@@ -23,3 +23,4 @@ rootProject.name = "Filum"
 include(":core:protocol")
 include(":core:crypto")
 include(":core:net")
+include(":core:data")
