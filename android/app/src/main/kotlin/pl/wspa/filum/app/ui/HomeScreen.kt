@@ -33,6 +33,7 @@ fun HomeScreen(
     onVerify: () -> Unit,
     onScheduleChange: (Schedule) -> Unit,
     onOpenLog: () -> Unit,
+    onOpenFolders: () -> Unit,
     onRequestStorageAccess: () -> Unit,
     onUnpair: () -> Unit,
 ) {
@@ -125,6 +126,7 @@ fun HomeScreen(
         HorizontalDivider()
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = onOpenFolders) { Text("Foldery") }
             OutlinedButton(onClick = onOpenLog) { Text("Dziennik") }
             TextButton(onClick = onUnpair) { Text("Rozparuj") }
         }
