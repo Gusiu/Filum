@@ -33,6 +33,15 @@ public sealed class FilumOptions
     /// <summary>Port nasluchu. Uzywany takze do zbudowania listy adresow w odpowiedzi na ping.</summary>
     public int Port { get; set; } = 8765;
 
+    /// <summary>
+    /// Rozgłaszanie usługi przez mDNS (§4.1 protokołu).
+    ///
+    /// Da się wyłączyć, bo w sieciach firmowych multicast bywa zablokowany, a wtedy
+    /// rozgłaszanie tylko generuje ruch bez efektu. Telefon i tak znajdzie serwer
+    /// po zapisanych adresach.
+    /// </summary>
+    public bool EnableMdns { get; set; } = true;
+
     /// <summary>Dolny próg wolnego miejsca (§8.4): max(5 GiB, 2% pojemności wolumenu).</summary>
     public long MinFreeBytes { get; set; } = 5L * 1024 * 1024 * 1024;
 

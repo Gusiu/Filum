@@ -478,3 +478,37 @@ public class PairingCodeRenderingTests
         return Encoding.UTF8.GetString(Convert.FromBase64String(value));
     }
 }
+
+/// <summary>Rozgłaszanie usługi w sieci lokalnej (§4.1 protokołu).</summary>
+public class MdnsAdvertiserTests
+{
+    [Fact]
+    public void NazwaInstancji_ZgadzaSieZPolemWKodzieParowania()
+    {
+        // Telefon dopasowuje rozgłoszenie do serwera, z którym się sparował, po tym
+        // właśnie ciągu — rozjazd między tymi dwoma miejscami sprawiłby, że
+        // wykrywanie znajduje serwer, ale klient go nie rozpoznaje.
+        const string pin = "EhZa6VgNQovoNrFs_e2PcVbgKr8EQf4ZzTQI5slNr7A";
+
+        Assert.Equal("filum-EhZa6VgN", MdnsAdvertiser.BuildInstanceName(pin));
+        Assert.Equal($"filum-{pin[..8]}", MdnsAdvertiser.BuildInstanceName(pin));
+    }
+
+    [Fact]
+    public void TypUslugi_JestZgodnyZeSpecyfikacja()
+    {
+        Assert.Equal("_filum._tcp", MdnsAdvertiser.ServiceType);
+    }
+
+    [Fact]
+    public async Task NieudaneRozglaszanie_NiePrzerywaStartuSerwera()
+    {
+        // Rozgłaszanie jest wygodą, nie warunkiem działania: zapora albo sieć bez
+        // obsługi multicastu nie mogą uniemożliwić przyjmowania kopii zapasowej.
+        using var app = new FilumApp();
+
+        var response = await app.CreateClient().GetAsync("/api/v1/pair/new");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+}

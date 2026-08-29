@@ -31,6 +31,11 @@ builder.Services.AddSingleton<PairingRateLimiter>();
 builder.Services.AddSingleton<IClientCertificateProvider, ConnectionClientCertificateProvider>();
 builder.Services.AddSingleton<AdminService>();
 
+// Rozgłaszanie w sieci lokalnej. Wygoda, nie warunek działania: gdy multicast
+// nie przejdzie, telefon nadal znajdzie serwer po zapisanych adresach (§4.2).
+builder.Services.AddSingleton<MdnsAdvertiser>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<MdnsAdvertiser>());
+
 // Panel serwera. Blazor po stronie serwera, bo stan i tak tu mieszka, a przy
 // dostępie wyłącznie z pętli zwrotnej opóźnienie kanału jest nieodczuwalne.
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();

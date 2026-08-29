@@ -11,6 +11,7 @@ import pl.wspa.filum.net.EndpointKind
 import pl.wspa.filum.net.EndpointRacer
 import pl.wspa.filum.net.FilumApiClient
 import pl.wspa.filum.net.FilumHttpClients
+import pl.wspa.filum.net.MdnsDiscovery
 import pl.wspa.filum.net.RaceOutcome
 import pl.wspa.filum.net.ServerEndpoint
 import pl.wspa.filum.protocol.ManifestRequest
@@ -54,12 +55,25 @@ class SyncRunner(private val container: AppContainer) {
         )
         val api = FilumApiClient(clients.forKind(EndpointKind.LAN))
 
-        val candidates = loadCandidates(server)
-        val race = EndpointRacer(
-            probe = { endpoint ->
-                FilumApiClient(clients.forProbe(endpoint.kind)).ping(endpoint)
+        val racer = EndpointRacer(
+            probe = { endpoint -> FilumApiClient(clients.forProbe(endpoint.kind)).ping(endpoint) }
+        )
+
+        // Najpierw zapisane trasy — w zdecydowanej większości cykli któraś z nich
+        // odpowie i nie ma powodu płacić za wykrywanie.
+        var race = racer.fastest(loadCandidates(server))
+
+        if (race !is RaceOutcome.Reached) {
+            // Żadna zapisana trasa nie zadziałała. To jedyna sytuacja, w której
+            // samoaktualizacja zbioru tras (§4.4) nie ma się od czego odbić:
+            // telefon nie był w domu przez zmianę routera i nie ma sieci nakładkowej.
+            val discovered = MdnsDiscovery(container.context).findByPin(server.serverPin)
+
+            if (discovered.isNotEmpty()) {
+                journalDiscovery(discovered)
+                race = racer.fastest(discovered)
             }
-        ).fastest(candidates)
+        }
 
         val reached = when (race) {
             is RaceOutcome.Reached -> race
@@ -96,6 +110,19 @@ class SyncRunner(private val container: AppContainer) {
         finishSession(sessionId, outcome, usedDelta)
 
         return CycleResult.Done(outcome, reached.endpoint)
+    }
+
+    private suspend fun journalDiscovery(discovered: List<ServerEndpoint>) {
+        RoomJournal(container.database.log()).record(
+            JournalLevel.INFO, "mdns_found",
+            "Znaleziono serwer w sieci lokalnej: ${discovered.joinToString { it.toString() }}",
+        )
+
+        // Zapisujemy od razu: przy następnym cyklu trasa będzie już w zbiorze
+        // kandydatów i wykrywanie nie będzie potrzebne.
+        container.database.endpoints().upsert(
+            discovered.map { EndpointEntity(it.host, it.port, it.kind.name) }
+        )
     }
 
     // --- trasy ---

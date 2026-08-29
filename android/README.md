@@ -27,7 +27,7 @@ i ten zostaje na 36 zgodnie z ADR-013, żeby na razie ominąć wymóg
 |---|---|---|
 | `:core:protocol` | modele wymiany, `PathRules`, odczyt kodu parowania | nie — czysty JVM |
 | `:core:crypto` | klucz w Android Keystore, przypięcie klucza serwera | częściowo |
-| `:core:net` | klient zasobów, wyścig tras, przypięcie gniazd do Wi-Fi | częściowo |
+| `:core:net` | klient zasobów, wyścig tras, mDNS, przypięcie gniazd do Wi-Fi | częściowo |
 | `:core:data` | Room: kolejka, dziennik, budżet usługi pierwszoplanowej | tak |
 | `:core:scan` | `MediaStore` z licznikiem generacji, obchód drzewa, wykluczenia | częściowo |
 | `:core:sync` | silnik cyklu: manifest, wznawianie, klasyfikacja błędów | nie — za interfejsami |
@@ -81,7 +81,7 @@ tutaj, jako ponowna prośba o te same pliki.
 | skanowanie: `MediaStore` i pełny obchód | zaimplementowane, nieuruchomione na telefonie |
 | harmonogram: ręcznie, codziennie, co tydzień | działa |
 | usługa pierwszoplanowa z pilnowaniem budżetu | działa |
-| wykrywanie przez mDNS | niezaczęte — etap 5 |
+| wykrywanie przez mDNS | działa, sprawdzone przeciwko serwerowi |
 | ekran wykluczeń, skaner kodu QR aparatem | niezaczęte |
 
 Parowanie odbywa się przez wklejenie ciągu `filum1:…` ze schowka. Skaner aparatem

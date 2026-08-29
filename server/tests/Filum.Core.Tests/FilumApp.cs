@@ -66,6 +66,10 @@ public sealed class FilumApp : WebApplicationFactory<Program>
         builder.UseSetting("Filum:ConfigDirectory", _config.Path);
         builder.UseSetting("Filum:ManifestBatch", "3");
 
+        // Bez tego każda instancja testowa zajmowałaby gniazda multicastu, a kilka
+        // naraz wchodzi sobie w drogę. Rozgłaszanie sprawdzamy osobno, na żywym serwerze.
+        builder.UseSetting("Filum:EnableMdns", "false");
+
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<IClientCertificateProvider>();
