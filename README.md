@@ -19,10 +19,10 @@ Zbiór plików przechowywanych przez Filum jest monotoniczny — może wyłączn
 
 ## Komponenty
 
-| Katalog | Opis | Stan |
-|---|---|---|
-| `server/` | usługa HTTP na Windows: .NET 9, panel w przeglądarce, ikona w zasobniku | do zbudowania |
-| `android/` | klient: Kotlin, Compose, WorkManager, Room, OkHttp | do zbudowania |
+| Katalog | Opis |
+|---|---|
+| `server/` | usługa HTTP na Windows: .NET 9, panel w przeglądarce, ikona w zasobniku |
+| `android/` | klient: Kotlin, Compose, WorkManager, Room, OkHttp |
 
 ## Najważniejsze właściwości
 
@@ -62,7 +62,7 @@ od zera na podstawie samego dokumentu jest dowodem, że dokument jest kompletny.
 
 ## Stan prac
 
-Etapy 1–4, 6 i 7 z [tabeli kolejności budowy](docs/ARCHITECTURE.md#8-kolejność-budowy).
+Etapy 1–7 z [tabeli kolejności budowy](docs/ARCHITECTURE.md#8-kolejność-budowy).
 
 | Element | Stan |
 |---|---|
@@ -72,9 +72,10 @@ Etapy 1–4, 6 i 7 z [tabeli kolejności budowy](docs/ARCHITECTURE.md#8-kolejno�
 | klient: siedem modułów, od reguł ścieżek po silnik cyklu | działa, APK się buduje |
 | harmonogram i praca w tle z pilnowaniem budżetu 6 h | działa |
 | panel serwera i ikona w zasobniku | działa |
+| wykrywanie serwera przez mDNS | działa |
 | **test zgodności klient↔serwer** | przechodzi |
-| **130 testów serwera, 175 testów klienta** | zielone |
-| mDNS, `bundle`, `verify`, raport sierot | niezaczęte — etapy 5, 8, 9 |
+| **133 testy serwera, 175 testów klienta** | zielone |
+| `bundle`, `verify`, raport sierot | niezaczęte — etapy 8 i 9 |
 
 Serwer i klient są pisane niezależnie, w różnych językach, i pogodzone wyłącznie
 przez specyfikację oraz wspólne wektory testowe. `EndToEndTest` uruchamia prawdziwy

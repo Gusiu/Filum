@@ -26,6 +26,7 @@ cd server && dotnet run --project src/Filum.Server --no-launch-profile
 | `Filum:ConfigDirectory` | `%LOCALAPPDATA%\Filum` | klucz prywatny serwera |
 | `Filum:Bind` | `0.0.0.0` | adres nasłuchu |
 | `Filum:Port` | `8765` | port |
+| `Filum:EnableMdns` | `true` | rozgłaszanie usługi w sieci lokalnej |
 
 Każde ustawienie da się nadpisać zmienną środowiskową, np. `Filum__Root`.
 
@@ -135,7 +136,7 @@ Wznowienie polega na powtórzeniu żądania z `X-Filum-Offset` równym wartości
 | `POST /api/v1/manifest` | tak, z polem `rejected` |
 | `PUT /api/v1/file` | tak, wznawianie i wersjonowanie |
 | mTLS z przypięciem kluczy | tak |
-| rozgłaszanie mDNS | nie — etap 5 |
+| rozgłaszanie mDNS | tak |
 | `POST /api/v1/bundle` | nie — etap 8 |
 | `POST /api/v1/verify`, `GET /api/v1/orphans` | nie — etap 9 |
 | ikona w zasobniku systemowym | tak, osobny proces |
