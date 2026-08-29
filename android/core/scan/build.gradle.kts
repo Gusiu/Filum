@@ -1,11 +1,10 @@
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
 }
 
 android {
     namespace = "pl.wspa.filum.scan"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 30
@@ -23,11 +22,6 @@ android {
     }
 }
 
-kotlin {
-    compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-    }
-}
 
 dependencies {
     implementation(libs.kotlinx.coroutines.core)

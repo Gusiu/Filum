@@ -1,12 +1,11 @@
 plugins {
     alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.ksp)
 }
 
 android {
     namespace = "pl.wspa.filum.data"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         minSdk = 30
@@ -22,11 +21,6 @@ android {
     }
 }
 
-kotlin {
-    compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-    }
-}
 
 // Schemat bazy trafia do repozytorium. Dzięki temu każda zmiana modelu jest widoczna
 // w przeglądzie zmian, a migracje da się napisać wobec konkretnego, zapisanego stanu.
@@ -36,7 +30,7 @@ ksp {
 
 dependencies {
     api(project(":core:protocol"))
-    implementation(libs.room.runtime)
+    api(libs.room.runtime)
     implementation(libs.kotlinx.coroutines.core)
     ksp(libs.room.compiler)
 
