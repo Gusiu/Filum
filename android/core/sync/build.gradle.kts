@@ -30,5 +30,7 @@ dependencies {
 
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.kotlinx.coroutines.test)
+    // Do wygenerowania pary kluczy klienta w tescie zgodnosci, bez Android Keystore.
+    testImplementation(libs.okhttp.tls)
     testRuntimeOnly(libs.junit.platform.launcher)
 }

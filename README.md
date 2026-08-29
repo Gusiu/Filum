@@ -62,19 +62,25 @@ od zera na podstawie samego dokumentu jest dowodem, że dokument jest kompletny.
 
 ## Stan prac
 
-Etapy 1, 2 i 4 z [tabeli kolejności budowy](docs/ARCHITECTURE.md#8-kolejność-budowy).
+Etapy 1–4 z [tabeli kolejności budowy](docs/ARCHITECTURE.md#8-kolejność-budowy).
 
 | Element | Stan |
 |---|---|
 | specyfikacja protokołu i architektura | spisane |
-| `PathRules` w C# i w Kotlinie | zaimplementowane, oba przechodzą wspólne wektory |
-| serwer: `ping`, `manifest`, `PUT /file` | wznawianie i wersjonowanie sprawdzone |
-| mTLS, parowanie kodem QR, rejestr urządzeń | działa, sprawdzone na prawdziwym TLS |
-| **121 testów po stronie serwera** | zielone |
-| mDNS, `bundle`, `verify`, sieroty, panel, klient Androida | niezaczęte — etapy 3, 5, 7–9 |
+| serwer: parowanie, ping, manifest, wznawialny transfer, wersjonowanie | działa |
+| mTLS z wzajemnym przypięciem kluczy | działa, sprawdzone na prawdziwym TLS |
+| klient: siedem modułów, od reguł ścieżek po silnik cyklu | działa, APK się buduje |
+| **test zgodności klient↔serwer** | przechodzi |
+| **121 testów serwera, 168 testów klienta** | zielone |
+| mDNS, harmonogram, `bundle`, `verify`, sieroty, panel | niezaczęte — etapy 5–9 |
 
-Serwer wolno już wystawić na sieć lokalną: bez sparowanego klucza żaden zasób
-zapisujący nie odpowiada. Szczegóły w [server/README.md](server/README.md).
+Serwer i klient są pisane niezależnie, w różnych językach, i pogodzone wyłącznie
+przez specyfikację oraz wspólne wektory testowe. `EndToEndTest` uruchamia prawdziwy
+klient kotlinowy przeciwko prawdziwemu serwerowi w C# i sprawdza, czy oba wyliczają
+tę samą tożsamość pliku — szczegóły w [android/README.md](android/README.md).
+
+Cykl nie był jeszcze przejechany na prawdziwym telefonie: `MediaStore`, Android
+Keystore i uprawnienie do pamięci da się sprawdzić wyłącznie na urządzeniu.
 
 ## Budowanie
 
