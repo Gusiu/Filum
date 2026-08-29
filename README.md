@@ -19,10 +19,10 @@ Zbiór plików przechowywanych przez Filum jest monotoniczny — może wyłączn
 
 ## Komponenty
 
-| Katalog | Opis | Stan |
-|---|---|---|
-| `server/` | usługa HTTP na Windows: .NET 9, panel w przeglądarce, ikona w zasobniku | do zbudowania |
-| `android/` | klient: Kotlin, Compose, WorkManager, Room, OkHttp | do zbudowania |
+| Katalog | Opis |
+|---|---|
+| `server/` | usługa HTTP na Windows: .NET 9, panel w przeglądarce, ikona w zasobniku |
+| `android/` | klient: Kotlin, Compose, WorkManager, Room, OkHttp |
 
 ## Najważniejsze właściwości
 
