@@ -7,8 +7,10 @@ import pl.wspa.filum.data.LogEventDao
 import pl.wspa.filum.data.LogEventEntity
 import pl.wspa.filum.data.LogLevel
 import pl.wspa.filum.net.ApiResult
+import pl.wspa.filum.net.BundleEntry
 import pl.wspa.filum.net.FilumApiClient
 import pl.wspa.filum.net.ServerEndpoint
+import pl.wspa.filum.protocol.BundleResponse
 import pl.wspa.filum.protocol.FileChunkResponse
 import pl.wspa.filum.protocol.ManifestRequest
 import pl.wspa.filum.protocol.ManifestResponse
@@ -158,4 +160,7 @@ class ApiSyncTransport(
         digest: String?,
     ): ApiResult<FileChunkResponse> =
         api.putFile(endpoint, canonicalPath, file, size, mtime, offset, length, digest)
+
+    override suspend fun putBundle(entries: List<BundleEntry>): ApiResult<BundleResponse> =
+        api.putBundle(endpoint, entries)
 }

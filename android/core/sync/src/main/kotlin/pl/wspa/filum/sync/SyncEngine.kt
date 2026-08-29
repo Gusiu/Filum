@@ -1,6 +1,7 @@
 package pl.wspa.filum.sync
 
 import pl.wspa.filum.net.ApiResult
+import pl.wspa.filum.net.BundleEntry
 import pl.wspa.filum.protocol.FailureKind
 import pl.wspa.filum.protocol.ManifestEntry
 import pl.wspa.filum.protocol.ManifestRequest
@@ -139,7 +140,23 @@ class SyncEngine(
                 return SyncOutcome.Completed(filesSent, bytesSent)
             }
 
-            for (entry in batch) {
+            // Małe pliki idą paczkami, duże pojedynczo. Przy stu tysiącach plików,
+            // z których większość jest drobna, narzut żądania HTTP zaczyna dominować
+            // nad transferem danych (ADR-008).
+            val (small, large) = batch.partition { it.size <= config.smallFileThreshold && it.bytesSent == 0L }
+
+            for (group in group(small)) {
+                if (deadline.reached()) return stopOnBudget()
+
+                when (sendBundle(group)) {
+                    SendResult.INTERRUPTED ->
+                        return SyncOutcome.Interrupted(InterruptReason.CONNECTION, filesSent, bytesSent)
+
+                    else -> Unit
+                }
+            }
+
+            for (entry in large) {
                 if (deadline.reached()) return stopOnBudget()
 
                 when (send(entry, deadline)) {
@@ -167,6 +184,121 @@ class SyncEngine(
     }
 
     private enum class SendResult { SENT, SKIPPED, FAILED, INTERRUPTED }
+
+    /**
+     * Dzieli pliki na paczki mieszczące się w limitach z odpowiedzi na ping.
+     *
+     * Plik większy od limitu paczki nie może w niej pojechać — trafia do niej sam,
+     * a i tak zostanie odrzucony przez próg rozmiaru wyżej; tutaj pilnujemy tylko,
+     * żeby nie zbudować paczki, której serwer nie przyjmie.
+     */
+    private fun group(files: List<QueuedFile>): List<List<QueuedFile>> {
+        val groups = mutableListOf<List<QueuedFile>>()
+        var current = mutableListOf<QueuedFile>()
+        var bytes = 0L
+
+        for (file in files) {
+            val wouldExceed = bytes + file.size > config.bundleMaxBytes ||
+                current.size >= config.bundleMaxCount
+
+            if (wouldExceed && current.isNotEmpty()) {
+                groups += current
+                current = mutableListOf()
+                bytes = 0
+            }
+
+            current += file
+            bytes += file.size
+        }
+
+        if (current.isNotEmpty()) groups += current
+        return groups
+    }
+
+    private suspend fun sendBundle(group: List<QueuedFile>): SendResult {
+        val entries = mutableListOf<BundleEntry>()
+        val byPath = mutableMapOf<String, QueuedFile>()
+
+        for (queued in group) {
+            val file = File(queued.absolutePath)
+
+            if (!file.isFile) {
+                queue.markPermanentFailure(queued.canonicalPath, "plik już nie istnieje")
+                continue
+            }
+            if (file.length() != queued.size || Math.floorDiv(file.lastModified(), 1000L) != queued.mtime) {
+                queue.markTransientFailure(queued.canonicalPath, "plik zmienił się po skanie")
+                continue
+            }
+
+            entries += BundleEntry(
+                canonicalPath = queued.canonicalPath,
+                file = file,
+                size = queued.size,
+                mtime = queued.mtime,
+                digest = sha256(file),
+            )
+            byPath[queued.canonicalPath] = queued
+        }
+
+        if (entries.isEmpty()) return SendResult.SKIPPED
+
+        return when (val result = transport.putBundle(entries)) {
+            is ApiResult.Ok -> {
+                applyBundleResults(result.value.results, byPath)
+                SendResult.SENT
+            }
+
+            is ApiResult.Unreachable -> {
+                // Paczka nie doszła w całości. Wszystkie jej pliki wracają do kolejki —
+                // nie mamy pojęcia, ile z nich serwer zdążył zapisać, a ponowna
+                // wysyłka niczego nie psuje, bo manifest i tak je odsieje.
+                entries.forEach { queue.markTransientFailure(it.canonicalPath, result.message) }
+                SendResult.INTERRUPTED
+            }
+
+            is ApiResult.Failure -> {
+                // Uszkodzone ramkowanie albo przekroczony limit unieważnia całą paczkę.
+                entries.forEach { queue.markTransientFailure(it.canonicalPath, result.code) }
+                journal.record(JournalLevel.WARN, result.code, "Paczka odrzucona: ${result.message}")
+                SendResult.FAILED
+            }
+        }
+    }
+
+    private suspend fun applyBundleResults(
+        results: List<pl.wspa.filum.protocol.BundleFileResult>,
+        byPath: Map<String, QueuedFile>,
+    ) {
+        val reported = results.map { it.path }.toSet()
+
+        for (result in results) {
+            val queued = byPath[result.path] ?: continue
+
+            if (result.ok) {
+                queue.markDone(result.path)
+                filesSent++
+                bytesSent += queued.size
+                continue
+            }
+
+            // Odrzucenie pojedynczego pliku w paczce ma tę samą wagę co przy PUT:
+            // zła ścieżka jest trwała, reszta warta ponowienia.
+            val error = result.error.orEmpty()
+            if (error in PERMANENT_BUNDLE_ERRORS) {
+                queue.markPermanentFailure(result.path, error)
+                journal.record(JournalLevel.WARN, error, "${result.path}: odrzucone w paczce")
+            } else {
+                queue.markTransientFailure(result.path, error)
+            }
+        }
+
+        // Serwer nie wspomniał o pliku, który wysłaliśmy. Nie zakładamy powodzenia —
+        // wraca do kolejki i wyjaśni się przy najbliższym manifeście.
+        for ((path, _) in byPath) {
+            if (path !in reported) queue.markTransientFailure(path, "brak wyniku w odpowiedzi")
+        }
+    }
 
     private suspend fun send(entry: QueuedFile, deadline: Deadline): SendResult {
         val file = File(entry.absolutePath)
@@ -312,7 +444,12 @@ class SyncEngine(
 
     private companion object {
         /** Ile pozycji bierzemy z kolejki naraz. Mniej znaczy częstsze zapytania do bazy. */
-        const val UPLOAD_BATCH = 64
+        const val UPLOAD_BATCH = 256
+
+        /** Błędy paczki, po których ponawianie nie ma sensu — to wada pliku, nie sieci. */
+        val PERMANENT_BUNDLE_ERRORS = setOf(
+            "absolute", "traversal", "dot_segment", "empty_segment", "nul", "path_too_long",
+        )
 
         /** Ile razy dajemy serwerowi poprawić nasze wyobrażenie o przesunięciu. */
         const val MAX_OFFSET_CORRECTIONS = 3

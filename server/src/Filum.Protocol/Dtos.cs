@@ -119,6 +119,23 @@ public sealed record FileChunkResponse(
     bool Complete,
     string? Versioned = null);
 
+// --- POST /api/v1/bundle (§5.4) ---
+
+public sealed record BundleFileResult(
+    [property: JsonPropertyName("p")] string Path,
+    [property: JsonPropertyName("ok")] bool Ok,
+    [property: JsonPropertyName("error")] string? Error = null,
+    [property: JsonPropertyName("versioned")] string? Versioned = null);
+
+public sealed record BundleResponse(
+    [property: JsonPropertyName("results")] IReadOnlyList<BundleFileResult> Results);
+
+/// <summary>Typ zawartości paczki. Ramkowanie binarne, nie multipart (§5.4).</summary>
+public static class BundleContentType
+{
+    public const string Value = "application/vnd.filum.bundle";
+}
+
 // --- błędy (§6) ---
 
 public sealed record ErrorResponse(

@@ -1,6 +1,8 @@
 package pl.wspa.filum.sync
 
 import pl.wspa.filum.net.ApiResult
+import pl.wspa.filum.net.BundleEntry
+import pl.wspa.filum.protocol.BundleResponse
 import pl.wspa.filum.protocol.FileChunkResponse
 import pl.wspa.filum.protocol.ManifestRequest
 import pl.wspa.filum.protocol.ManifestResponse
@@ -30,6 +32,9 @@ interface SyncTransport {
         length: Long,
         digest: String?,
     ): ApiResult<FileChunkResponse>
+
+    /** Wysyła wiele małych plików jednym żądaniem (§5.4). */
+    suspend fun putBundle(entries: List<BundleEntry>): ApiResult<BundleResponse>
 }
 
 /** Pozycja kolejki widziana przez silnik. */
@@ -110,6 +115,19 @@ data class SyncConfig(
 
     /** Po tylu nieudanych podejściach uznajemy plik za trwale problematyczny. */
     val maxAttempts: Int = 5,
+
+    /**
+     * Poniżej tego rozmiaru plik idzie w paczce, a nie osobnym żądaniem (ADR-008).
+     *
+     * Wartość podaje serwer w odpowiedzi na ping; klient nie zakłada własnej.
+     * Próg zostanie wyznaczony pomiarem, a nie przyjęty z góry — to jeden
+     * z eksperymentów do rozdziału wynikowego.
+     */
+    val smallFileThreshold: Long = 262_144,
+
+    val bundleMaxBytes: Long = 8L * 1024 * 1024,
+
+    val bundleMaxCount: Int = 256,
 )
 
 /**

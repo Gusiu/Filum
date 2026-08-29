@@ -26,6 +26,7 @@ public static class FilumApi
         api.MapGet("/ping", Ping);
         api.MapPost("/manifest", Manifest);
         api.MapPut("/file", File);
+        api.MapPost("/bundle", Bundle);
     }
 
     // --- POST /api/v1/pair (§3.3) ---
@@ -204,6 +205,30 @@ public static class FilumApi
 
             _ => Error(StatusCodes.Status500InternalServerError, ErrorCodes.BadRequest, "Nieznany stan transferu.")
         };
+    }
+
+    // --- POST /api/v1/bundle (§5.4) ---
+
+    private static async Task<IResult> Bundle(
+        HttpContext context,
+        BundleReader bundles,
+        CancellationToken ct)
+    {
+        try
+        {
+            var results = await bundles.ReadAsync(context.Device().Slug, context.Request.Body, ct);
+
+            // Paczka może się powieść częściowo: jeden plik z odrzuconą ścieżką nie
+            // unieważnia pozostałych stu, które doszły poprawnie.
+            return Results.Ok(new BundleResponse(
+                results.Select(r => new BundleFileResult(r.Path, r.Ok, r.Error, r.Versioned)).ToList()));
+        }
+        catch (BundleFormatException e)
+        {
+            // Uszkodzone ramkowanie unieważnia całą paczkę: od tego miejsca nie wiemy
+            // już, gdzie kończy się jeden plik, a zaczyna następny.
+            return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, e.Message);
+        }
     }
 
     // --- nagłówki ---

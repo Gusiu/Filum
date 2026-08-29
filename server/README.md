@@ -137,6 +137,6 @@ Wznowienie polega na powtórzeniu żądania z `X-Filum-Offset` równym wartości
 | `PUT /api/v1/file` | tak, wznawianie i wersjonowanie |
 | mTLS z przypięciem kluczy | tak |
 | rozgłaszanie mDNS | tak |
-| `POST /api/v1/bundle` | nie — etap 8 |
+| `POST /api/v1/bundle` | tak |
 | `POST /api/v1/verify`, `GET /api/v1/orphans` | nie — etap 9 |
 | ikona w zasobniku systemowym | tak, osobny proces |
