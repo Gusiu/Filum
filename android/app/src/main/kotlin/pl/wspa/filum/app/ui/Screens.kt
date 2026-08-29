@@ -3,21 +3,15 @@ package pl.wspa.filum.app.ui
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -36,91 +30,6 @@ import pl.wspa.filum.data.LogLevel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
-@Composable
-fun HomeScreen(
-    state: UiState,
-    onSyncNow: () -> Unit,
-    onOpenLog: () -> Unit,
-    onRequestStorageAccess: () -> Unit,
-    onUnpair: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Text("Filum", style = MaterialTheme.typography.headlineMedium)
-        Text(
-            "Kopia zapasowa telefonu na komputer. Serwer nigdy niczego nie usuwa.",
-            style = MaterialTheme.typography.bodyMedium,
-        )
-
-        state.server?.let { server ->
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(server.label, style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "Klucz serwera: ${server.serverPin.take(12)}…",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = FontFamily.Monospace,
-                    )
-                    Text("W kolejce: ${state.pendingFiles} plików", style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-        }
-
-        if (!state.hasStorageAccess) {
-            // Bez pełnego dostępu skan zobaczy wyłącznie katalogi mediów, więc
-            // dokumenty i pobrane pliki nigdy nie trafiłyby do kopii (ADR-013).
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Brak dostępu do plików", style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        "Filum potrzebuje dostępu do całej pamięci, żeby objąć kopią także " +
-                            "dokumenty i pobrane pliki, a nie tylko zdjęcia.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    Button(onClick = onRequestStorageAccess) { Text("Nadaj dostęp") }
-                }
-            }
-        }
-
-        Button(
-            onClick = onSyncNow,
-            enabled = !state.busy && state.server != null && state.hasStorageAccess,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            if (state.busy) {
-                CircularProgressIndicator(Modifier.height(18.dp), strokeWidth = 2.dp)
-                Spacer(Modifier.height(8.dp))
-            }
-            Text(if (state.busy) "Pracuję…" else "Synchronizuj teraz")
-        }
-
-        if (state.statusLine.isNotEmpty()) {
-            Text(state.statusLine, style = MaterialTheme.typography.bodyMedium)
-        }
-
-        state.lastError?.let { error ->
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("Szczegóły", style = MaterialTheme.typography.titleSmall)
-                    Text(error, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
-                }
-            }
-        }
-
-        HorizontalDivider()
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onOpenLog) { Text("Dziennik") }
-            TextButton(onClick = onUnpair) { Text("Rozparuj") }
-        }
-    }
-}
 
 @Composable
 fun PairingScreen(
@@ -163,10 +72,10 @@ fun PairingScreen(
 
         Button(
             onClick = { onPair(code.trim(), label.trim()) },
-            enabled = !state.busy && code.isNotBlank() && label.isNotBlank(),
+            enabled = !state.pairing && code.isNotBlank() && label.isNotBlank(),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(if (state.busy) "Paruję…" else "Sparuj")
+            Text(if (state.pairing) "Paruję…" else "Sparuj")
         }
 
         state.lastError?.let {

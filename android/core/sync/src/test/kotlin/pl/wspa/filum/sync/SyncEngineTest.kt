@@ -266,7 +266,7 @@ class SyncEngineTest {
         val outcome = run(listOf(a, b))
 
         val interrupted = assertInstanceOf(SyncOutcome.Interrupted::class.java, outcome)
-        assertEquals("połączenie", interrupted.reason)
+        assertEquals(InterruptReason.CONNECTION, interrupted.reason)
         assertEquals(FakeQueue.State.TRANSIENT, queue.state("a.txt"))
     }
 
@@ -333,7 +333,7 @@ class SyncEngineTest {
         val outcome = run(listOf(a), deadline = natychmiast)
 
         val interrupted = assertInstanceOf(SyncOutcome.Interrupted::class.java, outcome)
-        assertEquals("budżet", interrupted.reason)
+        assertEquals(InterruptReason.BUDGET, interrupted.reason)
     }
 
     @Test

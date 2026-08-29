@@ -171,7 +171,7 @@ class SyncRunner(private val container: AppContainer) {
 
         val (files, bytes, result) = when (outcome) {
             is SyncOutcome.Completed -> Triple(outcome.filesSent, outcome.bytesSent, "completed")
-            is SyncOutcome.Interrupted -> Triple(outcome.filesSent, outcome.bytesSent, "interrupted:${outcome.reason}")
+            is SyncOutcome.Interrupted -> Triple(outcome.filesSent, outcome.bytesSent, "interrupted:${outcome.reason.name.lowercase()}")
             is SyncOutcome.Failed -> Triple(0, 0L, "failed:${outcome.reason}")
         }
 

@@ -112,13 +112,28 @@ data class SyncConfig(
     val maxAttempts: Int = 5,
 )
 
+/**
+ * Dlaczego cykl skończył się wcześniej.
+ *
+ * Typ, a nie napis: od tego zależy, czy praca ma zostać ponowiona, czy odłożona
+ * do następnego okna. Rozstrzyganie o tym przez porównanie tekstu wyłożyłoby się
+ * po cichu przy pierwszej zmianie komunikatu.
+ */
+enum class InterruptReason {
+    /** Wyczerpany budżet pracy w tle. Kolejka czeka; ponawianie teraz nic nie da. */
+    BUDGET,
+
+    /** Zerwane połączenie. Warto spróbować ponownie, gdy sieć wróci. */
+    CONNECTION,
+}
+
 sealed interface SyncOutcome {
 
     /** Kolejka pusta — wszystko, co było do wysłania, poszło. */
     data class Completed(val filesSent: Int, val bytesSent: Long) : SyncOutcome
 
-    /** Skończyliśmy sami, w kontrolowanym momencie: budżet, sieć, decyzja użytkownika. */
-    data class Interrupted(val reason: String, val filesSent: Int, val bytesSent: Long) : SyncOutcome
+    /** Skończyliśmy sami, w kontrolowanym momencie. */
+    data class Interrupted(val reason: InterruptReason, val filesSent: Int, val bytesSent: Long) : SyncOutcome
 
     /** Nie dało się nawet uzgodnić manifestu. */
     data class Failed(val reason: String) : SyncOutcome

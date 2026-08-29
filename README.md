@@ -62,7 +62,7 @@ od zera na podstawie samego dokumentu jest dowodem, że dokument jest kompletny.
 
 ## Stan prac
 
-Etapy 1–4 z [tabeli kolejności budowy](docs/ARCHITECTURE.md#8-kolejność-budowy).
+Etapy 1–4 i 6 z [tabeli kolejności budowy](docs/ARCHITECTURE.md#8-kolejność-budowy).
 
 | Element | Stan |
 |---|---|
@@ -70,9 +70,10 @@ Etapy 1–4 z [tabeli kolejności budowy](docs/ARCHITECTURE.md#8-kolejność-bud
 | serwer: parowanie, ping, manifest, wznawialny transfer, wersjonowanie | działa |
 | mTLS z wzajemnym przypięciem kluczy | działa, sprawdzone na prawdziwym TLS |
 | klient: siedem modułów, od reguł ścieżek po silnik cyklu | działa, APK się buduje |
+| harmonogram i praca w tle z pilnowaniem budżetu 6 h | działa |
 | **test zgodności klient↔serwer** | przechodzi |
-| **121 testów serwera, 168 testów klienta** | zielone |
-| mDNS, harmonogram, `bundle`, `verify`, sieroty, panel | niezaczęte — etapy 5–9 |
+| **121 testów serwera, 175 testów klienta** | zielone |
+| mDNS, `bundle`, `verify`, sieroty, panel serwera | niezaczęte — etapy 5, 7–9 |
 
 Serwer i klient są pisane niezależnie, w różnych językach, i pogodzone wyłącznie
 przez specyfikację oraz wspólne wektory testowe. `EndToEndTest` uruchamia prawdziwy
