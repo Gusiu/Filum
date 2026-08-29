@@ -1,0 +1,40 @@
+# Filum - wektory testowe sanityzacji sciezek (PATH-RULES.md)
+# Format: input <TAB> expected <TAB> komentarz
+# Escape w kolumnach input/expected: \xHH = bajt o kodzie HH, \\ = literalny backslash
+# expected: sciezka wynikowa z separatorem / albo REJECT:<powod>
+# Obie implementacje musza przechodzic caly zestaw.
+DCIM/Camera/IMG_0001.JPG	DCIM/Camera/IMG_0001.JPG	przejscie bez zmian
+Pictures/wakacje 2025/zdjęcie.jpg	Pictures/wakacje 2025/zdjęcie.jpg	spacje i diakrytyki sa dozwolone
+Documents/raport:v2.docx	Documents/raport%3Av2.docx	dwukropek
+Documents/a<b>c.txt	Documents/a%3Cb%3Ec.txt	nawiasy ostre
+Documents/100% pewne.txt	Documents/100%25 pewne.txt	procent kodowany jako pierwszy - warunek roznowartosciowosci
+Documents/juz%3Azakodowane.txt	Documents/juz%253Azakodowane.txt	tekst wygladajacy na kodowanie tez sie koduje
+Download/plik?.bin	Download/plik%3F.bin	znak zapytania
+Download/a"b.txt	Download/a%22b.txt	cudzyslow
+Download/a|b.txt	Download/a%7Cb.txt	pionowa kreska
+Download/a*b.txt	Download/a%2Ab.txt	gwiazdka
+Download/back\\slash.txt	Download/back%5Cslash.txt	backslash jest legalny w nazwie na Androidzie
+Download/a\x01b.txt	Download/a%01b.txt	kod sterujacy
+Download/a\x1Fb.txt	Download/a%1Fb.txt	gorna granica kodow sterujacych
+Notes/koniec.	Notes/koniec%2E	koncowa kropka
+Notes/koniec\x20	Notes/koniec%20	koncowa spacja
+Notes/...	Notes/..%2E	kodowany tylko ostatni znak
+Notes/a. .	Notes/a. %2E	kropka i spacja w srodku zostaja nietkniete
+Notes/w.srodku.kropki.txt	Notes/w.srodku.kropki.txt	kropki wewnetrzne sa legalne
+System/CON	System/%43ON	nazwa zastrzezona DOS
+System/con.txt	System/%63on.txt	zastrzezona z rozszerzeniem, wielkosc liter zachowana
+System/COM1.log	System/%43OM1.log	port szeregowy
+System/LPT9	System/%4CPT9	port rownolegly
+System/NUL	System/%4EUL	urzadzenie puste
+System/aux	System/%61ux	nazwa zastrzezona malymi literami
+System/prn.dat	System/%70rn.dat	drukarka
+System/CONSOLE.txt	System/CONSOLE.txt	nie jest nazwa zastrzezona - dopasowanie jest dokladne
+System/COM10.log	System/COM10.log	zastrzezone sa tylko COM1..COM9
+Mixed/a<b:c.\x20\x20	Mixed/a%3Cb%3Ac.\x20%20	kilka regul naraz; kodowany tylko ostatni znak, przedostatnia spacja przestaje byc koncowa
+/etc/passwd	REJECT:absolute	sciezka bezwzgledna
+../sekret.txt	REJECT:traversal	wyjscie poza katalog
+a/../b.txt	REJECT:traversal	wyjscie w srodku sciezki
+a/./b.txt	REJECT:dot_segment	segment kropkowy
+a//b.txt	REJECT:empty_segment	pusty segment
+a/b\x00c.txt	REJECT:nul	bajt zerowy
+C:/Windows/x.txt	C%3A/Windows/x.txt	litera dysku to zwykly tekst - kodowanie ja neutralizuje
