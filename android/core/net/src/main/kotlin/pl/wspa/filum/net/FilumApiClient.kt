@@ -12,6 +12,7 @@ import okhttp3.Response
 import okio.BufferedSink
 import okio.buffer
 import okio.source
+import pl.wspa.filum.protocol.BundleResponse
 import pl.wspa.filum.protocol.ErrorResponse
 import pl.wspa.filum.protocol.FileChunkResponse
 import pl.wspa.filum.protocol.FilumHeaders
@@ -101,6 +102,24 @@ class FilumApiClient(
         if (digest != null) builder.header(FilumHeaders.DIGEST, digest)
 
         return execute(builder.build()) { json.decodeFromString<FileChunkResponse>(it) }
+    }
+
+    /**
+     * Wysyła paczkę małych plików (§5.4).
+     *
+     * Żądanie może się powieść **częściowo**: odpowiedź niesie wynik dla każdego pliku
+     * z osobna, bo jedna odrzucona ścieżka nie unieważnia pozostałych stu.
+     */
+    suspend fun putBundle(
+        endpoint: ServerEndpoint,
+        entries: List<BundleEntry>,
+    ): ApiResult<BundleResponse> {
+        val request = Request.Builder()
+            .url(endpoint.url("/bundle"))
+            .post(BundleBody(entries))
+            .build()
+
+        return execute(request) { json.decodeFromString<BundleResponse>(it) }
     }
 
     private fun ServerEndpoint.url(resource: String): String = "$baseUrl${Protocol.PREFIX}$resource"

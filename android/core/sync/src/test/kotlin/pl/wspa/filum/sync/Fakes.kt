@@ -1,6 +1,9 @@
 package pl.wspa.filum.sync
 
 import pl.wspa.filum.net.ApiResult
+import pl.wspa.filum.net.BundleEntry
+import pl.wspa.filum.protocol.BundleFileResult
+import pl.wspa.filum.protocol.BundleResponse
 import pl.wspa.filum.protocol.ErrorResponse
 import pl.wspa.filum.protocol.FileChunkResponse
 import pl.wspa.filum.protocol.HttpStatus
@@ -189,6 +192,33 @@ class FakeTransport : SyncTransport {
 
         return ApiResult.Ok(FileChunkResponse(length, buffer.length.toLong(), complete))
     }
+
+    val bundles = mutableListOf<List<String>>()
+
+    /** Podmieniana w testach, żeby wymusić odpowiedź serwera na paczkę. */
+    var bundleResponder: ((List<BundleEntry>) -> ApiResult<BundleResponse>)? = null
+
+    override suspend fun putBundle(entries: List<BundleEntry>): ApiResult<BundleResponse> {
+        bundles += entries.map { it.canonicalPath }
+
+        bundleResponder?.let { return it(entries) }
+
+        val results = entries.map { entry ->
+            val actual = sha256(entry.file.readBytes())
+            if (actual != entry.digest) {
+                BundleFileResult(entry.canonicalPath, ok = false, error = "digest_mismatch")
+            } else {
+                received[entry.canonicalPath] = StringBuilder(entry.file.readText())
+                BundleFileResult(entry.canonicalPath, ok = true)
+            }
+        }
+
+        return ApiResult.Ok(BundleResponse(results))
+    }
+
+    private fun sha256(bytes: ByteArray): String =
+        java.security.MessageDigest.getInstance("SHA-256").digest(bytes)
+            .joinToString("") { "%02x".format(it) }
 
     fun content(path: String): String = received[path]?.toString().orEmpty()
 

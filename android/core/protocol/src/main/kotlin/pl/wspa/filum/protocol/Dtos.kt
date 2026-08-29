@@ -157,6 +157,26 @@ data class FileChunkResponse(
     @SerialName("versioned") val versioned: String? = null,
 )
 
+// --- POST /bundle (§5.4) ---
+
+@Serializable
+data class BundleFileResult(
+    @SerialName("p") val path: String,
+    @SerialName("ok") val ok: Boolean,
+    @SerialName("error") val error: String? = null,
+    @SerialName("versioned") val versioned: String? = null,
+)
+
+@Serializable
+data class BundleResponse(
+    @SerialName("results") val results: List<BundleFileResult> = emptyList(),
+)
+
+/** Typ zawartości paczki. Ramkowanie binarne, nie multipart (§5.4). */
+object BundleContentType {
+    const val VALUE = "application/vnd.filum.bundle"
+}
+
 // --- błędy (§6) ---
 
 @Serializable

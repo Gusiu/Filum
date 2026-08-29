@@ -125,6 +125,9 @@ class EndToEndTest {
                     canonicalPath: String, file: File, size: Long, mtime: Long,
                     offset: Long, length: Long, digest: String?,
                 ) = client.putFile(endpoint, canonicalPath, file, size, mtime, offset, length, digest)
+
+                override suspend fun putBundle(entries: List<pl.wspa.filum.net.BundleEntry>) =
+                    client.putBundle(endpoint, entries)
             },
             queue = queue,
             journal = journal,

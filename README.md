@@ -62,7 +62,7 @@ od zera na podstawie samego dokumentu jest dowodem, że dokument jest kompletny.
 
 ## Stan prac
 
-Etapy 1–7 z [tabeli kolejności budowy](docs/ARCHITECTURE.md#8-kolejność-budowy).
+Etapy 1–8 z [tabeli kolejności budowy](docs/ARCHITECTURE.md#8-kolejność-budowy).
 
 | Element | Stan |
 |---|---|
@@ -73,9 +73,10 @@ Etapy 1–7 z [tabeli kolejności budowy](docs/ARCHITECTURE.md#8-kolejność-bud
 | harmonogram i praca w tle z pilnowaniem budżetu 6 h | działa |
 | panel serwera i ikona w zasobniku | działa |
 | wykrywanie serwera przez mDNS | działa |
+| agregacja małych plików w paczki | działa |
 | **test zgodności klient↔serwer** | przechodzi |
-| **133 testy serwera, 175 testów klienta** | zielone |
-| `bundle`, `verify`, raport sierot | niezaczęte — etapy 8 i 9 |
+| **146 testów serwera, 186 testów klienta** | zielone |
+| `verify`, raport sierot | niezaczęte — etap 9 |
 
 Serwer i klient są pisane niezależnie, w różnych językach, i pogodzone wyłącznie
 przez specyfikację oraz wspólne wektory testowe. `EndToEndTest` uruchamia prawdziwy

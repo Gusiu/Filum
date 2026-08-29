@@ -101,7 +101,13 @@ class SyncRunner(private val container: AppContainer) {
             transport = ApiSyncTransport(FilumApiClient(clients.forKind(reached.endpoint.kind)), reached.endpoint),
             queue = container.queue,
             journal = journal,
-            config = SyncConfig(manifestBatch = reached.ping.limits.manifestBatch),
+            // Limity bierzemy z odpowiedzi na ping; klient nie zakłada własnych (§5.1).
+            config = SyncConfig(
+                manifestBatch = reached.ping.limits.manifestBatch,
+                smallFileThreshold = reached.ping.limits.smallFileThreshold.toLong(),
+                bundleMaxBytes = reached.ping.limits.bundleMaxBytes.toLong(),
+                bundleMaxCount = reached.ping.limits.bundleMaxCount,
+            ),
         )
 
         val (files, usedDelta) = collectFiles(mode)

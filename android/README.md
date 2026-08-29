@@ -30,7 +30,7 @@ i ten zostaje na 36 zgodnie z ADR-013, żeby na razie ominąć wymóg
 | `:core:net` | klient zasobów, wyścig tras, mDNS, przypięcie gniazd do Wi-Fi | częściowo |
 | `:core:data` | Room: kolejka, dziennik, budżet usługi pierwszoplanowej | tak |
 | `:core:scan` | `MediaStore` z licznikiem generacji, obchód drzewa, wykluczenia | częściowo |
-| `:core:sync` | silnik cyklu: manifest, wznawianie, klasyfikacja błędów | nie — za interfejsami |
+| `:core:sync` | silnik cyklu: manifest, wznawianie, paczkowanie, klasyfikacja błędów | nie — za interfejsami |
 | `:app` | parowanie, ekran główny, dziennik, składanie zależności | tak |
 
 Podział nie jest ozdobnikiem. Najtrudniejsze części — reguły ścieżek, wyścig tras
@@ -39,7 +39,7 @@ się na zwykłej maszynie wirtualnej, bez emulatora i w sekundach.
 
 ## Testy
 
-175 testów jednostkowych, wszystkie na JVM:
+186 testów jednostkowych, wszystkie na JVM:
 
 - **reguły ścieżek** — te same wektory `docs/testvectors/paths.tsv` co implementacja w C#,
 - **przypięcie klucza** — wektory ze stałych certyfikatów z odciskami policzonymi przez openssl,
@@ -47,7 +47,8 @@ się na zwykłej maszynie wirtualnej, bez emulatora i w sekundach.
 - **wyścig tras** — zegar wirtualny, więc opóźnienia w sekundach nie wydłużają wykonania,
 - **skaner** — prawdziwe pliki w katalogu tymczasowym,
 - **silnik** — pełne atrapy kolejki i serwera, sprawdzające przejścia stanów,
-- **decyzja o ponowieniu pracy w tle** — wydzielona z workera, żeby dała się przetestować.
+- **decyzja o ponowieniu pracy w tle** — wydzielona z workera, żeby dała się przetestować,
+- **paczkowanie małych plików** — podział, limity i częściowe niepowodzenie paczki.
 
 ### Test zgodności między implementacjami
 

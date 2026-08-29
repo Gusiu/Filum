@@ -53,11 +53,20 @@ class SyncEngineTest {
         return ScannedFile(name, file.absolutePath, content.length.toLong(), mtime)
     }
 
+    /**
+     * Uruchamia cykl z **wyłączonym paczkowaniem**.
+     *
+     * Ta klasa sprawdza ścieżkę pojedynczego PUT: wznawianie, konflikty przesunięcia,
+     * podział na fragmenty i skrót kontrolny. Przy domyślnym progu wszystkie testowe
+     * pliki byłyby na to za małe i poszłyby paczką, więc próg zerujemy jawnie.
+     * Ścieżkę paczki pokrywa BundlingTest.
+     */
     private suspend fun run(
         files: List<ScannedFile>,
         deadline: Deadline = nigdy,
         config: SyncConfig = SyncConfig(),
-    ): SyncOutcome = engine(config).run("sesja-1", ManifestRequest.MODE_DELTA, files.asSequence(), deadline)
+    ): SyncOutcome = engine(config.copy(smallFileThreshold = 0))
+        .run("sesja-1", ManifestRequest.MODE_DELTA, files.asSequence(), deadline)
 
     // --- ścieżka podstawowa ---
 

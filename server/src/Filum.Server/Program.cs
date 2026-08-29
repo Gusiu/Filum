@@ -25,6 +25,7 @@ builder.Services.AddSingleton<SpacePolicy>();
 builder.Services.AddSingleton<VersionStore>();
 builder.Services.AddSingleton<ManifestResolver>();
 builder.Services.AddSingleton<TransferStore>();
+builder.Services.AddSingleton<BundleReader>();
 builder.Services.AddSingleton<DeviceStats>();
 builder.Services.AddSingleton<PairingService>();
 builder.Services.AddSingleton<PairingRateLimiter>();
