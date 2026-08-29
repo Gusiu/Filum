@@ -62,20 +62,19 @@ od zera na podstawie samego dokumentu jest dowodem, że dokument jest kompletny.
 
 ## Stan prac
 
-Etapy 1–2 z [tabeli kolejności budowy](docs/ARCHITECTURE.md#8-kolejność-budowy).
+Etapy 1, 2 i 4 z [tabeli kolejności budowy](docs/ARCHITECTURE.md#8-kolejność-budowy).
 
 | Element | Stan |
 |---|---|
 | specyfikacja protokołu i architektura | spisane |
-| `PathRules` w C# | zaimplementowane, testy przechodzą |
-| `PathRules` w Kotlinie | napisane, **nieskompilowane** — patrz [android/README.md](android/README.md) |
-| serwer: `ping`, `manifest`, `PUT /file` | działa, wznawianie i wersjonowanie sprawdzone |
-| **95 testów po stronie serwera** | zielone |
-| mTLS, mDNS, `bundle`, `verify`, sieroty, panel | niezaczęte — etapy 4–9 |
+| `PathRules` w C# i w Kotlinie | zaimplementowane, oba przechodzą wspólne wektory |
+| serwer: `ping`, `manifest`, `PUT /file` | wznawianie i wersjonowanie sprawdzone |
+| mTLS, parowanie kodem QR, rejestr urządzeń | działa, sprawdzone na prawdziwym TLS |
+| **121 testów po stronie serwera** | zielone |
+| mDNS, `bundle`, `verify`, sieroty, panel, klient Androida | niezaczęte — etapy 3, 5, 7–9 |
 
-Serwer nasłuchuje wyłącznie na `127.0.0.1` i **nie ma jeszcze uwierzytelniania**;
-wystawienie go na sieć jest dopuszczalne dopiero po etapie 4. Szczegóły
-w [server/README.md](server/README.md).
+Serwer wolno już wystawić na sieć lokalną: bez sparowanego klucza żaden zasób
+zapisujący nie odpowiada. Szczegóły w [server/README.md](server/README.md).
 
 ## Budowanie
 

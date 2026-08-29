@@ -6,25 +6,6 @@ using Filum.Core;
 namespace Filum.Server;
 
 /// <summary>
-/// Ustala, którego urządzenia dotyczy żądanie.
-///
-/// Docelowo (etap 4) tożsamością jest pin certyfikatu klienta z warstwy TLS — protokół
-/// celowo nie ma nagłówka z identyfikatorem urządzenia, bo byłby podatny na podszycie
-/// (§3.2). Na etapie 2 nie ma jeszcze mTLS, więc urządzenie bierzemy z konfiguracji.
-/// </summary>
-public interface IDeviceResolver
-{
-    string Resolve(HttpContext context);
-    string Label(HttpContext context);
-}
-
-public sealed class ConfiguredDeviceResolver(FilumOptions options) : IDeviceResolver
-{
-    public string Resolve(HttpContext context) => options.DeviceSlug;
-    public string Label(HttpContext context) => options.DeviceLabel;
-}
-
-/// <summary>
 /// Licznik plików i bajtów urządzenia, prezentowany w odpowiedzi na ping.
 ///
 /// Ping bierze udział w wyścigu tras (§4.2), więc musi być tani. Przechodzenie drzewa

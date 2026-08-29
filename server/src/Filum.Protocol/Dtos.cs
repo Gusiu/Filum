@@ -41,6 +41,13 @@ public sealed record PingResponse(
     ProtocolLimits Limits,
     DateTimeOffset Time);
 
+// --- POST /api/v1/pair (§3.3) ---
+
+/// <summary>Zgłoszenie parowania. Certyfikat klienta w postaci DER, zakodowany base64.</summary>
+public sealed record PairRequest(string Cert, string Label);
+
+public sealed record PairResponse(string DeviceKey, string ServerInstanceId, int Protocol);
+
 // --- POST /api/v1/manifest (§5.2) ---
 
 /// <summary>

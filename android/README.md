@@ -24,13 +24,14 @@ przy pierwszym otwarciu projektu, albo `gradle wrapper` z lokalnej instalacji.
 
 | Moduł | Stan |
 |---|---|
-| `:core:protocol` | `PathRules` napisane, testy napisane, **nieskompilowane** |
+| `:core:protocol` | `PathRules` **skompilowane i sprawdzone** kompilatorem z Android Studio (kotlinc 2.3.10) |
 | pozostałe | niezaczęte, patrz [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) §3.1 |
 
-Logika `PathRules` została zweryfikowana krzyżowo: identyczna transkrypcja na
-Javę przechodzi te same wektory `docs/testvectors/paths.tsv` co implementacja
-w C#. Nie zastępuje to jednak uruchomienia testów kotlinowych — kod nie był
-kompilowany i mogą w nim być błędy składni.
+`PathRules.kt` kompiluje się bez ostrzeżeń i przechodzi komplet 35 wektorów
+z `docs/testvectors/paths.tsv` — wynik identyczny z implementacją w C#.
+Sprawdzenia dokonano samodzielnym programem uruchomieniowym, bo bez Gradle'a
+nie da się jeszcze wykonać testów JUnit. Sam plik `PathRulesTest.kt` czeka więc
+na pierwszą synchronizację projektu w Android Studio.
 
 ## Dlaczego `:core:protocol` nie jest modułem Android Library
 

@@ -3,31 +3,8 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using Filum.Protocol;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Filum.Core.Tests;
-
-/// <summary>Serwer uruchomiony w pamięci, na własnym katalogu tymczasowym.</summary>
-public sealed class FilumApp : WebApplicationFactory<Program>
-{
-    private readonly TempRoot _root = new();
-
-    public string Root => _root.Path;
-
-    protected override void ConfigureWebHost(IWebHostBuilder builder)
-    {
-        builder.UseSetting("Filum:Root", _root.Path);
-        builder.UseSetting("Filum:DeviceSlug", "telefon");
-        builder.UseSetting("Filum:ManifestBatch", "3");
-    }
-
-    protected override void Dispose(bool disposing)
-    {
-        base.Dispose(disposing);
-        if (disposing) _root.Dispose();
-    }
-}
 
 /// <summary>
 /// Testy zasobów HTTP z §5 protokołu. Sprawdzają to, czego testy jednostkowe nie
@@ -39,11 +16,13 @@ public class ApiTests : IClassFixture<FilumApp>
 
     private readonly FilumApp _app;
     private readonly HttpClient _client;
+    private readonly string _slug;
 
     public ApiTests(FilumApp app)
     {
         _app = app;
         _client = app.CreateClient();
+        _slug = app.PairAsync().GetAwaiter().GetResult();
     }
 
     private static string EncodePath(string canonical) =>
@@ -135,7 +114,7 @@ public class ApiTests : IClassFixture<FilumApp>
         Assert.True(body!.Complete);
         Assert.Equal(content.Length, body.Offset);
 
-        var stored = Path.Combine(_app.Root, "telefon", "files", "Documents", "przez-http.txt");
+        var stored = Path.Combine(_app.Root, _slug, "files", "Documents", "przez-http.txt");
         Assert.Equal(content, await File.ReadAllBytesAsync(stored));
     }
 

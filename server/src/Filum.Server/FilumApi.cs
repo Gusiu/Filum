@@ -1,5 +1,8 @@
 using System.Globalization;
+using System.Net;
 using System.Reflection;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Filum.Core;
 using Filum.Protocol;
@@ -14,9 +17,92 @@ public static class FilumApi
     {
         var api = app.MapGroup("/api/v1");
 
+        api.MapPost("/pair", Pair);
+        api.MapGet("/pair/new", NewPairing);
+
         api.MapGet("/ping", Ping);
         api.MapPost("/manifest", Manifest);
         api.MapPut("/file", File);
+    }
+
+    // --- POST /api/v1/pair (§3.3) ---
+
+    private static IResult Pair(
+        HttpContext context,
+        PairRequest request,
+        PairingService pairing,
+        PairingRateLimiter limiter,
+        DeviceRegistry registry,
+        ILogger<PairingService> logger)
+    {
+        var source = context.Connection.RemoteIpAddress?.ToString() ?? "nieznany";
+        if (!limiter.TryRegisterAttempt(source))
+        {
+            logger.LogWarning("Przekroczono limit prób parowania z {Source}", source);
+            return Error(StatusCodes.Status429TooManyRequests, "rate_limited",
+                         "Za dużo prób parowania. Spróbuj ponownie za kilka minut.");
+        }
+
+        var authorization = context.Request.Headers.Authorization.ToString();
+        if (!authorization.StartsWith("Bearer ", StringComparison.Ordinal))
+            return Error(StatusCodes.Status401Unauthorized, "unauthorized", "Brak tokenu parowania.");
+
+        if (!pairing.TryConsume(authorization["Bearer ".Length..]))
+            return Error(StatusCodes.Status401Unauthorized, "unauthorized",
+                         "Token parowania jest nieznany, już zużyty albo wygasł.");
+
+        X509Certificate2 certificate;
+        try
+        {
+            certificate = X509CertificateLoader.LoadCertificate(Convert.FromBase64String(request.Cert));
+        }
+        catch (Exception ex) when (ex is FormatException or CryptographicException)
+        {
+            return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest,
+                         "Pole cert musi zawierać certyfikat DER zakodowany base64.");
+        }
+
+        var pin = CertificateStore.ComputePin(certificate);
+        var device = registry.Register(pin, CleanLabel(request.Label));
+
+        logger.LogInformation("Sparowano urządzenie {Label} ({Slug}) o kluczu {Pin}",
+                              device.Label, device.Slug, pin);
+
+        return Results.Ok(new PairResponse(pin, ServerIdentity.InstanceId, ProtocolVersion.Current));
+    }
+
+    /// <summary>
+    /// Wydaje token parowania i buduje ładunek kodu QR.
+    ///
+    /// Dostępne wyłącznie z pętli zwrotnej: to jedyny zasób wydający sekret, a osoba
+    /// przy komputerze jest z definicji uprawniona do sparowania telefonu. Docelowo
+    /// woła to panel (etap 7); na razie służy do parowania z wiersza poleceń.
+    /// </summary>
+    private static IResult NewPairing(
+        HttpContext context,
+        FilumOptions options,
+        CertificateStore certificates,
+        PairingService pairing)
+    {
+        var remote = context.Connection.RemoteIpAddress;
+        if (remote is null || !IPAddress.IsLoopback(remote))
+            return Error(StatusCodes.Status403Forbidden, "forbidden",
+                         "Parowanie można rozpocząć tylko z komputera, na którym działa serwer.");
+
+        var payload = new QrPayload(
+            Environment.MachineName,
+            certificates.Pin,
+            pairing.Issue(),
+            options.Port,
+            LocalEndpoints.Enumerate(options.Port),
+            $"filum-{certificates.Pin[..8]}");
+
+        return Results.Ok(new
+        {
+            qr = PairingService.Encode(payload),
+            expiresInSeconds = (int)PairingService.Lifetime.TotalSeconds,
+            payload
+        });
     }
 
     // --- GET /api/v1/ping (§5.1) ---
@@ -26,11 +112,10 @@ public static class FilumApi
         FilumOptions options,
         StoragePaths paths,
         SpacePolicy space,
-        DeviceStats stats,
-        IDeviceResolver devices)
+        DeviceStats stats)
     {
-        var slug = devices.Resolve(context);
-        stats.RefreshIfStale(slug, StatsTtl);
+        var device = context.Device();
+        stats.RefreshIfStale(device.Slug, StatsTtl);
         var (count, bytes) = stats.Current;
 
         var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
@@ -40,7 +125,7 @@ public static class FilumApi
             new ServerInfo(Environment.MachineName, version, ServerIdentity.InstanceId),
             LocalEndpoints.Enumerate(options.Port),
             new StorageInfo(space.FreeBytes(paths.Root), space.TotalBytes(paths.Root)),
-            new DeviceInfo(devices.Label(context), count, bytes),
+            new DeviceInfo(device.Label, count, bytes),
             new ProtocolLimits(
                 options.ManifestBatch,
                 options.SmallFileThreshold,
@@ -56,8 +141,7 @@ public static class FilumApi
         HttpContext context,
         ManifestRequest request,
         FilumOptions options,
-        ManifestResolver resolver,
-        IDeviceResolver devices)
+        ManifestResolver resolver)
     {
         if (request.Files is null)
             return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, "Brak pola files.");
@@ -70,7 +154,7 @@ public static class FilumApi
             return Error(StatusCodes.Status413PayloadTooLarge, ErrorCodes.PayloadTooLarge,
                          $"Partia liczy {request.Files.Count} pozycji, limit to {options.ManifestBatch}.");
 
-        var resolution = resolver.Resolve(devices.Resolve(context), request.Files);
+        var resolution = resolver.Resolve(context.Device().Slug, request.Files);
 
         return Results.Ok(new ManifestResponse(resolution.Have, resolution.Needed, resolution.Rejected));
     }
@@ -80,13 +164,12 @@ public static class FilumApi
     private static async Task<IResult> File(
         HttpContext context,
         TransferStore transfers,
-        IDeviceResolver devices,
         CancellationToken ct)
     {
         if (!TryReadChunkHeaders(context.Request, out var request, out var problem))
             return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, problem);
 
-        var outcome = await transfers.WriteAsync(devices.Resolve(context), request, context.Request.Body, ct);
+        var outcome = await transfers.WriteAsync(context.Device().Slug, request, context.Request.Body, ct);
 
         return outcome.Status switch
         {
@@ -181,9 +264,7 @@ public static class FilumApi
         return true;
     }
 
-    /// <summary>
-    /// base64url bez dopełnienia (§5.3). Dopełnienie dokładamy sami, bo Convert go wymaga.
-    /// </summary>
+    /// <summary>base64url bez dopełnienia (§5.3). Dopełnienie dokładamy sami, bo Convert go wymaga.</summary>
     private static bool TryDecodePath(string? value, out string decoded)
     {
         decoded = "";
@@ -194,7 +275,6 @@ public static class FilumApi
         {
             2 => normalized + "==",
             3 => normalized + "=",
-            1 => normalized,
             _ => normalized
         };
         if (normalized.Length % 4 != 0) return false;
@@ -208,6 +288,14 @@ public static class FilumApi
         {
             return false;
         }
+    }
+
+    /// <summary>Etykieta jest tylko prezentacyjna (§3.2), ale trafia do nazwy katalogu — przycinamy.</summary>
+    private static string CleanLabel(string? label)
+    {
+        var cleaned = (label ?? "").Trim();
+        if (cleaned.Length == 0) return "Urządzenie";
+        return cleaned.Length > 64 ? cleaned[..64] : cleaned;
     }
 
     private static IResult Error(int status, string code, string message, long? expectedOffset = null) =>

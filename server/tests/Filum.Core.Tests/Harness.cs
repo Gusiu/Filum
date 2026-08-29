@@ -34,7 +34,7 @@ public sealed class Harness : IDisposable
 
     public Harness(Action<FilumOptions>? configure = null)
     {
-        Options = new FilumOptions { Root = _root.Path, DeviceSlug = Slug };
+        Options = new FilumOptions { Root = _root.Path };
         configure?.Invoke(Options);
 
         Paths = new StoragePaths(_root.Path);

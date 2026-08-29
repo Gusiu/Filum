@@ -8,10 +8,10 @@
 | Projekt | Odpowiedzialność |
 |---|---|
 | `Filum.Protocol` | modele DTO, `PathRules`, stałe protokołu — bez operacji plikowych |
-| `Filum.Core` | silnik składowania: manifest, fragmenty, wersje, próg miejsca |
-| `Filum.Server` | Kestrel, zasoby HTTP, parsowanie nagłówków |
+| `Filum.Core` | silnik składowania, certyfikat serwera, rejestr urządzeń |
+| `Filum.Server` | Kestrel z mTLS, zasoby HTTP, parowanie |
 | `Filum.Protocol.Tests` | wektory ścieżek wspólne z klientem Androida |
-| `Filum.Core.Tests` | silnik składowania i testy integracyjne API |
+| `Filum.Core.Tests` | silnik składowania, bezpieczeństwo, testy integracyjne API |
 
 ## Uruchamianie
 
@@ -19,23 +19,43 @@
 cd server && dotnet run --project src/Filum.Server --no-launch-profile
 ```
 
-Katalog backupu ustawia `Filum:Root` w `appsettings.json` albo zmienna
-środowiskowa `Filum__Root`. Bez tego serwer użyje
-`%LOCALAPPDATA%\Filum\backup`.
+| Ustawienie | Domyślnie | Znaczenie |
+|---|---|---|
+| `Filum:Root` | `%LOCALAPPDATA%\Filum\backup` | katalog backupu |
+| `Filum:ConfigDirectory` | `%LOCALAPPDATA%\Filum` | klucz prywatny serwera |
+| `Filum:Bind` | `0.0.0.0` | adres nasłuchu |
+| `Filum:Port` | `8765` | port |
 
-## Ostrzeżenie: stan na etapie 2
+Każde ustawienie da się nadpisać zmienną środowiskową, np. `Filum__Root`.
 
-Serwer nasłuchuje **wyłącznie na `127.0.0.1`** i nie ma jeszcze ani TLS, ani
-żadnego uwierzytelniania. Tożsamość urządzenia jest ustalona w konfiguracji
-(`Filum:DeviceSlug`), bo docelowy mechanizm — pin certyfikatu klienta z warstwy
-TLS (§3.2 protokołu) — pojawi się dopiero na etapie 4.
+Klucz prywatny leży **poza katalogiem backupu**. Ten bywa kopiowany na inny dysk
+albo odtwarzany z kopii, więc klucz wyciekłby razem z danymi.
 
-Nie wolno zmieniać adresu nasłuchu na `0.0.0.0` przed etapem 4. W tym stanie
-każdy w sieci lokalnej mógłby zapisywać pliki na dysku.
+## Bezpieczeństwo
 
-Miejsce, w którym to się podepnie, jest już przygotowane: interfejs
-`IDeviceResolver` w `Filum.Server`. Implementacja `ConfiguredDeviceResolver`
-zostanie zastąpiona odczytem pinu z certyfikatu.
+Od etapu 4 obowiązuje **wzajemne przypięcie kluczy** (§3.1 protokołu, ADR-005):
+
+- serwer generuje przy pierwszym starcie parę EC P-256 i certyfikat samopodpisany,
+- telefon przy parowaniu przekazuje swój certyfikat, serwer zapamiętuje odcisk klucza,
+- każdy zasób poza `/api/v1/pair` wymaga certyfikatu klienta o znanym odcisku.
+
+Nie ma urzędu certyfikacji ani tokenów wędrujących w każdym żądaniu. Odebranie
+dostępu zgubionemu telefonowi to skreślenie jednego wpisu w rejestrze.
+
+Dzięki temu nasłuch na `0.0.0.0` jest bezpieczny: bez sparowanego klucza żaden
+zasób zapisujący nie odpowiada.
+
+## Parowanie
+
+Token wydaje zasób dostępny **wyłącznie z pętli zwrotnej**:
+
+```bash
+curl -sk https://127.0.0.1:8765/api/v1/pair/new
+```
+
+Odpowiedź zawiera gotowy ciąg `filum1:...` do zakodowania w kodzie QR oraz
+rozłożony ładunek: nazwę serwera, odcisk jego klucza, token, port i listę adresów.
+Token jest jednorazowy i żyje 10 minut. Docelowo woła to panel (etap 7).
 
 ## Testy
 
@@ -45,20 +65,19 @@ cd server && dotnet test
 
 ## Przejazd ręczny
 
+Certyfikat serwera jest samopodpisany, więc `curl` potrzebuje `-k`; telefon
+zamiast tego sprawdza odcisk klucza. Odcisk można zweryfikować niezależnie:
+
 ```bash
-curl -s http://127.0.0.1:8765/api/v1/ping
+openssl s_client -connect 127.0.0.1:8765 </dev/null 2>/dev/null | openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl base64 | tr '+/' '-_' | tr -d '='
 ```
 
-Manifest — czego serwerowi brakuje:
+Wynik musi być identyczny z polem `k` z `/api/v1/pair/new`.
+
+Wysyłka pliku wymaga sparowanego certyfikatu (`X-Filum-Path` to base64url bez dopełnienia):
 
 ```bash
-curl -s -X POST http://127.0.0.1:8765/api/v1/manifest -H 'Content-Type: application/json' -d '{"session":"s1","mode":"delta","batch":0,"final":true,"files":[{"p":"DCIM/Camera/a.jpg","s":28,"m":1756400000}]}'
-```
-
-Wysyłka pliku (`X-Filum-Path` to base64url bez dopełnienia):
-
-```bash
-curl -s -X PUT http://127.0.0.1:8765/api/v1/file -H "X-Filum-Path: RENJTS9DYW1lcmEvYS5qcGc" -H "X-Filum-Size: 28" -H "X-Filum-Mtime: 1756400000" -H "X-Filum-Offset: 0" --data-binary @plik.jpg
+curl -sk --cert client.crt --key client.key -X PUT https://127.0.0.1:8765/api/v1/file -H "X-Filum-Path: RENJTS9DYW1lcmEvYS5qcGc" -H "X-Filum-Size: 28" -H "X-Filum-Mtime: 1756400000" -H "X-Filum-Offset: 0" --data-binary @plik.jpg
 ```
 
 Wznowienie polega na powtórzeniu żądania z `X-Filum-Offset` równym wartości
@@ -69,11 +88,16 @@ Wznowienie polega na powtórzeniu żądania z `X-Filum-Offset` równym wartości
 
 | Zasób | Stan |
 |---|---|
+| `GET /api/v1/pair/new` | tak, tylko z pętli zwrotnej |
+| `POST /api/v1/pair` | tak, token jednorazowy, limit 5 prób na 15 minut |
 | `GET /api/v1/ping` | tak, z listą adresów lokalnych (§4.4) |
 | `POST /api/v1/manifest` | tak, z polem `rejected` |
 | `PUT /api/v1/file` | tak, wznawianie i wersjonowanie |
+| mTLS z przypięciem kluczy | tak |
+| rozgłaszanie mDNS | nie — etap 5 |
 | `POST /api/v1/bundle` | nie — etap 8 |
-| `POST /api/v1/verify` | nie — etap 9 |
-| `GET /api/v1/orphans` | nie — etap 9 |
-| `POST /api/v1/pair`, mTLS, mDNS | nie — etapy 4 i 5 |
+| `POST /api/v1/verify`, `GET /api/v1/orphans` | nie — etap 9 |
 | panel Blazor, ikona w zasobniku | nie — etap 7 |
+
+Kod QR jest na razie zwracany jako ciąg znaków; renderowanie obrazka przyjdzie
+z panelem w etapie 7.

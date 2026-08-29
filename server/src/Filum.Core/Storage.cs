@@ -13,12 +13,16 @@ public sealed class FilumOptions
     public string Root { get; set; } = "";
 
     /// <summary>
-    /// Etap 2: tożsamość urządzenia jest ustalona na sztywno, bo nie ma jeszcze mTLS.
-    /// Od etapu 4 zastąpi to odczyt pinu z certyfikatu klienta (§3.2 protokołu).
+    /// Katalog na klucz prywatny serwera. Poza katalogiem backupu — patrz FilumPaths.
+    /// Pusty oznacza %LOCALAPPDATA%\Filum.
     /// </summary>
-    public string DeviceSlug { get; set; } = "dev-device";
+    public string ConfigDirectory { get; set; } = "";
 
-    public string DeviceLabel { get; set; } = "Urządzenie deweloperskie";
+    /// <summary>
+    /// Adres nasłuchu. Od etapu 4 obowiązuje mTLS, więc wystawienie na sieć jest
+    /// bezpieczne — bez sparowanego klucza żaden zasób poza /pair nie odpowiada.
+    /// </summary>
+    public string Bind { get; set; } = "0.0.0.0";
 
     public int ManifestBatch { get; set; } = 2000;
     public int SmallFileThreshold { get; set; } = 262_144;

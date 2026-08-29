@@ -121,6 +121,20 @@ ważnego certyfikatu klienta MUSI zwrócić `401`.
 
 Serwer MUSI ograniczyć próby parowania do **5 na 15 minut** z jednego adresu źródłowego.
 
+### 3.4 Wydawanie tokenu
+
+```
+GET /api/v1/pair/new
+```
+
+Zasób pomocniczy, **nieużywany przez klienta mobilnego**. Wydaje token i zwraca
+gotowy ładunek kodu QR na potrzeby interfejsu serwera.
+
+Serwer MUSI go udostępniać wyłącznie połączeniom z pętli zwrotnej. Jest to jedyny
+zasób wydający sekret, a osoba siedząca przy komputerze jest z definicji uprawniona
+do sparowania telefonu — udostępnienie go w sieci pozwalałoby obcemu urządzeniu
+wygenerować sobie token parowania.
+
 ---
 
 ## 4. Wykrywanie i wybór trasy
