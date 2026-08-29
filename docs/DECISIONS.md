@@ -244,10 +244,16 @@ pozostają czytelne i w pełni odwracalne.
 **Decyzja.** Interfejs jako strona serwowana przez sam serwer (Blazor), otwierana
 z menu ikony w zasobniku systemowym.
 
-**Uzasadnienie.** Serwer i tak jest serwerem HTTP, więc panel jest niemal darmowy.
-Ten sam interfejs otwiera się z telefonu i z innego komputera w sieci, co przy
-debugowaniu transferu jest znacznie wygodniejsze. Ikona w zasobniku daje
-aplikacji fizyczną obecność w systemie.
+**Uzasadnienie.** Serwer i tak jest serwerem HTTP, więc panel jest niemal darmowy —
+nie trzeba drugiego zestawu bibliotek ani drugiego sposobu prezentowania stanu.
+Ikona w zasobniku daje aplikacji fizyczną obecność w systemie.
+
+**Korekta wprowadzona przy implementacji.** Pierwotnie zakładaliśmy, że panel będzie
+osiągalny także z telefonu i z innego komputera w sieci, co bywa wygodne przy
+diagnozowaniu transferu. Trzeba było z tego zrezygnować: panel **wydaje tokeny
+parowania** i pokazuje zawartość kopii, więc wystawienie go w sieci pozwalałoby
+obcemu urządzeniu sparować się bez wiedzy właściciela. Panel jest dostępny wyłącznie
+z pętli zwrotnej. Wygoda diagnostyczna nie jest warta furtki do kopii zapasowej.
 
 **Odrzucone.** Pełna aplikacja WPF/WinUI (dublowanie logiki prezentacji stanu),
 sama konsola (nie do przyjęcia dla użytkownika końcowego).

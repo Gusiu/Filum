@@ -48,6 +48,33 @@ public sealed record PairRequest(string Cert, string Label);
 
 public sealed record PairResponse(string DeviceKey, string ServerInstanceId, int Protocol);
 
+// --- GET /api/v1/admin/status ---
+
+/// <summary>
+/// Urządzenie widziane przez panel. Model jest płaski i samodzielny, bo tę samą
+/// odpowiedź czyta ikona w zasobniku — osobny proces, który nie ma dostępu do
+/// wewnętrznych typów serwera.
+/// </summary>
+public sealed record AdminDevice(
+    string Pin,
+    string Slug,
+    string Label,
+    bool Enabled,
+    DateTimeOffset PairedAt,
+    long FileCount,
+    long BytesStored,
+    DateTimeOffset? LastActivity);
+
+public sealed record AdminStatus(
+    string ServerName,
+    string Version,
+    string Pin,
+    IReadOnlyList<string> Endpoints,
+    string BackupRoot,
+    long FreeBytes,
+    long TotalBytes,
+    IReadOnlyList<AdminDevice> Devices);
+
 // --- POST /api/v1/manifest (§5.2) ---
 
 /// <summary>

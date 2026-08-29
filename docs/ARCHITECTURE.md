@@ -35,7 +35,7 @@ mieszka na telefonie.
 | `Filum.Protocol` | modele DTO, `PathRules`, stałe protokołu | brak — czysta biblioteka, bez I/O |
 | `Filum.Core` | silnik składowania: manifest, fragmenty, wersje, sieroty, polityka miejsca | `Filum.Protocol` |
 | `Filum.Server` | Kestrel, zasoby HTTP, mTLS, parowanie, mDNS, panel Blazor | `Filum.Core` |
-| `Filum.Tray` | ikona w zasobniku systemowym, menu kontekstowe | tylko API HTTP |
+| `Filum.Tray` | ikona w zasobniku systemowym, menu kontekstowe | `Filum.Protocol`, `Filum.Core` i lokalne API |
 | `Filum.Tests` | testy jednostkowe i integracyjne | wszystkie |
 
 `Filum.Protocol` jest celowo bez zależności i bez operacji plikowych — dzięki temu
@@ -242,9 +242,12 @@ parowanie kodem QR, wyłączenie, usunięcie), składowanie (zajętość per urz
 wolne miejsce, katalog główny), przeglądarka wersji, raport sierot, dziennik,
 ustawienia (port, katalog, progi, tryb adopcji).
 
-Ten sam panel otwiera się z telefonu i z innego komputera w sieci — przy
-debugowaniu transferu okazuje się to znacznie wygodniejsze niż osobne okno
-aplikacji desktopowej.
+Panel jest dostępny **wyłącznie z pętli zwrotnej**. Wydaje tokeny parowania
+i pokazuje zawartość kopii, więc udostępnienie go w sieci pozwalałoby obcemu
+urządzeniu sparować się bez wiedzy właściciela komputera (ADR-010).
+
+Z tego samego powodu z pętli zwrotnej dostępne są też zasoby administracyjne
+(`/api/v1/admin/*`) — korzysta z nich ikona w zasobniku, będąca osobnym procesem.
 
 ---
 

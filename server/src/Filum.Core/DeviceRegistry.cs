@@ -95,6 +95,24 @@ public sealed class DeviceRegistry
         return true;
     }
 
+    /// <summary>
+    /// Odbiera urządzeniu dostęp, zostawiając jego pliki nietknięte.
+    ///
+    /// Usuwamy wyłącznie device.json. Katalog files/ zostaje, bo niezmiennik I1
+    /// obowiązuje także tutaj — najczęstszy powód rozparowania to zgubiony telefon,
+    /// czyli chwila, w której kopia jest najbardziej potrzebna.
+    /// </summary>
+    public bool Forget(string pin)
+    {
+        if (!_byPin.TryRemove(pin, out var record)) return false;
+
+        var file = Path.Combine(_paths.MetaRoot(record.Slug), "device.json");
+        var extended = LongPath.Extended(file);
+        if (File.Exists(extended)) File.Delete(extended);
+
+        return true;
+    }
+
     private void Persist(DeviceRecord record)
     {
         var directory = _paths.MetaRoot(record.Slug);

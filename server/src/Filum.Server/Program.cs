@@ -1,6 +1,7 @@
 using System.Net;
 using Filum.Core;
 using Filum.Server;
+using Filum.Server.Components;
 using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.Extensions.Options;
 
@@ -28,6 +29,11 @@ builder.Services.AddSingleton<DeviceStats>();
 builder.Services.AddSingleton<PairingService>();
 builder.Services.AddSingleton<PairingRateLimiter>();
 builder.Services.AddSingleton<IClientCertificateProvider, ConnectionClientCertificateProvider>();
+builder.Services.AddSingleton<AdminService>();
+
+// Panel serwera. Blazor po stronie serwera, bo stan i tak tu mieszka, a przy
+// dostępie wyłącznie z pętli zwrotnej opóźnienie kanału jest nieodczuwalne.
+builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 
 builder.WebHost.ConfigureKestrel(kestrel =>
 {
@@ -57,7 +63,16 @@ builder.WebHost.ConfigureKestrel(kestrel =>
 var app = builder.Build();
 
 app.UseMiddleware<DeviceAuthenticationMiddleware>();
+
+app.UseStaticFiles();
+
+// Wymagane przez interaktywne komponenty Blazora. Panel i tak jest dostępny wyłącznie
+// z pętli zwrotnej, ale to zabezpieczenie kosztuje jedną linię i chroni przed
+// żądaniem wywołanym z otwartej obok strony w przeglądarce.
+app.UseAntiforgery();
+
 app.MapFilumApi();
+app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 
 app.Logger.LogInformation("Filum: katalog backupu {Root}", backupRoot);
 app.Logger.LogInformation("Filum: certyfikat {Path}", certificates.Path);
@@ -69,7 +84,7 @@ app.Logger.LogInformation("Filum: sparowanych urządzeń: {Count}", known.Count)
 if (known.Count == 0)
 {
     app.Logger.LogInformation(
-        "Filum: aby sparować telefon, pobierz kod QR z https://127.0.0.1:{Port}/api/v1/pair/new", options.Port);
+        "Filum: aby sparować telefon, otwórz panel pod https://127.0.0.1:{Port}/parowanie", options.Port);
 }
 
 app.Run();

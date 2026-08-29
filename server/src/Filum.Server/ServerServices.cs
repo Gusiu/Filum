@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
@@ -6,32 +7,42 @@ using Filum.Core;
 namespace Filum.Server;
 
 /// <summary>
-/// Licznik plików i bajtów urządzenia, prezentowany w odpowiedzi na ping.
+/// Liczniki plików i bajtów per urządzenie, prezentowane w odpowiedzi na ping
+/// i w panelu.
 ///
-/// Ping bierze udział w wyścigu tras (§4.2), więc musi być tani. Przechodzenie drzewa
-/// przy każdym wywołaniu byłoby nie do przyjęcia przy 100 tys. plików, dlatego wartość
-/// jest z pamięci podręcznej, a odświeżenie idzie w tle i nigdy nie blokuje odpowiedzi.
+/// Ping bierze udział w wyścigu tras (§4.2), więc musi być tani. Przechodzenie
+/// drzewa przy każdym wywołaniu byłoby nie do przyjęcia przy 100 tys. plików,
+/// dlatego wartość pochodzi z pamięci podręcznej, a odświeżenie idzie w tle
+/// i nigdy nie blokuje odpowiedzi.
 /// </summary>
 public sealed class DeviceStats(StoragePaths paths, ILogger<DeviceStats> logger)
 {
-    private long _count;
-    private long _bytes;
-    private long _computedTicks;
-    private int _running;
+    private sealed record Entry(long Count, long Bytes, DateTime ComputedUtc);
 
-    public (long Count, long Bytes) Current => (Interlocked.Read(ref _count), Interlocked.Read(ref _bytes));
+    private static readonly TimeSpan Ttl = TimeSpan.FromSeconds(60);
 
-    public void RefreshIfStale(string slug, TimeSpan ttl)
+    private readonly ConcurrentDictionary<string, Entry> _cache = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, byte> _running = new(StringComparer.Ordinal);
+
+    /// <summary>Ostatnio policzone wartości; odświeża je w tle, gdy się zestarzały.</summary>
+    public (long Count, long Bytes) For(string slug)
     {
-        var computed = new DateTime(Interlocked.Read(ref _computedTicks), DateTimeKind.Utc);
-        if (DateTime.UtcNow - computed < ttl) return;
-        if (Interlocked.Exchange(ref _running, 1) == 1) return;
+        var entry = _cache.GetValueOrDefault(slug);
+        if (entry is null || DateTime.UtcNow - entry.ComputedUtc >= Ttl) Refresh(slug);
+
+        return entry is null ? (0, 0) : (entry.Count, entry.Bytes);
+    }
+
+    private void Refresh(string slug)
+    {
+        if (!_running.TryAdd(slug, 0)) return;
 
         _ = Task.Run(() =>
         {
             try
             {
-                Compute(slug);
+                var (count, bytes) = Compute(slug);
+                _cache[slug] = new Entry(count, bytes, DateTime.UtcNow);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -39,21 +50,15 @@ public sealed class DeviceStats(StoragePaths paths, ILogger<DeviceStats> logger)
             }
             finally
             {
-                Interlocked.Exchange(ref _computedTicks, DateTime.UtcNow.Ticks);
-                Interlocked.Exchange(ref _running, 0);
+                _running.TryRemove(slug, out _);
             }
         });
     }
 
-    private void Compute(string slug)
+    private (long Count, long Bytes) Compute(string slug)
     {
         var root = LongPath.Extended(paths.FilesRoot(slug));
-        if (!Directory.Exists(root))
-        {
-            Interlocked.Exchange(ref _count, 0);
-            Interlocked.Exchange(ref _bytes, 0);
-            return;
-        }
+        if (!Directory.Exists(root)) return (0, 0);
 
         long count = 0;
         long bytes = 0;
@@ -63,8 +68,7 @@ public sealed class DeviceStats(StoragePaths paths, ILogger<DeviceStats> logger)
             bytes += new FileInfo(file).Length;
         }
 
-        Interlocked.Exchange(ref _count, count);
-        Interlocked.Exchange(ref _bytes, bytes);
+        return (count, bytes);
     }
 }
 
