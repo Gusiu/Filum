@@ -43,6 +43,12 @@ android {
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
+
+    // Decyzja o ponawianiu pracy w tle nie dotyka API Androida, więc testuje się
+    // na zwykłej maszynie wirtualnej.
+    testOptions {
+        unitTests.all { it.useJUnitPlatform() }
+    }
 }
 
 
@@ -55,6 +61,7 @@ dependencies {
     implementation(project(":core:sync"))
 
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.work)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
@@ -64,4 +71,7 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.compose.ui.tooling.preview)
     debugImplementation(libs.compose.ui.tooling)
+
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }

@@ -1,5 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      Usluga pierwszoplanowa typu dataSync. Od Androida 15 ma limit szesciu godzin
+      na dobe w oknie kroczacym - pilnuje go BudgetTracker, zeby system nie ubil
+      transferu w losowym momencie.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Blokada Wi-Fi: bez niej oszczedzanie energii karty tnie przepustowosc. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application
         android:name="pl.wspa.filum.app.FilumApplication"
@@ -17,6 +30,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          Usluge pierwszoplanowa uruchamia WorkManager, wiec typ dataSync trzeba
+          dopisac do jego wlasnej deklaracji. Bez tego system odmawia jej podniesienia
+          na Androidzie 14 i nowszym.
+        -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
 
     </application>
 

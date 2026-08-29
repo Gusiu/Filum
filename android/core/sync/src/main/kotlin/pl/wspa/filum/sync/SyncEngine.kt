@@ -100,7 +100,7 @@ class SyncEngine(
                     JournalLevel.INFO, "deadline_manifest",
                     "Koniec budżetu w trakcie uzgadniania manifestu, partia $index.",
                 )
-                return SyncOutcome.Interrupted("budżet", filesSent, bytesSent)
+                return SyncOutcome.Interrupted(InterruptReason.BUDGET, filesSent, bytesSent)
             }
         }
 
@@ -145,7 +145,7 @@ class SyncEngine(
                 when (send(entry, deadline)) {
                     SendResult.SENT -> filesSent++
                     SendResult.INTERRUPTED ->
-                        return SyncOutcome.Interrupted("połączenie", filesSent, bytesSent)
+                        return SyncOutcome.Interrupted(InterruptReason.CONNECTION, filesSent, bytesSent)
 
                     SendResult.SKIPPED, SendResult.FAILED -> Unit
                 }
@@ -163,7 +163,7 @@ class SyncEngine(
             JournalLevel.INFO, "deadline_upload",
             "Koniec budżetu; kończę czysto po $filesSent plikach ($bytesSent B).",
         )
-        return SyncOutcome.Interrupted("budżet", filesSent, bytesSent)
+        return SyncOutcome.Interrupted(InterruptReason.BUDGET, filesSent, bytesSent)
     }
 
     private enum class SendResult { SENT, SKIPPED, FAILED, INTERRUPTED }

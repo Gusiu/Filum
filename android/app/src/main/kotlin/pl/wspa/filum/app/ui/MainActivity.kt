@@ -31,6 +31,7 @@ class MainActivity : ComponentActivity() {
                 val model: MainViewModel = viewModel(factory = MainViewModel.Factory(container))
                 val state by model.state.collectAsState()
                 val log by model.log.collectAsState()
+                val running by model.running.collectAsState()
 
                 // Uprawnienie do całej pamięci nadaje się w ustawieniach systemu,
                 // poza aplikacją, więc po powrocie trzeba odczytać jego stan na nowo.
@@ -46,7 +47,9 @@ class MainActivity : ComponentActivity() {
 
                             Screen.HOME -> HomeScreen(
                                 state = state,
+                                running = running,
                                 onSyncNow = model::syncNow,
+                                onScheduleChange = model::setSchedule,
                                 onOpenLog = { model.show(Screen.LOG) },
                                 onRequestStorageAccess = ::openStorageAccessSettings,
                                 onUnpair = model::unpair,

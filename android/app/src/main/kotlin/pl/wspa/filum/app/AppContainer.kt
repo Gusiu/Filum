@@ -7,6 +7,7 @@ import pl.wspa.filum.crypto.FilumTls
 import pl.wspa.filum.data.EndpointEntity
 import pl.wspa.filum.data.FilumDatabase
 import pl.wspa.filum.data.PairedServerEntity
+import pl.wspa.filum.data.SettingsEntity
 import pl.wspa.filum.net.AndroidLocalNetworkBinder
 import pl.wspa.filum.net.ApiResult
 import pl.wspa.filum.net.EndpointKind
@@ -36,6 +37,10 @@ class AppContainer(val context: Context) {
     val pairing: PairingController by lazy { PairingController(this) }
 
     val syncRunner: SyncRunner by lazy { SyncRunner(this) }
+
+    /** Ustawienia z wartościami domyślnymi przy pierwszym uruchomieniu. */
+    suspend fun settings(): SettingsEntity =
+        database.settings().get() ?: SettingsEntity().also { database.settings().save(it) }
 }
 
 class FilumApplication : Application() {

@@ -39,14 +39,15 @@ się na zwykłej maszynie wirtualnej, bez emulatora i w sekundach.
 
 ## Testy
 
-168 testów jednostkowych, wszystkie na JVM:
+175 testów jednostkowych, wszystkie na JVM:
 
 - **reguły ścieżek** — te same wektory `docs/testvectors/paths.tsv` co implementacja w C#,
 - **przypięcie klucza** — wektory ze stałych certyfikatów z odciskami policzonymi przez openssl,
 - **klient zasobów** — `MockWebServer` z prawdziwym TLS i `requireClientAuth`,
 - **wyścig tras** — zegar wirtualny, więc opóźnienia w sekundach nie wydłużają wykonania,
 - **skaner** — prawdziwe pliki w katalogu tymczasowym,
-- **silnik** — pełne atrapy kolejki i serwera, sprawdzające przejścia stanów.
+- **silnik** — pełne atrapy kolejki i serwera, sprawdzające przejścia stanów,
+- **decyzja o ponowieniu pracy w tle** — wydzielona z workera, żeby dała się przetestować.
 
 ### Test zgodności między implementacjami
 
@@ -78,7 +79,8 @@ tutaj, jako ponowna prośba o te same pliki.
 | parowanie, ping, manifest, wznawialny transfer | działa, sprawdzone przeciwko serwerowi |
 | ekrany: parowanie, główny, dziennik | działają |
 | skanowanie: `MediaStore` i pełny obchód | zaimplementowane, nieuruchomione na telefonie |
-| harmonogram, usługa pierwszoplanowa | niezaczęte — etap 6 |
+| harmonogram: ręcznie, codziennie, co tydzień | działa |
+| usługa pierwszoplanowa z pilnowaniem budżetu | działa |
 | wykrywanie przez mDNS | niezaczęte — etap 5 |
 | ekran wykluczeń, skaner kodu QR aparatem | niezaczęte |
 

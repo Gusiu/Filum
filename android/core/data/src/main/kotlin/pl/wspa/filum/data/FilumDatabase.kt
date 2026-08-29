@@ -15,8 +15,9 @@ import androidx.room.RoomDatabase
         ExclusionEntity::class,
         BudgetWindowEntity::class,
         LogEventEntity::class,
+        SettingsEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class FilumDatabase : RoomDatabase() {
@@ -29,6 +30,7 @@ abstract class FilumDatabase : RoomDatabase() {
     abstract fun exclusions(): ExclusionDao
     abstract fun budget(): BudgetDao
     abstract fun log(): LogEventDao
+    abstract fun settings(): SettingsDao
 
     companion object {
         const val NAME = "filum.db"
