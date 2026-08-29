@@ -75,9 +75,10 @@ Etapy 1–9 z [tabeli kolejności budowy](docs/ARCHITECTURE.md#8-kolejność-bud
 | wykrywanie serwera przez mDNS | działa |
 | agregacja małych plików w paczki | działa |
 | kontrola integralności i raport sierot | działa |
+| serwer jako usługa Windows | działa, nierejestrowany |
 | **test zgodności klient↔serwer** | przechodzi |
 | **160 testów serwera, 186 testów klienta** | zielone |
-| skaner QR aparatem, usługa Windows | niezaczęte |
+| skaner kodu QR aparatem telefonu | niezaczęte |
 
 Serwer i klient są pisane niezależnie, w różnych językach, i pogodzone wyłącznie
 przez specyfikację oraz wspólne wektory testowe. `EndToEndTest` uruchamia prawdziwy

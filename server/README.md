@@ -79,6 +79,31 @@ nietknięta. Rozparowanie usuwa wyłącznie wpis `device.json` — pliki zostaj�
 bo najczęstszy powód rozparowania to zgubiony telefon, czyli dokładnie ta
 chwila, w której kopia jest najbardziej potrzebna.
 
+## Uruchamianie jako usługa Windows
+
+Ten sam plik wykonywalny działa w obu trybach — wykrywa sam, jak został uruchomiony.
+Usługa jest potrzebna, żeby kopia przyjmowała się także przy wylogowanym użytkowniku.
+
+Publikacja do jednego pliku:
+
+```bash
+cd server && dotnet publish src/Filum.Server -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
+```
+
+Rejestracja usługi (wiersz poleceń z uprawnieniami administratora):
+
+```bash
+sc.exe create Filum binPath= "C:\ścieżka\do\Filum.Server.exe" start= auto
+```
+
+Usługa działa w sesji 0 i **nie może wyświetlać interfejsu** — dlatego ikona
+w zasobniku jest osobnym procesem uruchamianym przy logowaniu (ADR-010).
+
+Katalog konfiguracji domyślnie zależy od konta, na którym działa usługa, więc przy
+rejestracji warto podać `Filum:Root` i `Filum:ConfigDirectory` jawnie — inaczej
+usługa uruchomiona jako `LocalSystem` użyje innych katalogów niż serwer
+uruchamiany ręcznie.
+
 ## Ikona w zasobniku
 
 ```bash

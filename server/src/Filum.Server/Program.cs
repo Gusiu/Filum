@@ -3,9 +3,19 @@ using Filum.Core;
 using Filum.Server;
 using Filum.Server.Components;
 using Microsoft.AspNetCore.Server.Kestrel.Https;
+using Microsoft.Extensions.Hosting.WindowsServices;
 using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Ten sam plik wykonywalny działa jako zwykły program i jako usługa Windows.
+// Wywołanie samo wykrywa, w którym trybie wystartowano, więc uruchomienie
+// z wiersza poleceń zachowuje się bez zmian.
+//
+// Usługa jest potrzebna, żeby kopia działała także przy wylogowanym użytkowniku.
+// Nie może natomiast wyświetlać interfejsu - sesja 0 na to nie pozwala - dlatego
+// ikona w zasobniku jest osobnym procesem (ADR-010).
+builder.Host.UseWindowsService(options => options.ServiceName = "Filum");
 
 builder.Services.Configure<FilumOptions>(builder.Configuration.GetSection(FilumOptions.SectionName));
 builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<FilumOptions>>().Value);
