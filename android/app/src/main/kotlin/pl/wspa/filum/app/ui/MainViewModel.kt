@@ -18,11 +18,14 @@ import pl.wspa.filum.app.work.SyncScheduler
 import pl.wspa.filum.data.LogEventEntity
 import pl.wspa.filum.data.PairedServerEntity
 import pl.wspa.filum.data.Schedule
+import pl.wspa.filum.data.ExclusionEntity
 import pl.wspa.filum.data.SettingsEntity
 import pl.wspa.filum.data.SyncSessionEntity
 import pl.wspa.filum.scan.Environment
+import pl.wspa.filum.scan.ExclusionRules
+import java.io.File
 
-enum class Screen { HOME, PAIRING, LOG }
+enum class Screen { HOME, PAIRING, LOG, FOLDERS }
 
 data class UiState(
     val screen: Screen = Screen.HOME,
@@ -35,6 +38,8 @@ data class UiState(
     val lastError: String? = null,
     val verifying: Boolean = false,
     val verification: String? = null,
+    val folders: List<FolderChoice> = emptyList(),
+    val foldersLoading: Boolean = false,
 )
 
 class MainViewModel(private val container: AppContainer) : ViewModel() {
@@ -140,6 +145,56 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
 
                     is VerificationResult.Failed -> "Nie udało się sprawdzić: ${result.reason}"
                 },
+            )
+        }
+    }
+
+    /**
+     * Wczytuje katalogi najwyższego poziomu razem z bieżącymi wykluczeniami.
+     *
+     * Liczba elementów pochodzi z jednego wywołania `list()`, nie z obchodu drzewa:
+     * ekran ma się otworzyć od razu, a dokładna liczba plików w Download nikomu
+     * nie jest potrzebna do podjęcia decyzji.
+     */
+    fun openFolders() {
+        _state.value = _state.value.copy(screen = Screen.FOLDERS, foldersLoading = true)
+
+        viewModelScope.launch {
+            val folders = withContext(Dispatchers.IO) { readFolders() }
+            _state.value = _state.value.copy(folders = folders, foldersLoading = false)
+        }
+    }
+
+    fun setExcluded(path: String, excluded: Boolean) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                val dao = container.database.exclusions()
+                if (excluded) dao.save(ExclusionEntity(path)) else dao.delete(ExclusionEntity(path))
+            }
+
+            _state.value = _state.value.copy(
+                folders = _state.value.folders.map {
+                    if (it.path == path) it.copy(excluded = excluded) else it
+                },
+            )
+        }
+    }
+
+    private suspend fun readFolders(): List<FolderChoice> {
+        val excluded = container.database.exclusions().active().map { it.pathPrefix }.toSet()
+        val root = File(Environment.externalStorageRootPath())
+
+        val directories = root.listFiles()
+            ?.filter { it.isDirectory && !it.name.startsWith(".") }
+            ?.sortedBy { it.name.lowercase() }
+            ?: return emptyList()
+
+        return directories.map { directory ->
+            FolderChoice(
+                path = directory.name,
+                excluded = directory.name in excluded,
+                fileCount = directory.list()?.size ?: -1,
+                suggested = directory.name in ExclusionRules.SUGGESTED_FOR_EXCLUSION,
             )
         }
     }

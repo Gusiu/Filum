@@ -52,12 +52,20 @@ class MainActivity : ComponentActivity() {
                                 onVerify = model::verify,
                                 onScheduleChange = model::setSchedule,
                                 onOpenLog = { model.show(Screen.LOG) },
+                                onOpenFolders = model::openFolders,
                                 onRequestStorageAccess = ::openStorageAccessSettings,
                                 onUnpair = model::unpair,
                             )
 
                             Screen.LOG -> LogScreen(
                                 events = log,
+                                onBack = { model.show(Screen.HOME) },
+                            )
+
+                            Screen.FOLDERS -> FoldersScreen(
+                                folders = state.folders,
+                                loading = state.foldersLoading,
+                                onToggle = model::setExcluded,
                                 onBack = { model.show(Screen.HOME) },
                             )
                         }

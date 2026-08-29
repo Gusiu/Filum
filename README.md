@@ -77,7 +77,7 @@ Etapy 1–9 z [tabeli kolejności budowy](docs/ARCHITECTURE.md#8-kolejność-bud
 | kontrola integralności i raport sierot | działa |
 | **test zgodności klient↔serwer** | przechodzi |
 | **160 testów serwera, 186 testów klienta** | zielone |
-| ekran wykluczeń, skaner QR aparatem, usługa Windows | niezaczęte |
+| skaner QR aparatem, usługa Windows | niezaczęte |
 
 Serwer i klient są pisane niezależnie, w różnych językach, i pogodzone wyłącznie
 przez specyfikację oraz wspólne wektory testowe. `EndToEndTest` uruchamia prawdziwy

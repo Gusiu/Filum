@@ -83,6 +83,20 @@ class ExclusionRules(
         )
 
         /**
+         * Katalogi, które warto pokazać użytkownikowi jako kandydatów do wykluczenia.
+         *
+         * Nie są wykluczone domyślnie — decyzja należy do użytkownika. Ale to właśnie
+         * one najczęściej zawierają dane odtwarzalne albo bardzo duże: pobrane
+         * instalatory, filmy z gier, podcasty.
+         */
+        val SUGGESTED_FOR_EXCLUSION = setOf(
+            "Download",
+            "Podcasts",
+            "Recordings",
+            "Audiobooks",
+        )
+
+        /**
          * Okno spokoju: pliki zmodyfikowane w ciągu ostatniej minuty pomijamy,
          * bo mogą być właśnie zapisywane (§5.3 protokołu). Wysłanie połowy nagrania
          * dałoby na serwerze plik, który wygląda na kompletny, a nie jest.

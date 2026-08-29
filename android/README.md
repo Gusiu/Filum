@@ -31,7 +31,7 @@ i ten zostaje na 36 zgodnie z ADR-013, żeby na razie ominąć wymóg
 | `:core:data` | Room: kolejka, dziennik, budżet usługi pierwszoplanowej | tak |
 | `:core:scan` | `MediaStore` z licznikiem generacji, obchód drzewa, wykluczenia | częściowo |
 | `:core:sync` | silnik cyklu: manifest, wznawianie, paczkowanie, klasyfikacja błędów | nie — za interfejsami |
-| `:app` | parowanie, ekran główny, dziennik, składanie zależności | tak |
+| `:app` | parowanie, ekran główny, foldery, dziennik, składanie zależności | tak |
 
 Podział nie jest ozdobnikiem. Najtrudniejsze części — reguły ścieżek, wyścig tras
 i decyzje silnika o tym, co ponowić, a co odłożyć — leżą w modułach, które testują
@@ -84,7 +84,8 @@ tutaj, jako ponowna prośba o te same pliki.
 | usługa pierwszoplanowa z pilnowaniem budżetu | działa |
 | wykrywanie przez mDNS | działa, sprawdzone przeciwko serwerowi |
 | kontrola integralności próbki plików | działa |
-| ekran wykluczeń, skaner kodu QR aparatem | niezaczęte |
+| ekran wykluczeń (Foldery) | działa |
+| skaner kodu QR aparatem | niezaczęte |
 
 Parowanie odbywa się przez wklejenie ciągu `filum1:…` ze schowka. Skaner aparatem
 dojdzie razem z panelem serwera, który i tak musi ten kod narysować (etap 7).
