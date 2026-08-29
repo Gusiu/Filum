@@ -5,16 +5,13 @@ import android.security.keystore.KeyProperties
 import android.security.keystore.StrongBoxUnavailableException
 import android.util.Log
 import java.math.BigInteger
-import java.net.Socket
 import java.security.KeyPairGenerator
 import java.security.KeyStore
-import java.security.Principal
 import java.security.PrivateKey
 import java.security.cert.X509Certificate
 import java.security.spec.ECGenParameterSpec
 import java.util.Calendar
 import javax.net.ssl.KeyManager
-import javax.net.ssl.X509ExtendedKeyManager
 import javax.security.auth.x500.X500Principal
 
 /**
@@ -50,38 +47,7 @@ class DeviceIdentity private constructor(
      * żadnej listy nie wysyła (bo nie ma urzędu — ADR-005), więc domyślny menedżer
      * nie wybrałby niczego i uścisk dłoni poszedłby bez certyfikatu klienta.
      */
-    fun keyManagers(): Array<KeyManager> = arrayOf(SingleKeyManager(alias, certificate, privateKey))
-
-    private class SingleKeyManager(
-        private val alias: String,
-        certificate: X509Certificate,
-        private val privateKey: PrivateKey,
-    ) : X509ExtendedKeyManager() {
-
-        private val chain = arrayOf(certificate)
-
-        override fun chooseClientAlias(
-            keyType: Array<out String>?, issuers: Array<out Principal>?, socket: Socket?,
-        ): String = alias
-
-        override fun chooseEngineClientAlias(
-            keyType: Array<out String>?, issuers: Array<out Principal>?, engine: javax.net.ssl.SSLEngine?,
-        ): String = alias
-
-        override fun getClientAliases(keyType: String?, issuers: Array<out Principal>?): Array<String> =
-            arrayOf(alias)
-
-        override fun getCertificateChain(alias: String?): Array<X509Certificate> = chain
-
-        override fun getPrivateKey(alias: String?): PrivateKey = privateKey
-
-        // Telefon nigdy nie występuje w roli serwera TLS.
-        override fun getServerAliases(keyType: String?, issuers: Array<out Principal>?): Array<String>? = null
-
-        override fun chooseServerAlias(
-            keyType: String?, issuers: Array<out Principal>?, socket: Socket?,
-        ): String? = null
-    }
+    fun keyManagers(): Array<KeyManager> = arrayOf(FixedKeyManager(alias, certificate, privateKey))
 
     companion object {
         private const val TAG = "FilumIdentity"

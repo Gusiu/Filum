@@ -22,3 +22,4 @@ rootProject.name = "Filum"
 // których błąd kosztuje ciche skasowanie pliku.
 include(":core:protocol")
 include(":core:crypto")
+include(":core:net")
