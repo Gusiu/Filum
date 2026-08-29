@@ -62,19 +62,29 @@ od zera na podstawie samego dokumentu jest dowodem, że dokument jest kompletny.
 
 ## Stan prac
 
-Etap 1 z [tabeli kolejności budowy](docs/ARCHITECTURE.md#8-kolejność-budowy): reguły ścieżek.
+Etapy 1–2 z [tabeli kolejności budowy](docs/ARCHITECTURE.md#8-kolejność-budowy).
 
 | Element | Stan |
 |---|---|
 | specyfikacja protokołu i architektura | spisane |
-| `Filum.Protocol.PathRules` (C#) | zaimplementowane, **60 testów przechodzi** |
-| `pl.wspa.filum.protocol.PathRules` (Kotlin) | napisane, nieskompilowane — brak Gradle/Kotlina, patrz [android/README.md](android/README.md) |
-| pozostałe moduły | niezaczęte |
+| `PathRules` w C# | zaimplementowane, testy przechodzą |
+| `PathRules` w Kotlinie | napisane, **nieskompilowane** — patrz [android/README.md](android/README.md) |
+| serwer: `ping`, `manifest`, `PUT /file` | działa, wznawianie i wersjonowanie sprawdzone |
+| **95 testów po stronie serwera** | zielone |
+| mTLS, mDNS, `bundle`, `verify`, sieroty, panel | niezaczęte — etapy 4–9 |
+
+Serwer nasłuchuje wyłącznie na `127.0.0.1` i **nie ma jeszcze uwierzytelniania**;
+wystawienie go na sieć jest dopuszczalne dopiero po etapie 4. Szczegóły
+w [server/README.md](server/README.md).
 
 ## Budowanie
 
 ```bash
 cd server && dotnet test
+```
+
+```bash
+cd server && dotnet run --project src/Filum.Server --no-launch-profile
 ```
 
 Klient Androida wymaga Android Studio — szczegóły w [android/README.md](android/README.md).

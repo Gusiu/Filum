@@ -238,6 +238,9 @@ Odpowiedź `200`:
     { "p": "DCIM/Camera/IMG_0002.JPG", "offset": 0 },
     { "p": "Movies/klip.mp4",          "offset": 5242880 },
     { "p": "Documents/notatka.txt",    "offset": 0, "versioned": true }
+  ],
+  "rejected": [
+    { "p": "dziwna/../ścieżka.txt", "error": "traversal" }
   ]
 }
 ```
@@ -247,6 +250,14 @@ Odpowiedź `200`:
 - `versioned: true` sygnalizuje, że ścieżka jest już zajęta przez inną zawartość
   i po zakończeniu transferu poprzednia wersja zostanie odłożona (§8.3).
   Pole jest informacyjne — służy prezentacji w interfejsie.
+- `rejected` zawiera ścieżki nienadające się do składowania (§7), z wartością
+  `error` z tabeli w §4 dokumentu PATH-RULES. Pojedyncza zła ścieżka **nie może**
+  unieważniać całej partii. Klient MUSI oznaczyć takie pozycje jako trwale nieudane
+  i nigdy nie próbować ich wysyłać.
+
+  Bez tego pola klient dowiedziałby się o odrzuceniu dopiero z odpowiedzi `422`
+  na `PUT`, czyli po jednym zmarnowanym żądaniu na każdy taki plik — a przy
+  wysyłce po sieci komórkowej to realny koszt.
 
 Serwer wyznacza `have`/`needed` przez porównanie `(rozmiar, mtime)` z systemem
 plików. Serwer **nie utrzymuje własnego indeksu zawartości** (ADR-003).
