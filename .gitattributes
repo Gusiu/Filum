@@ -1,0 +1,10 @@
+# Domyslnie normalizujemy do LF w repozytorium.
+* text=auto eol=lf
+
+# Wektory testowe musza byc bajt w bajt takie same po obu stronach.
+# Zadnej konwersji koncow linii - to jest plik kontraktowy, nie zrodlo.
+*.tsv -text
+
+# Pliki narzedzi Visual Studio / Rider oczekuja CRLF.
+*.sln text eol=crlf
+*.csproj text eol=crlf
