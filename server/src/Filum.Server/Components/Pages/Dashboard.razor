@@ -68,19 +68,19 @@
                 {
                     <tr>
                         <td>
-                            @entry.Device.Label
-                            @if (!entry.Device.Enabled)
+                            @entry.Label
+                            @if (!entry.Enabled)
                             {
                                 <span class="ostrzezenie"> — wyłączone</span>
                             }
-                            <div class="mono przygaszony">@entry.Device.Slug</div>
+                            <div class="mono przygaszony">@entry.Slug</div>
                         </td>
                         <td>@entry.FileCount</td>
                         <td>@Format.Bytes(entry.BytesStored)</td>
                         <td>@Format.Moment(entry.LastActivity)</td>
                         <td>
                             <button @onclick="() => Toggle(entry)">
-                                @(entry.Device.Enabled ? "Wyłącz" : "Włącz")
+                                @(entry.Enabled ? "Wyłącz" : "Włącz")
                             </button>
                         </td>
                     </tr>
@@ -97,13 +97,13 @@
 </main>
 
 @code {
-    private PanelSnapshot? snapshot;
+    private AdminStatus? snapshot;
 
     protected override void OnInitialized() => snapshot = Admin.Snapshot();
 
-    private void Toggle(DeviceSummary entry)
+    private void Toggle(AdminDevice entry)
     {
-        Admin.SetEnabled(entry.Device.Pin, !entry.Device.Enabled);
+        Admin.SetEnabled(entry.Pin, !entry.Enabled);
         snapshot = Admin.Snapshot();
     }
 }

@@ -394,11 +394,11 @@ public class PanelAccessTests
         using var app = new FilumApp();
         await app.PairAsync("Galaxy S24 Ultra");
 
-        var snapshot = await app.CreateClient().GetFromJsonAsync<PanelSnapshot>("/api/v1/admin/status");
+        var snapshot = await app.CreateClient().GetFromJsonAsync<AdminStatus>("/api/v1/admin/status");
 
         Assert.NotNull(snapshot);
         Assert.Equal(43, snapshot.Pin.Length);
-        Assert.Equal("Galaxy S24 Ultra", snapshot.Devices.Single().Device.Label);
+        Assert.Equal("Galaxy S24 Ultra", snapshot.Devices.Single().Label);
         Assert.True(snapshot.TotalBytes > 0);
     }
 

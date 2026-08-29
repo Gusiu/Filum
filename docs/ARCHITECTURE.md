@@ -35,7 +35,7 @@ mieszka na telefonie.
 | `Filum.Protocol` | modele DTO, `PathRules`, stałe protokołu | brak — czysta biblioteka, bez I/O |
 | `Filum.Core` | silnik składowania: manifest, fragmenty, wersje, sieroty, polityka miejsca | `Filum.Protocol` |
 | `Filum.Server` | Kestrel, zasoby HTTP, mTLS, parowanie, mDNS, panel Blazor | `Filum.Core` |
-| `Filum.Tray` | ikona w zasobniku systemowym, menu kontekstowe | tylko API HTTP |
+| `Filum.Tray` | ikona w zasobniku systemowym, menu kontekstowe | `Filum.Protocol`, `Filum.Core` i lokalne API |
 | `Filum.Tests` | testy jednostkowe i integracyjne | wszystkie |
 
 `Filum.Protocol` jest celowo bez zależności i bez operacji plikowych — dzięki temu

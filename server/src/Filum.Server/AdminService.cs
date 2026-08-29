@@ -1,24 +1,9 @@
 using System.Reflection;
 using Filum.Core;
+using Filum.Protocol;
 using QRCoder;
 
 namespace Filum.Server;
-
-public sealed record DeviceSummary(
-    DeviceRecord Device,
-    long FileCount,
-    long BytesStored,
-    DateTimeOffset? LastActivity);
-
-public sealed record PanelSnapshot(
-    string ServerName,
-    string Version,
-    string Pin,
-    IReadOnlyList<string> Endpoints,
-    string BackupRoot,
-    long FreeBytes,
-    long TotalBytes,
-    IReadOnlyList<DeviceSummary> Devices);
 
 public sealed record PairingCode(string Payload, string QrSvg, int ExpiresInSeconds);
 
@@ -38,17 +23,19 @@ public sealed class AdminService(
     DeviceStats stats,
     PairingService pairing)
 {
-    public PanelSnapshot Snapshot()
+    public AdminStatus Snapshot()
     {
         var devices = registry.All()
             .Select(device =>
             {
                 var (count, bytes) = stats.For(device.Slug);
-                return new DeviceSummary(device, count, bytes, LastActivity(device.Slug));
+                return new AdminDevice(
+                    device.Pin, device.Slug, device.Label, device.Enabled, device.PairedAt,
+                    count, bytes, LastActivity(device.Slug));
             })
             .ToList();
 
-        return new PanelSnapshot(
+        return new AdminStatus(
             ServerName: Environment.MachineName,
             Version: Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0",
             Pin: certificates.Pin,

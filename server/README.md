@@ -9,7 +9,8 @@
 |---|---|
 | `Filum.Protocol` | modele DTO, `PathRules`, stałe protokołu — bez operacji plikowych |
 | `Filum.Core` | silnik składowania, certyfikat serwera, rejestr urządzeń |
-| `Filum.Server` | Kestrel z mTLS, zasoby HTTP, parowanie |
+| `Filum.Server` | Kestrel z mTLS, zasoby HTTP, parowanie, panel |
+| `Filum.Tray` | ikona w zasobniku systemowym |
 | `Filum.Protocol.Tests` | wektory ścieżek wspólne z klientem Androida |
 | `Filum.Core.Tests` | silnik składowania, bezpieczeństwo, testy integracyjne API |
 
@@ -77,6 +78,24 @@ nietknięta. Rozparowanie usuwa wyłącznie wpis `device.json` — pliki zostaj�
 bo najczęstszy powód rozparowania to zgubiony telefon, czyli dokładnie ta
 chwila, w której kopia jest najbardziej potrzebna.
 
+## Ikona w zasobniku
+
+```bash
+cd server && dotnet run --project src/Filum.Tray
+```
+
+Pokazuje, czy serwer działa, ilu telefonów dotyczy kopia i ile zostało miejsca.
+Pod prawym przyciskiem: panel, ekran parowania i katalog kopii.
+
+Jest **osobnym procesem**, bo usługa Windows działa w sesji 0 i nie może wyświetlać
+interfejsu. Rozmawia z serwerem przez to samo lokalne API co panel — nie ma między
+nimi żadnego kanału specjalnego.
+
+Certyfikat serwera weryfikuje po odcisku klucza odczytanym z `server.pfx`, a nie po
+łańcuchu zaufania. Dzięki temu nie ufa czemukolwiek, co zdąży zająć port 8765.
+
+Katalog konfiguracji i port można nadpisać zmiennymi `FILUM_CONFIG` i `FILUM_PORT`.
+
 ## Testy
 
 ```bash
@@ -119,4 +138,4 @@ Wznowienie polega na powtórzeniu żądania z `X-Filum-Offset` równym wartości
 | rozgłaszanie mDNS | nie — etap 5 |
 | `POST /api/v1/bundle` | nie — etap 8 |
 | `POST /api/v1/verify`, `GET /api/v1/orphans` | nie — etap 9 |
-| ikona w zasobniku systemowym | nie — osobny proces, w przygotowaniu |
+| ikona w zasobniku systemowym | tak, osobny proces |
