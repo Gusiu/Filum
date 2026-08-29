@@ -60,6 +60,7 @@
                     <th>Plików</th>
                     <th>Rozmiar</th>
                     <th>Ostatnia zmiana</th>
+                    <th>Bez odpowiednika</th>
                     <th></th>
                 </tr>
                 </thead>
@@ -78,6 +79,18 @@
                         <td>@entry.FileCount</td>
                         <td>@Format.Bytes(entry.BytesStored)</td>
                         <td>@Format.Moment(entry.LastActivity)</td>
+                        <td>
+                            @if (entry.OrphanCount > 0)
+                            {
+                                <a href="@($"/sieroty/{entry.Slug}")">
+                                    @entry.OrphanCount (@Format.Bytes(entry.OrphanBytes))
+                                </a>
+                            }
+                            else
+                            {
+                                <span class="przygaszony">—</span>
+                            }
+                        </td>
                         <td>
                             <button @onclick="() => Toggle(entry)">
                                 @(entry.Enabled ? "Wyłącz" : "Włącz")

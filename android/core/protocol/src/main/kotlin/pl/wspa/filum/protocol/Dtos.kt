@@ -177,6 +177,26 @@ object BundleContentType {
     const val VALUE = "application/vnd.filum.bundle"
 }
 
+// --- POST /verify (§5.5) ---
+
+@Serializable
+data class VerifyEntry(
+    @SerialName("p") val path: String,
+    @SerialName("d") val digest: String,
+)
+
+@Serializable
+data class VerifyRequest(
+    @SerialName("files") val files: List<VerifyEntry>,
+)
+
+@Serializable
+data class VerifyResponse(
+    @SerialName("ok") val ok: List<String> = emptyList(),
+    @SerialName("mismatch") val mismatch: List<String> = emptyList(),
+    @SerialName("missing") val missing: List<String> = emptyList(),
+)
+
 // --- błędy (§6) ---
 
 @Serializable

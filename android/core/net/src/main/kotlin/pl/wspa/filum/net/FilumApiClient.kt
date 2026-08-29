@@ -22,6 +22,9 @@ import pl.wspa.filum.protocol.PairRequest
 import pl.wspa.filum.protocol.PairResponse
 import pl.wspa.filum.protocol.PingResponse
 import pl.wspa.filum.protocol.Protocol
+import pl.wspa.filum.protocol.VerifyEntry
+import pl.wspa.filum.protocol.VerifyRequest
+import pl.wspa.filum.protocol.VerifyResponse
 import java.io.File
 import java.io.IOException
 import java.util.Base64
@@ -120,6 +123,24 @@ class FilumApiClient(
             .build()
 
         return execute(request) { json.decodeFromString<BundleResponse>(it) }
+    }
+
+    /**
+     * Prosi serwer o sprawdzenie skrótów swoich kopii (§5.5).
+     *
+     * Operacja jest po stronie serwera kosztowna — liczy skróty plików z dysku —
+     * więc wywołuje ją wyłącznie świadoma decyzja użytkownika, nigdy cykl automatyczny.
+     */
+    suspend fun verify(
+        endpoint: ServerEndpoint,
+        entries: List<VerifyEntry>,
+    ): ApiResult<VerifyResponse> {
+        val request = Request.Builder()
+            .url(endpoint.url("/verify"))
+            .post(json.encodeToString(VerifyRequest(entries)).toRequestBody(JSON_MEDIA_TYPE))
+            .build()
+
+        return execute(request) { json.decodeFromString<VerifyResponse>(it) }
     }
 
     private fun ServerEndpoint.url(resource: String): String = "$baseUrl${Protocol.PREFIX}$resource"

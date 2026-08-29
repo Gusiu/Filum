@@ -83,6 +83,7 @@ tutaj, jako ponowna prośba o te same pliki.
 | harmonogram: ręcznie, codziennie, co tydzień | działa |
 | usługa pierwszoplanowa z pilnowaniem budżetu | działa |
 | wykrywanie przez mDNS | działa, sprawdzone przeciwko serwerowi |
+| kontrola integralności próbki plików | działa |
 | ekran wykluczeń, skaner kodu QR aparatem | niezaczęte |
 
 Parowanie odbywa się przez wklejenie ciągu `filum1:…` ze schowka. Skaner aparatem

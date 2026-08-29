@@ -128,7 +128,7 @@ Wznowienie polega na powtórzeniu żądania z `X-Filum-Offset` równym wartości
 
 | Zasób | Stan |
 |---|---|
-| panel: stan, urządzenia, kod QR | tak, tylko z pętli zwrotnej |
+| panel: stan, urządzenia, kod QR, raport sierot | tak, tylko z pętli zwrotnej |
 | `GET /api/v1/admin/status` | tak, tylko z pętli zwrotnej |
 | `GET /api/v1/pair/new` | tak, tylko z pętli zwrotnej |
 | `POST /api/v1/pair` | tak, token jednorazowy, limit 5 prób na 15 minut |
@@ -138,5 +138,6 @@ Wznowienie polega na powtórzeniu żądania z `X-Filum-Offset` równym wartości
 | mTLS z przypięciem kluczy | tak |
 | rozgłaszanie mDNS | tak |
 | `POST /api/v1/bundle` | tak |
-| `POST /api/v1/verify`, `GET /api/v1/orphans` | nie — etap 9 |
+| `POST /api/v1/verify` | tak |
+| `GET /api/v1/orphans` | tak |
 | ikona w zasobniku systemowym | tak, osobny proces |

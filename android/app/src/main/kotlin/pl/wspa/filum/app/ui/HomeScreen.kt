@@ -30,6 +30,7 @@ fun HomeScreen(
     state: UiState,
     running: Boolean,
     onSyncNow: () -> Unit,
+    onVerify: () -> Unit,
     onScheduleChange: (Schedule) -> Unit,
     onOpenLog: () -> Unit,
     onRequestStorageAccess: () -> Unit,
@@ -101,6 +102,24 @@ fun HomeScreen(
                     Text(error, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
                 }
             }
+        }
+
+        HorizontalDivider()
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Kontrola integralności", style = MaterialTheme.typography.titleSmall)
+            Text(
+                "Sprawdza, czy kopie na komputerze nadal odpowiadają plikom w telefonie. " +
+                    "Losowa próbka, uruchamiana ręcznie — pełne sprawdzenie 200 GB " +
+                    "oznaczałoby odczyt całej pamięci po obu stronach.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+
+            OutlinedButton(onClick = onVerify, enabled = !state.verifying && state.server != null) {
+                Text(if (state.verifying) "Sprawdzam…" else "Sprawdź próbkę")
+            }
+
+            state.verification?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
         }
 
         HorizontalDivider()

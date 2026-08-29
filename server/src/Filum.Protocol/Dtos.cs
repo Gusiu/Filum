@@ -63,7 +63,10 @@ public sealed record AdminDevice(
     DateTimeOffset PairedAt,
     long FileCount,
     long BytesStored,
-    DateTimeOffset? LastActivity);
+    DateTimeOffset? LastActivity,
+    /// <summary>Liczba plików obecnych w kopii, a nieobecnych już na telefonie (§5.6).</summary>
+    int OrphanCount = 0,
+    long OrphanBytes = 0);
 
 public sealed record AdminStatus(
     string ServerName,
@@ -135,6 +138,35 @@ public static class BundleContentType
 {
     public const string Value = "application/vnd.filum.bundle";
 }
+
+// --- POST /api/v1/verify (§5.5) ---
+
+public sealed record VerifyEntry(
+    [property: JsonPropertyName("p")] string Path,
+    [property: JsonPropertyName("d")] string Digest);
+
+public sealed record VerifyRequest(
+    [property: JsonPropertyName("files")] IReadOnlyList<VerifyEntry> Files);
+
+public sealed record VerifyResponse(
+    [property: JsonPropertyName("ok")] IReadOnlyList<string> Ok,
+    [property: JsonPropertyName("mismatch")] IReadOnlyList<string> Mismatch,
+    [property: JsonPropertyName("missing")] IReadOnlyList<string> Missing);
+
+// --- GET /api/v1/orphans (§5.6) ---
+
+/// <summary>
+/// Pliki obecne na serwerze, a nieobecne już na telefonie.
+///
+/// Raport jest wyłącznie informacyjny — nic nie jest na jego podstawie usuwane
+/// (ADR-015, niezmiennik I1).
+/// </summary>
+public sealed record OrphanReport(
+    [property: JsonPropertyName("session")] string Session,
+    [property: JsonPropertyName("generatedAt")] DateTimeOffset GeneratedAt,
+    [property: JsonPropertyName("count")] int Count,
+    [property: JsonPropertyName("bytes")] long Bytes,
+    [property: JsonPropertyName("paths")] IReadOnlyList<string> Paths);
 
 // --- błędy (§6) ---
 
