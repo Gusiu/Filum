@@ -27,16 +27,17 @@ public sealed class StubClientCertificateProvider : IClientCertificateProvider
 }
 
 /// <summary>
-/// TestServer nie ustawia adresu zdalnego, a zasób /pair/new wpuszcza wyłącznie
-/// z pętli zwrotnej. Uzupełniamy adres, zamiast rozluźniać warunek w kodzie produkcyjnym.
+/// TestServer nie ustawia adresu zdalnego, a panel i zasoby administracyjne wpuszczają
+/// wyłącznie połączenia z pętli zwrotnej. Podstawiamy adres, zamiast rozluźniać warunek
+/// w kodzie produkcyjnym — dzięki temu da się też sprawdzić, co widzi obce urządzenie.
 /// </summary>
-public sealed class LoopbackAddressFilter : IStartupFilter
+public sealed class RemoteAddressFilter(Func<IPAddress> address) : IStartupFilter
 {
     public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
     {
         app.Use(async (context, following) =>
         {
-            context.Connection.RemoteIpAddress ??= IPAddress.Loopback;
+            context.Connection.RemoteIpAddress = address();
             await following();
         });
         next(app);
@@ -50,6 +51,9 @@ public sealed class FilumApp : WebApplicationFactory<Program>
     private readonly TempRoot _config = new();
 
     public string Root => _root.Path;
+
+    /// <summary>Adres, z którego rzekomo przychodzą żądania. Domyślnie pętla zwrotna.</summary>
+    public IPAddress RemoteAddress { get; set; } = IPAddress.Loopback;
 
     public StubClientCertificateProvider Certificates { get; } = new();
 
@@ -66,7 +70,7 @@ public sealed class FilumApp : WebApplicationFactory<Program>
         {
             services.RemoveAll<IClientCertificateProvider>();
             services.AddSingleton<IClientCertificateProvider>(Certificates);
-            services.AddSingleton<IStartupFilter, LoopbackAddressFilter>();
+            services.AddSingleton<IStartupFilter>(new RemoteAddressFilter(() => RemoteAddress));
         });
     }
 

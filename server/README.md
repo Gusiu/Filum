@@ -45,17 +45,37 @@ dostępu zgubionemu telefonowi to skreślenie jednego wpisu w rejestrze.
 Dzięki temu nasłuch na `0.0.0.0` jest bezpieczny: bez sparowanego klucza żaden
 zasób zapisujący nie odpowiada.
 
-## Parowanie
+## Panel
 
-Token wydaje zasób dostępny **wyłącznie z pętli zwrotnej**:
+Otwórz w przeglądarce **na komputerze z serwerem**:
+
+```
+https://127.0.0.1:8765/
+```
+
+Pokazuje stan serwera, wolne miejsce, listę sparowanych telefonów wraz z liczbą
+plików i zajętością, a pod `/parowanie` rysuje kod QR do sparowania kolejnego
+urządzenia.
+
+Panel jest dostępny **wyłącznie z pętli zwrotnej** — wydaje tokeny parowania
+i pokazuje zawartość kopii, więc wystawienie go w sieci pozwalałoby obcemu
+urządzeniu sparować się bez wiedzy właściciela (ADR-010). Certyfikat jest
+samopodpisany, więc przeglądarka ostrzeże przy pierwszym wejściu.
+
+Ten sam token da się pobrać z wiersza poleceń:
 
 ```bash
 curl -sk https://127.0.0.1:8765/api/v1/pair/new
 ```
 
-Odpowiedź zawiera gotowy ciąg `filum1:...` do zakodowania w kodzie QR oraz
-rozłożony ładunek: nazwę serwera, odcisk jego klucza, token, port i listę adresów.
-Token jest jednorazowy i żyje 10 minut. Docelowo woła to panel (etap 7).
+Token jest jednorazowy i żyje 10 minut.
+
+### Wyłączenie i rozparowanie urządzenia
+
+Wyłączone urządzenie dostaje `403` na każde żądanie, ale jego kopia zostaje
+nietknięta. Rozparowanie usuwa wyłącznie wpis `device.json` — pliki zostają,
+bo najczęstszy powód rozparowania to zgubiony telefon, czyli dokładnie ta
+chwila, w której kopia jest najbardziej potrzebna.
 
 ## Testy
 
@@ -88,6 +108,8 @@ Wznowienie polega na powtórzeniu żądania z `X-Filum-Offset` równym wartości
 
 | Zasób | Stan |
 |---|---|
+| panel: stan, urządzenia, kod QR | tak, tylko z pętli zwrotnej |
+| `GET /api/v1/admin/status` | tak, tylko z pętli zwrotnej |
 | `GET /api/v1/pair/new` | tak, tylko z pętli zwrotnej |
 | `POST /api/v1/pair` | tak, token jednorazowy, limit 5 prób na 15 minut |
 | `GET /api/v1/ping` | tak, z listą adresów lokalnych (§4.4) |
@@ -97,7 +119,4 @@ Wznowienie polega na powtórzeniu żądania z `X-Filum-Offset` równym wartości
 | rozgłaszanie mDNS | nie — etap 5 |
 | `POST /api/v1/bundle` | nie — etap 8 |
 | `POST /api/v1/verify`, `GET /api/v1/orphans` | nie — etap 9 |
-| panel Blazor, ikona w zasobniku | nie — etap 7 |
-
-Kod QR jest na razie zwracany jako ciąg znaków; renderowanie obrazka przyjdzie
-z panelem w etapie 7.
+| ikona w zasobniku systemowym | nie — osobny proces, w przygotowaniu |

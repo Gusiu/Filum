@@ -1,0 +1,109 @@
+@page "/"
+@inject AdminService Admin
+@rendermode InteractiveServer
+
+<main>
+    <h1>Filum</h1>
+    <p class="przygaszony">Kopia zapasowa telefonu na tym komputerze. Nic nie jest tu usuwane.</p>
+
+    <nav>
+        <a href="/" class="aktywny">Stan</a>
+        <a href="/parowanie">Parowanie</a>
+    </nav>
+
+    @if (snapshot is null)
+    {
+        <p>Wczytuję…</p>
+    }
+    else
+    {
+        <div class="karta">
+            <dl class="pola">
+                <dt>Serwer</dt>
+                <dd>@snapshot.ServerName <span class="przygaszony">wersja @snapshot.Version</span></dd>
+
+                <dt>Klucz</dt>
+                <dd class="mono">@snapshot.Pin</dd>
+
+                <dt>Katalog kopii</dt>
+                <dd class="mono">@snapshot.BackupRoot</dd>
+
+                <dt>Wolne miejsce</dt>
+                <dd>
+                    @Format.Bytes(snapshot.FreeBytes) z @Format.Bytes(snapshot.TotalBytes)
+                    @if (snapshot.FreeBytes < 20L * 1024 * 1024 * 1024)
+                    {
+                        <span class="ostrzezenie">— zostało niewiele</span>
+                    }
+                </dd>
+
+                <dt>Adresy</dt>
+                <dd class="mono">@string.Join(", ", snapshot.Endpoints)</dd>
+            </dl>
+        </div>
+
+        <h2>Urządzenia</h2>
+
+        @if (snapshot.Devices.Count == 0)
+        {
+            <div class="karta">
+                <p>Nie sparowano jeszcze żadnego telefonu.</p>
+                <a href="/parowanie"><button class="glowny">Sparuj telefon</button></a>
+            </div>
+        }
+        else
+        {
+            <table>
+                <thead>
+                <tr>
+                    <th>Nazwa</th>
+                    <th>Plików</th>
+                    <th>Rozmiar</th>
+                    <th>Ostatnia zmiana</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody>
+                @foreach (var entry in snapshot.Devices)
+                {
+                    <tr>
+                        <td>
+                            @entry.Device.Label
+                            @if (!entry.Device.Enabled)
+                            {
+                                <span class="ostrzezenie"> — wyłączone</span>
+                            }
+                            <div class="mono przygaszony">@entry.Device.Slug</div>
+                        </td>
+                        <td>@entry.FileCount</td>
+                        <td>@Format.Bytes(entry.BytesStored)</td>
+                        <td>@Format.Moment(entry.LastActivity)</td>
+                        <td>
+                            <button @onclick="() => Toggle(entry)">
+                                @(entry.Device.Enabled ? "Wyłącz" : "Włącz")
+                            </button>
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+
+            <p class="przygaszony">
+                Wyłączone urządzenie nie może już nic wysłać, ale jego dotychczasowa kopia
+                zostaje nietknięta.
+            </p>
+        }
+    }
+</main>
+
+@code {
+    private PanelSnapshot? snapshot;
+
+    protected override void OnInitialized() => snapshot = Admin.Snapshot();
+
+    private void Toggle(DeviceSummary entry)
+    {
+        Admin.SetEnabled(entry.Device.Pin, !entry.Device.Enabled);
+        snapshot = Admin.Snapshot();
+    }
+}

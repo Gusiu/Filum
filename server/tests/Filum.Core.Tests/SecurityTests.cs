@@ -334,3 +334,147 @@ public class AuthenticationTests
         Assert.Empty(Directory.GetDirectories(app.Root));
     }
 }
+
+/// <summary>
+/// Reguła dostępu do panelu i zasobów administracyjnych.
+///
+/// Panel wydaje tokeny parowania i pokazuje, co leży w kopii, więc obce urządzenie
+/// w tej samej sieci nie może go dotknąć. Osoba przy komputerze jest jedynym
+/// uprawnionym odbiorcą — i to jest jedyne kryterium, jakie tu mamy.
+/// </summary>
+public class PanelAccessTests
+{
+    private static readonly IPAddress Obcy = IPAddress.Parse("192.168.1.77");
+
+    [Fact]
+    public async Task Panel_ZPetliZwrotnej_JestDostepny()
+    {
+        using var app = new FilumApp();
+
+        var response = await app.CreateClient().GetAsync("/");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Panel_ZSieci_JestOdrzucany()
+    {
+        using var app = new FilumApp { RemoteAddress = Obcy };
+
+        var response = await app.CreateClient().GetAsync("/");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task WydawanieTokenu_ZSieci_JestOdrzucane()
+    {
+        // Inaczej dowolne urządzenie w sieci mogłoby wygenerować sobie token
+        // i sparować się bez wiedzy właściciela komputera.
+        using var app = new FilumApp { RemoteAddress = Obcy };
+
+        var response = await app.CreateClient().GetAsync("/api/v1/pair/new");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Status_ZSieci_JestOdrzucany()
+    {
+        using var app = new FilumApp { RemoteAddress = Obcy };
+
+        var response = await app.CreateClient().GetAsync("/api/v1/admin/status");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Status_ZPetliZwrotnej_PokazujeSparowaneUrzadzenia()
+    {
+        using var app = new FilumApp();
+        await app.PairAsync("Galaxy S24 Ultra");
+
+        var snapshot = await app.CreateClient().GetFromJsonAsync<PanelSnapshot>("/api/v1/admin/status");
+
+        Assert.NotNull(snapshot);
+        Assert.Equal(43, snapshot.Pin.Length);
+        Assert.Equal("Galaxy S24 Ultra", snapshot.Devices.Single().Device.Label);
+        Assert.True(snapshot.TotalBytes > 0);
+    }
+
+    [Fact]
+    public async Task Parowanie_ZSieci_Jest_Dozwolone()
+    {
+        // Telefon paruje się przez sieć, więc /pair musi być osiągalne z zewnątrz.
+        // Chroni go token jednorazowy, a nie adres źródłowy.
+        using var app = new FilumApp();
+        var offer = await app.NewPairingAsync();
+
+        app.RemoteAddress = Obcy;
+        var response = await app.PostPairAsync(app.CreateClient(), offer!.Payload.Token, "Telefon");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Rozparowanie_NieUsuwaPlikow()
+    {
+        // Najczęstszy powód rozparowania to zgubiony telefon — czyli dokładnie ta
+        // chwila, w której kopia jest najbardziej potrzebna (niezmiennik I1).
+        using var app = new FilumApp();
+        var slug = await app.PairAsync();
+
+        var files = Path.Combine(app.Root, slug, "files", "DCIM");
+        Directory.CreateDirectory(files);
+        await File.WriteAllTextAsync(Path.Combine(files, "a.jpg"), "zawartość");
+
+        var admin = app.Services.GetRequiredService<AdminService>();
+        var registry = app.Services.GetRequiredService<DeviceRegistry>();
+        Assert.True(admin.Forget(registry.All().Single().Pin));
+
+        Assert.Empty(registry.All());
+        Assert.True(File.Exists(Path.Combine(files, "a.jpg")));
+    }
+}
+
+/// <summary>Kod parowania rysowany przez panel.</summary>
+public class PairingCodeRenderingTests
+{
+    [Fact]
+    public async Task KodParowania_NiesieOdciskKluczaIRysujeSieJakoSvg()
+    {
+        using var app = new FilumApp();
+        var admin = app.Services.GetRequiredService<AdminService>();
+        var certificates = app.Services.GetRequiredService<CertificateStore>();
+
+        var code = admin.IssuePairingCode();
+
+        Assert.StartsWith("filum1:", code.Payload);
+        Assert.Contains(certificates.Pin, Decode(code.Payload));
+        Assert.StartsWith("<svg", code.QrSvg);
+        Assert.Contains("</svg>", code.QrSvg);
+        Assert.Equal(600, code.ExpiresInSeconds);
+
+        await Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task KazdeWywolanie_DajeInnyToken()
+    {
+        // Token jest jednorazowy, więc dwa kody z rzędu nie mogą być tym samym kodem —
+        // inaczej drugi telefon nie miałby czym się sparować.
+        using var app = new FilumApp();
+        var admin = app.Services.GetRequiredService<AdminService>();
+
+        Assert.NotEqual(admin.IssuePairingCode().Payload, admin.IssuePairingCode().Payload);
+
+        await Task.CompletedTask;
+    }
+
+    private static string Decode(string payload)
+    {
+        var value = payload["filum1:".Length..].Replace('-', '+').Replace('_', '/');
+        value += (value.Length % 4) switch { 2 => "==", 3 => "=", _ => "" };
+        return Encoding.UTF8.GetString(Convert.FromBase64String(value));
+    }
+}

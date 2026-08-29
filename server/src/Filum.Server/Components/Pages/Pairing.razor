@@ -1,0 +1,58 @@
+@page "/parowanie"
+@inject AdminService Admin
+@rendermode InteractiveServer
+
+<main>
+    <h1>Parowanie telefonu</h1>
+
+    <nav>
+        <a href="/">Stan</a>
+        <a href="/parowanie" class="aktywny">Parowanie</a>
+    </nav>
+
+    @if (pairing is null)
+    {
+        <div class="karta">
+            <p>
+                Kod zawiera odcisk klucza tego serwera, więc telefon po zeskanowaniu wie,
+                komu ufać — i od tej chwili rozpoznaje serwer niezależnie od tego, pod jakim
+                adresem go zastanie.
+            </p>
+            <p class="przygaszony">
+                Kod jest jednorazowy i traci ważność po dziesięciu minutach.
+            </p>
+            <button class="glowny" @onclick="Generate">Wygeneruj kod</button>
+        </div>
+    }
+    else
+    {
+        <div class="karta">
+            <div class="qr">@((MarkupString)pairing.QrSvg)</div>
+        </div>
+
+        <div class="karta">
+            <p>
+                Zeskanuj kod aplikacją albo wklej poniższy ciąg do pola parowania.
+            </p>
+            <code class="kod">@pairing.Payload</code>
+            <p class="przygaszony">
+                Ważny jeszcze @(pairing.ExpiresInSeconds / 60) minut. Po sparowaniu telefon
+                przedstawia się własnym kluczem i token przestaje być potrzebny.
+            </p>
+            <button @onclick="Generate">Wygeneruj nowy</button>
+        </div>
+    }
+</main>
+
+@code {
+    private PairingCode? pairing;
+
+    /// <summary>
+    /// Kod powstaje dopiero po kliknięciu.
+    ///
+    /// Generowanie go przy każdym wejściu na stronę zostawiałoby stertę ważnych
+    /// tokenów po zwykłym przeglądaniu panelu — a każdy z nich pozwala sparować
+    /// dowolne urządzenie.
+    /// </summary>
+    private void Generate() => pairing = Admin.IssuePairingCode();
+}

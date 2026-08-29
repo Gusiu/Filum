@@ -11,14 +11,17 @@ namespace Filum.Server;
 
 public static class FilumApi
 {
-    private static readonly TimeSpan StatsTtl = TimeSpan.FromSeconds(60);
-
     public static void MapFilumApi(this WebApplication app)
     {
         var api = app.MapGroup("/api/v1");
 
         api.MapPost("/pair", Pair);
         api.MapGet("/pair/new", NewPairing);
+
+        // Zasoby administracyjne: wyłącznie z pętli zwrotnej, patrz
+        // DeviceAuthenticationMiddleware. Korzysta z nich ikona w zasobniku,
+        // która jest osobnym procesem i nie ma dostępu do stanu serwera inaczej.
+        api.MapGet("/admin/status", (AdminService admin) => Results.Ok(admin.Snapshot()));
 
         api.MapGet("/ping", Ping);
         api.MapPost("/manifest", Manifest);
@@ -115,8 +118,7 @@ public static class FilumApi
         DeviceStats stats)
     {
         var device = context.Device();
-        stats.RefreshIfStale(device.Slug, StatsTtl);
-        var (count, bytes) = stats.Current;
+        var (count, bytes) = stats.For(device.Slug);
 
         var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0";
 
