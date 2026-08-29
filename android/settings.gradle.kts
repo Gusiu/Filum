@@ -21,3 +21,9 @@ rootProject.name = "Filum"
 // bez emulatora i bez Android SDK — a to właśnie tutaj mieszkają reguły,
 // których błąd kosztuje ciche skasowanie pliku.
 include(":core:protocol")
+include(":core:crypto")
+include(":core:net")
+include(":core:data")
+include(":core:scan")
+include(":core:sync")
+include(":app")

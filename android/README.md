@@ -1,42 +1,91 @@
 # Filum — klient Android
 
-## Wymagane narzędzia
+Kotlin, Compose, Room, OkHttp. Implementacja klienta z
+[../docs/PROTOCOL.md](../docs/PROTOCOL.md) i [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
 
-Na tym etapie repozytorium zawiera wyłącznie moduł `:core:protocol`, który jest
-**czystym modułem JVM**, bez zależności od Androida. Jego testy uruchamiają się
-na zwykłej maszynie wirtualnej — bez emulatora i bez Android SDK.
-
-Do zbudowania potrzeba jednak Gradle'a i kompilatora Kotlina, których nie ma
-jeszcze w systemie. Najprościej zainstalować **Android Studio** — dostarcza
-komplet (Gradle, Kotlin, Android SDK), a i tak będzie potrzebne do modułów
-`:app` i `:feature:*`.
-
-Po instalacji:
+## Budowanie
 
 ```bash
-cd android && ./gradlew :core:protocol:test
+cd android && ./gradlew :app:assembleDebug
 ```
 
-Katalogu `gradle/wrapper/` nie ma w repozytorium — wygeneruje go Android Studio
-przy pierwszym otwarciu projektu, albo `gradle wrapper` z lokalnej instalacji.
+```bash
+cd android && ./gradlew test
+```
 
-## Stan modułów
+Wymaga Android Studio (Gradle, kompilator Kotlina, SDK). Wersje narzędzi:
+AGP 9.3.2, Gradle 9.5, Kotlin 2.3.10, `compileSdk 37`, `targetSdk 36`.
 
-| Moduł | Stan |
+`compileSdk` i `targetSdk` to dwie różne rzeczy. Kompilujemy wobec 37, bo tego
+wymagają nowsze biblioteki AndroidX, ale o zachowaniu systemu decyduje `targetSdk` —
+i ten zostaje na 36 zgodnie z ADR-013, żeby na razie ominąć wymóg
+`ACCESS_LOCAL_NETWORK` z Androida 17.
+
+## Moduły
+
+| Moduł | Odpowiedzialność | Zależy od Androida |
+|---|---|---|
+| `:core:protocol` | modele wymiany, `PathRules`, odczyt kodu parowania | nie — czysty JVM |
+| `:core:crypto` | klucz w Android Keystore, przypięcie klucza serwera | częściowo |
+| `:core:net` | klient zasobów, wyścig tras, przypięcie gniazd do Wi-Fi | częściowo |
+| `:core:data` | Room: kolejka, dziennik, budżet usługi pierwszoplanowej | tak |
+| `:core:scan` | `MediaStore` z licznikiem generacji, obchód drzewa, wykluczenia | częściowo |
+| `:core:sync` | silnik cyklu: manifest, wznawianie, klasyfikacja błędów | nie — za interfejsami |
+| `:app` | parowanie, ekran główny, dziennik, składanie zależności | tak |
+
+Podział nie jest ozdobnikiem. Najtrudniejsze części — reguły ścieżek, wyścig tras
+i decyzje silnika o tym, co ponowić, a co odłożyć — leżą w modułach, które testują
+się na zwykłej maszynie wirtualnej, bez emulatora i w sekundach.
+
+## Testy
+
+168 testów jednostkowych, wszystkie na JVM:
+
+- **reguły ścieżek** — te same wektory `docs/testvectors/paths.tsv` co implementacja w C#,
+- **przypięcie klucza** — wektory ze stałych certyfikatów z odciskami policzonymi przez openssl,
+- **klient zasobów** — `MockWebServer` z prawdziwym TLS i `requireClientAuth`,
+- **wyścig tras** — zegar wirtualny, więc opóźnienia w sekundach nie wydłużają wykonania,
+- **skaner** — prawdziwe pliki w katalogu tymczasowym,
+- **silnik** — pełne atrapy kolejki i serwera, sprawdzające przejścia stanów.
+
+### Test zgodności między implementacjami
+
+`EndToEndTest` uruchamia **prawdziwy klient kotlinowy przeciwko prawdziwemu serwerowi
+w C#**, po prawdziwym mTLS. Testy jednostkowe po obu stronach sprawdzają, czy każda
+implementacja robi to, co jej autor zamierzył — dopiero ten test sprawdza, czy
+zamierzenia się pokrywają.
+
+Jest pomijany, dopóki nie ma zmiennych środowiskowych, więc nie psuje zwykłej kompilacji.
+Żeby go uruchomić, wystartuj serwer, pobierz kod parowania i podaj jego składowe:
+
+```bash
+curl -sk https://127.0.0.1:8765/api/v1/pair/new
+```
+
+```bash
+cd android && FILUM_HOST=127.0.0.1 FILUM_PORT=8765 FILUM_PIN=<k> FILUM_TOKEN=<t> ./gradlew :core:sync:testDebugUnitTest --tests "*EndToEndTest*" --rerun-tasks
+```
+
+Test wysyła cztery pliki, w tym nazwę z dwukropkiem i nazwę z polskimi znakami,
+a potem żąda manifestu po raz drugi. Serwer musi wtedy zgłosić, że ma komplet —
+rozjazd w jednostkach `mtime` albo w normalizacji Unicode ujawniłby się właśnie
+tutaj, jako ponowna prośba o te same pliki.
+
+## Stan
+
+| Element | Stan |
 |---|---|
-| `:core:protocol` | `PathRules` **skompilowane i sprawdzone** kompilatorem z Android Studio (kotlinc 2.3.10) |
-| pozostałe | niezaczęte, patrz [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) §3.1 |
+| parowanie, ping, manifest, wznawialny transfer | działa, sprawdzone przeciwko serwerowi |
+| ekrany: parowanie, główny, dziennik | działają |
+| skanowanie: `MediaStore` i pełny obchód | zaimplementowane, nieuruchomione na telefonie |
+| harmonogram, usługa pierwszoplanowa | niezaczęte — etap 6 |
+| wykrywanie przez mDNS | niezaczęte — etap 5 |
+| ekran wykluczeń, skaner kodu QR aparatem | niezaczęte |
 
-`PathRules.kt` kompiluje się bez ostrzeżeń i przechodzi komplet 35 wektorów
-z `docs/testvectors/paths.tsv` — wynik identyczny z implementacją w C#.
-Sprawdzenia dokonano samodzielnym programem uruchomieniowym, bo bez Gradle'a
-nie da się jeszcze wykonać testów JUnit. Sam plik `PathRulesTest.kt` czeka więc
-na pierwszą synchronizację projektu w Android Studio.
+Parowanie odbywa się przez wklejenie ciągu `filum1:…` ze schowka. Skaner aparatem
+dojdzie razem z panelem serwera, który i tak musi ten kod narysować (etap 7).
 
-## Dlaczego `:core:protocol` nie jest modułem Android Library
-
-Reguły ścieżek to miejsce, w którym błąd kosztuje ciche skasowanie pliku na
-serwerze. Trzymanie ich w module JVM oznacza, że testy idą w sekundy, bez
-emulatora, i dają się uruchomić w każdym środowisku ciągłej integracji.
-Zależności od Androida (`MediaStore`, `Room`, `WorkManager`) pojawią się dopiero
-w `:core:scan`, `:core:data` i `:core:sync`.
+**Cykl nie był jeszcze przejechany na prawdziwym telefonie.** Kod protokołu jest
+zweryfikowany przeciwko serwerowi, ale `MediaStore`, Android Keystore, uprawnienie
+`MANAGE_EXTERNAL_STORAGE` i przypięcie gniazd do Wi-Fi da się sprawdzić wyłącznie
+na urządzeniu.
