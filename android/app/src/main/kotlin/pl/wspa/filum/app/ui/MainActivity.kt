@@ -49,6 +49,7 @@ class MainActivity : ComponentActivity() {
                                 state = state,
                                 running = running,
                                 onSyncNow = model::syncNow,
+                                onVerify = model::verify,
                                 onScheduleChange = model::setSchedule,
                                 onOpenLog = { model.show(Screen.LOG) },
                                 onRequestStorageAccess = ::openStorageAccessSettings,

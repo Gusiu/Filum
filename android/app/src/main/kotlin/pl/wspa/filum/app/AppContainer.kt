@@ -38,6 +38,8 @@ class AppContainer(val context: Context) {
 
     val syncRunner: SyncRunner by lazy { SyncRunner(this) }
 
+    val verification: VerificationRunner by lazy { VerificationRunner(this) }
+
     /** Ustawienia z wartościami domyślnymi przy pierwszym uruchomieniu. */
     suspend fun settings(): SettingsEntity =
         database.settings().get() ?: SettingsEntity().also { database.settings().save(it) }

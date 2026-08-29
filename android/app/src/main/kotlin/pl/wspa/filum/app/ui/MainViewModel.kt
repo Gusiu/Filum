@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import pl.wspa.filum.app.AppContainer
 import pl.wspa.filum.app.PairingResult
+import pl.wspa.filum.app.VerificationResult
 import pl.wspa.filum.app.work.SyncScheduler
 import pl.wspa.filum.data.LogEventEntity
 import pl.wspa.filum.data.PairedServerEntity
@@ -32,6 +33,8 @@ data class UiState(
     val pendingFiles: Int = 0,
     val lastSession: SyncSessionEntity? = null,
     val lastError: String? = null,
+    val verifying: Boolean = false,
+    val verification: String? = null,
 )
 
 class MainViewModel(private val container: AppContainer) : ViewModel() {
@@ -106,6 +109,39 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
      */
     fun syncNow() {
         SyncScheduler.runNow(container.context)
+    }
+
+    /**
+     * Sprawdza próbkę plików (§5.5). Wyłącznie na żądanie użytkownika: serwer liczy
+     * przy tym skróty swoich kopii, więc operacja jest kosztowna po obu stronach.
+     */
+    fun verify() {
+        if (_state.value.verifying) return
+
+        viewModelScope.launch {
+            _state.value = _state.value.copy(verifying = true, verification = null)
+
+            val result = withContext(Dispatchers.IO) { container.verification.verifySample() }
+
+            _state.value = _state.value.copy(
+                verifying = false,
+                verification = when (result) {
+                    is VerificationResult.Done -> when {
+                        result.corrupted.isNotEmpty() ->
+                            "Uszkodzone kopie: ${result.corrupted.size} z ${result.checked}. " +
+                                "Zostaną wysłane ponownie przy najbliższej pełnej synchronizacji."
+
+                        result.missing.isNotEmpty() ->
+                            "Brakuje ${result.missing.size} z ${result.checked} plików; " +
+                                "dojdą przy najbliższej synchronizacji."
+
+                        else -> "Sprawdzono ${result.checked} plików — wszystkie zgodne."
+                    }
+
+                    is VerificationResult.Failed -> "Nie udało się sprawdzić: ${result.reason}"
+                },
+            )
+        }
     }
 
     fun setSchedule(schedule: Schedule) {

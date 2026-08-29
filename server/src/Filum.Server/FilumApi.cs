@@ -11,6 +11,12 @@ namespace Filum.Server;
 
 public static class FilumApi
 {
+    /// <summary>
+    /// Limit z §5.5. Serwer liczy skróty swoich kopii, więc żądanie jest kosztowne —
+    /// przy braku limitu jedno wywołanie potrafiłoby zająć dysk na godziny.
+    /// </summary>
+    private const int MaxVerifyBatch = 256;
+
     public static void MapFilumApi(this WebApplication app)
     {
         var api = app.MapGroup("/api/v1");
@@ -27,6 +33,8 @@ public static class FilumApi
         api.MapPost("/manifest", Manifest);
         api.MapPut("/file", File);
         api.MapPost("/bundle", Bundle);
+        api.MapPost("/verify", Verify);
+        api.MapGet("/orphans", Orphans);
     }
 
     // --- POST /api/v1/pair (§3.3) ---
@@ -144,7 +152,8 @@ public static class FilumApi
         HttpContext context,
         ManifestRequest request,
         FilumOptions options,
-        ManifestResolver resolver)
+        ManifestResolver resolver,
+        OrphanReporter orphans)
     {
         if (request.Files is null)
             return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, "Brak pola files.");
@@ -157,7 +166,17 @@ public static class FilumApi
             return Error(StatusCodes.Status413PayloadTooLarge, ErrorCodes.PayloadTooLarge,
                          $"Partia liczy {request.Files.Count} pozycji, limit to {options.ManifestBatch}.");
 
-        var resolution = resolver.Resolve(context.Device().Slug, request.Files);
+        var slug = context.Device().Slug;
+        var resolution = resolver.Resolve(slug, request.Files);
+
+        // Sieroty liczymy wyłącznie dla sesji zgłaszającej komplet plików (§5.6).
+        // Sesja przyrostowa nic nie wie o plikach, o których nie wspomniała, więc
+        // różnica wobec dysku nie miałaby znaczenia.
+        if (request.Mode == "full")
+        {
+            orphans.RecordBatch(slug, request.Session, request.Files.Select(f => f.Path));
+            if (request.Final) orphans.Complete(slug, request.Session);
+        }
 
         return Results.Ok(new ManifestResponse(resolution.Have, resolution.Needed, resolution.Rejected));
     }
@@ -229,6 +248,36 @@ public static class FilumApi
             // już, gdzie kończy się jeden plik, a zaczyna następny.
             return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, e.Message);
         }
+    }
+
+    // --- POST /api/v1/verify (§5.5) ---
+
+    private static async Task<IResult> Verify(
+        HttpContext context,
+        VerifyRequest request,
+        VerifyService verifier,
+        CancellationToken ct)
+    {
+        if (request.Files is null)
+            return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, "Brak pola files.");
+
+        if (request.Files.Count > MaxVerifyBatch)
+            return Error(StatusCodes.Status413PayloadTooLarge, ErrorCodes.PayloadTooLarge,
+                         $"Naraz można sprawdzić najwyżej {MaxVerifyBatch} plików.");
+
+        return Results.Ok(await verifier.VerifyAsync(context.Device().Slug, request.Files, ct));
+    }
+
+    // --- GET /api/v1/orphans (§5.6) ---
+
+    private static IResult Orphans(HttpContext context, string session, OrphanReporter orphans)
+    {
+        var report = orphans.Read(context.Device().Slug, session);
+
+        return report is null
+            ? Error(StatusCodes.Status404NotFound, "no_report",
+                    "Dla tej sesji nie ma raportu. Powstaje dopiero po zamknięciu sesji z pełnym manifestem.")
+            : Results.Ok(report);
     }
 
     // --- nagłówki ---

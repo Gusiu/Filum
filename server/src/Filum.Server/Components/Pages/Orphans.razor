@@ -1,0 +1,82 @@
+@page "/sieroty/{Slug}"
+@inject AdminService Admin
+@rendermode InteractiveServer
+
+<main>
+    <h1>Pliki bez odpowiednika w telefonie</h1>
+
+    <nav>
+        <a href="/">Stan</a>
+        <a href="/parowanie">Parowanie</a>
+    </nav>
+
+    @if (report is null)
+    {
+        <div class="karta">
+            <p>Dla tego urządzenia nie ma jeszcze raportu.</p>
+            <p class="przygaszony">
+                Powstaje po pełnym uzgodnieniu, które telefon wykonuje okresowo —
+                skan przyrostowy nie wie nic o plikach, o których nie wspomniał,
+                więc nie da się z niego wyliczyć różnicy.
+            </p>
+        </div>
+    }
+    else if (report.Count == 0)
+    {
+        <div class="karta">
+            <p>Kopia odpowiada zawartości telefonu — nie ma plików bez odpowiednika.</p>
+            <p class="przygaszony">Stan na @Format.Moment(report.GeneratedAt).</p>
+        </div>
+    }
+    else
+    {
+        <div class="karta">
+            <p>
+                <strong>@report.Count</strong> plików o łącznym rozmiarze
+                <strong>@Format.Bytes(report.Bytes)</strong> jest w kopii, ale nie ma ich już
+                w telefonie. Zwykle to pliki usunięte albo przeniesione w inne miejsce.
+            </p>
+            <p class="przygaszony">
+                Filum niczego z tym nie robi i nie zrobi — to jest kopia zapasowa,
+                a jej sensem jest przetrwanie usunięcia w telefonie. Lista służy do tego,
+                żeby decyzję mógł podjąć człowiek, jeśli zabraknie miejsca na dysku.
+                Stan na @Format.Moment(report.GeneratedAt).
+            </p>
+        </div>
+
+        <div class="karta">
+            <table>
+                <thead>
+                <tr><th>Ścieżka w telefonie</th></tr>
+                </thead>
+                <tbody>
+                @foreach (var path in report.Paths.Take(Limit))
+                {
+                    <tr><td class="mono">@path</td></tr>
+                }
+                </tbody>
+            </table>
+
+            @if (report.Paths.Count > Limit)
+            {
+                <p class="przygaszony">
+                    Pokazano @Limit z @report.Paths.Count. Pełna lista jest w pliku
+                    <span class="mono">.filum/orphans-@(report.Session).json</span>
+                    w katalogu urządzenia.
+                </p>
+            }
+        </div>
+    }
+</main>
+
+@code {
+    /// <summary>Ile ścieżek pokazujemy na stronie. Reszta i tak jest w pliku raportu.</summary>
+    private const int Limit = 500;
+
+    [Parameter]
+    public string Slug { get; set; } = "";
+
+    private OrphanReport? report;
+
+    protected override void OnParametersSet() => report = Admin.Orphans(Slug);
+}
