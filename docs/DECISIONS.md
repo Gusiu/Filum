@@ -139,6 +139,14 @@ bez zysku bezpieczeństwa).
 udokumentowane, żeby nikt nie usunął jednego zabezpieczenia w przekonaniu,
 że drugie i tak działa.
 
+**StrongBox nie jest wymagany.** Osobny element bezpieczny mają urządzenia
+z wyższej półki; sprzęt tańszy oferuje wyłącznie zaufane środowisko procesora
+(TEE). Aplikacja próbuje StrongBoxa, a przy odmowie cicho schodzi do TEE —
+klucz prywatny nie opuszcza urządzenia w żadnym z tych przypadków, różni się
+odporność na atak fizyczny. Faktycznie użyty poziom aplikacja odczytuje
+z Keystore przy każdym uruchomieniu i zapisuje w dzienniku przy parowaniu,
+zamiast zakładać cokolwiek o sprzęcie.
+
 ---
 
 ## ADR-006 — Tożsamość przez klucz, nie przez adres
