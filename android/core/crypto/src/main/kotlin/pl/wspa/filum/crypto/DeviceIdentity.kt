@@ -1,10 +1,13 @@
 package pl.wspa.filum.crypto
 
 import android.security.keystore.KeyGenParameterSpec
+import android.os.Build
+import android.security.keystore.KeyInfo
 import android.security.keystore.KeyProperties
 import android.security.keystore.StrongBoxUnavailableException
 import android.util.Log
 import java.math.BigInteger
+import java.security.KeyFactory
 import java.security.KeyPairGenerator
 import java.security.KeyStore
 import java.security.PrivateKey
@@ -25,12 +28,36 @@ import javax.security.auth.x500.X500Principal
  * Certyfikat generuje sam Keystore przy tworzeniu klucza, więc nie potrzebujemy
  * BouncyCastle ani żadnej biblioteki do budowy X.509.
  */
+/**
+ * Gdzie fizycznie mieszka klucz prywatny.
+ *
+ * Rozróżnienie ma znaczenie praktyczne, nie tylko opisowe. StrongBox to osobny układ
+ * scalony odporny na atak fizyczny; TEE to wydzielony tryb tego samego procesora —
+ * znacznie lepszy niż nic, ale podatny na klasę ataków, na którą StrongBox nie jest.
+ * Urządzenia z niższej półki zwykle mają wyłącznie TEE.
+ */
+enum class KeySecurity {
+    /** Osobny element bezpieczny (Samsung Knox Vault i podobne). */
+    STRONGBOX,
+
+    /** Zaufane środowisko wykonawcze procesora. */
+    TRUSTED_ENVIRONMENT,
+
+    /** Klucz w pamięci procesu — nie powinno się zdarzyć na Androidzie 11 i nowszym. */
+    SOFTWARE,
+
+    /** Nie udało się ustalić. */
+    UNKNOWN;
+
+    val isHardwareBacked: Boolean get() = this == STRONGBOX || this == TRUSTED_ENVIRONMENT
+}
+
 class DeviceIdentity private constructor(
     val alias: String,
     val certificate: X509Certificate,
     private val privateKey: PrivateKey,
-    /** Czy klucz leży w sprzętowym elemencie bezpiecznym. Prezentowane na ekranie pomocy. */
-    val strongBoxBacked: Boolean,
+    /** Gdzie leży klucz prywatny. Pokazywane użytkownikowi i zapisywane w dzienniku. */
+    val security: KeySecurity,
 ) {
 
     /** Certyfikat w postaci DER — dokładnie to, co idzie w polu `cert` żądania parowania. */
@@ -81,7 +108,7 @@ class DeviceIdentity private constructor(
                 return generate(alias)
             }
 
-            return DeviceIdentity(alias, certificate, key, strongBoxBacked = false)
+            return DeviceIdentity(alias, certificate, key, securityOf(key))
         }
 
         fun delete(alias: String = DEFAULT_ALIAS) {
@@ -101,11 +128,16 @@ class DeviceIdentity private constructor(
             }
 
             val store = keyStore()
+            val key = store.getKey(alias, null) as PrivateKey
+
             return DeviceIdentity(
                 alias = alias,
                 certificate = store.getCertificate(alias) as X509Certificate,
-                privateKey = store.getKey(alias, null) as PrivateKey,
-                strongBoxBacked = strongBox,
+                privateKey = key,
+                // Pytamy Keystore, zamiast zapamiętywać wynik generowania. Ta wartość
+                // jest odczytywana przy każdym uruchomieniu, a nie tylko przy pierwszym,
+                // i tylko Keystore wie, co naprawdę zrobił z kluczem.
+                security = securityOf(key),
             )
         }
 
@@ -145,6 +177,33 @@ class DeviceIdentity private constructor(
                 .setUserAuthenticationRequired(false)
                 .setIsStrongBoxBacked(useStrongBox)
                 .build()
+        }
+
+        /**
+         * Odczytuje z Keystore, gdzie faktycznie leży klucz.
+         *
+         * Do Androida 11 włącznie da się jedynie stwierdzić, czy klucz jest w sprzęcie —
+         * odróżnienie StrongBoxa od TEE wprowadzono dopiero w Androidzie 12. Wtedy
+         * zwracamy TRUSTED_ENVIRONMENT, bo to jest gwarancja, której jesteśmy pewni.
+         */
+        private fun securityOf(key: PrivateKey): KeySecurity = try {
+            val info = KeyFactory.getInstance(key.algorithm, KEYSTORE)
+                .getKeySpec(key, KeyInfo::class.java)
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                when (info.securityLevel) {
+                    KeyProperties.SECURITY_LEVEL_STRONGBOX -> KeySecurity.STRONGBOX
+                    KeyProperties.SECURITY_LEVEL_TRUSTED_ENVIRONMENT -> KeySecurity.TRUSTED_ENVIRONMENT
+                    KeyProperties.SECURITY_LEVEL_SOFTWARE -> KeySecurity.SOFTWARE
+                    else -> KeySecurity.UNKNOWN
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                if (info.isInsideSecureHardware) KeySecurity.TRUSTED_ENVIRONMENT else KeySecurity.SOFTWARE
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Nie udało się ustalić poziomu zabezpieczenia klucza", e)
+            KeySecurity.UNKNOWN
         }
 
         private fun keyStore(): KeyStore = KeyStore.getInstance(KEYSTORE).apply { load(null) }

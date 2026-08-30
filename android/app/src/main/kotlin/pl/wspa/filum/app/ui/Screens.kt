@@ -83,8 +83,11 @@ fun PairingScreen(
         }
 
         Text(
-            "Telefon wygeneruje własny klucz w bezpiecznym module urządzenia. " +
-                "Klucz prywatny nigdy go nie opuszcza.",
+            "Telefon wygeneruje własny klucz i zapisze go w module bezpieczeństwa " +
+                "urządzenia — użyje osobnego układu, jeśli ten jest dostępny, a w jego " +
+                "braku zaufanego środowiska procesora. Klucz prywatny nie opuszcza " +
+                "urządzenia w żadnym z tych przypadków. Użyty poziom zapisuje się " +
+                "w dzienniku przy parowaniu.",
             style = MaterialTheme.typography.bodySmall,
         )
     }

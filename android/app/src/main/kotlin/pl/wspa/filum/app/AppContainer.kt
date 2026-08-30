@@ -3,6 +3,7 @@ package pl.wspa.filum.app
 import android.app.Application
 import android.content.Context
 import pl.wspa.filum.crypto.DeviceIdentity
+import pl.wspa.filum.crypto.KeySecurity
 import pl.wspa.filum.crypto.FilumTls
 import pl.wspa.filum.data.EndpointEntity
 import pl.wspa.filum.data.FilumDatabase
@@ -16,6 +17,7 @@ import pl.wspa.filum.net.FilumHttpClients
 import pl.wspa.filum.net.ServerEndpoint
 import pl.wspa.filum.protocol.PairingCode
 import pl.wspa.filum.protocol.QrPayload
+import pl.wspa.filum.sync.JournalLevel
 
 /**
  * Zależności aplikacji, składane ręcznie.
@@ -90,6 +92,15 @@ class PairingController(private val container: AppContainer) {
             when (val result = api.pair(endpoint, payload.token, identity.certificateDer, deviceLabel)) {
                 is ApiResult.Ok -> {
                     persist(payload, result.value.serverInstanceId, identity, candidates)
+
+                    // Poziom zabezpieczenia klucza trafia do dziennika przy parowaniu:
+                    // to jedyny moment, w którym powstaje, a przy diagnozowaniu warto
+                    // wiedzieć, czy klucz siedzi w osobnym układzie, czy tylko w TEE.
+                    RoomJournal(container.database.log()).record(
+                        JournalLevel.INFO, "paired",
+                        "Sparowano z ${payload.name}. Klucz urządzenia: ${describe(identity.security)}.",
+                    )
+
                     return PairingResult.Paired(payload.name, endpoint)
                 }
 
@@ -125,6 +136,13 @@ class PairingController(private val container: AppContainer) {
         container.database.endpoints().upsert(
             candidates.map { EndpointEntity(it.host, it.port, EndpointKind.LAN.name) }
         )
+    }
+
+    private fun describe(security: KeySecurity): String = when (security) {
+        KeySecurity.STRONGBOX -> "osobny element bezpieczny (StrongBox)"
+        KeySecurity.TRUSTED_ENVIRONMENT -> "zaufane środowisko procesora (TEE)"
+        KeySecurity.SOFTWARE -> "pamięć procesu — brak wsparcia sprzętowego"
+        KeySecurity.UNKNOWN -> "nieustalony poziom zabezpieczenia"
     }
 
     suspend fun unpair() {
