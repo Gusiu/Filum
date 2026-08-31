@@ -10,6 +10,7 @@ public enum ChunkStatus
     PathRejected,
     OffsetMismatch,
     DigestMismatch,
+    DigestRequired,
     InsufficientStorage,
     TooMuchData
 }
@@ -42,7 +43,8 @@ public sealed class TransferStore(
     StoragePaths paths,
     FilumOptions options,
     VersionStore versions,
-    SpacePolicy space)
+    SpacePolicy space,
+    IntegrityLedger ledger)
 {
     /// <summary>
     /// Blokady per plik. Dwa równoległe żądania do tej samej ścieżki uszkodziłyby fragment,
@@ -56,6 +58,14 @@ public sealed class TransferStore(
                                   out var target, out var storedRelative, out var rejection))
         {
             return new ChunkOutcome(ChunkStatus.PathRejected, Rejection: rejection);
+        }
+
+        // Odrzucamy od razu, zanim cokolwiek trafi na dysk. Przyjęcie bajtów, których
+        // i tak nie da się wpisać do rejestru, byłoby marnowaniem transferu po obu
+        // stronach — a przy wznawianiu klient nie ma jak dosłać samego skrótu.
+        if (options.RequireDigest && request.Digest is null)
+        {
+            return new ChunkOutcome(ChunkStatus.DigestRequired);
         }
 
         var remaining = request.Size - request.Offset;
@@ -175,6 +185,13 @@ public sealed class TransferStore(
                                  DateTimeOffset.FromUnixTimeSeconds(request.Mtime).UtcDateTime);
 
         Delete(metaPath);
+
+        // Rejestr dopisujemy dopiero po udanym przeniesieniu. Wpis o pliku, który
+        // ostatecznie nie wylądował na dysku, byłby gorszy niż brak wpisu.
+        if (request.Digest is { } accepted)
+        {
+            ledger.Append(slug, request.CanonicalPath, request.Size, request.Mtime, accepted);
+        }
 
         return new ChunkOutcome(ChunkStatus.Ok, received, request.Size, Complete: true, VersionedPath: versioned);
     }

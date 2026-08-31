@@ -61,6 +61,7 @@
                     <th>Rozmiar</th>
                     <th>Ostatnia zmiana</th>
                     <th>Bez odpowiednika</th>
+                    <th>Rejestr</th>
                     <th></th>
                 </tr>
                 </thead>
@@ -89,6 +90,32 @@
                             else
                             {
                                 <span class="przygaszony">—</span>
+                            }
+                        </td>
+                        <td>
+                            @if (entry.Ledger is not { } ledger)
+                            {
+                                <span class="przygaszony">—</span>
+                            }
+                            else if (ledger.Intact)
+                            {
+                                <span>@ledger.Entries wpisów</span>
+                                <div class="przygaszony">łańcuch spójny</div>
+                            }
+                            else
+                            {
+                                @* Naruszony łańcuch jest jedyną rzeczą w panelu, która znaczy
+                                   „ktoś tu grzebał". Musi się rzucać w oczy i podawać wiersz,
+                                   od którego zaczyna się rozjazd — bez tego zgłoszenie jest
+                                   alarmem, z którym nie da się nic zrobić. *@
+                                <span class="ostrzezenie">rejestr naruszony</span>
+                                <div class="przygaszony">
+                                    @if (ledger.BrokenAtSequence is { } at)
+                                    {
+                                        <text>od wpisu @at. </text>
+                                    }
+                                    @ledger.Problem
+                                </div>
                             }
                         </td>
                         <td>

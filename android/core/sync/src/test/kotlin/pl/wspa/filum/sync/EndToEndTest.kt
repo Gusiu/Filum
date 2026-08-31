@@ -136,7 +136,10 @@ class EndToEndTest {
 
         val outcome = engine.run("e2e-1", ManifestRequest.MODE_FULL, scanned.asSequence(), Deadline { false })
 
-        val completed = assertInstanceOf(SyncOutcome.Completed::class.java, outcome)
+        // Powód trafia do komunikatu: test zgodności, który mówi tylko „zły typ",
+        // każe zgadywać, po której stronie leży rozjazd — a to jest jedyna informacja,
+        // po którą się tu przychodzi.
+        val completed = assertInstanceOf(SyncOutcome.Completed::class.java, outcome, outcome.toString())
         println("wysłano ${completed.filesSent} plików, ${completed.bytesSent} B")
         assertEquals(4, completed.filesSent)
 

@@ -35,17 +35,18 @@ sierot (ADR-015), który informuje, ale nie kasuje.
 
 ## ADR-002 — Tożsamość pliku bez skrótu kryptograficznego
 
-**Status:** przyjęta
+**Status:** przyjęta jako **domyślna**, uzupełniona przez ADR-016
 
-**Kontekst.** Pierwsza synchronizacja obejmuje około 200 GB. Klasyczne narzędzia
-wykrywają zmiany przez porównanie skrótów zawartości.
+**Kontekst.** Biblioteka na telefonie bywa duża — dziesiątki albo setki gigabajtów.
+Klasyczne narzędzia wykrywają zmiany przez porównanie skrótów zawartości.
 
 **Decyzja.** Plik identyfikuje trójka `(ścieżka, rozmiar, mtime)`. Skróty służą
 wyłącznie kontroli integralności transferu i trybowi weryfikacji.
 
-**Uzasadnienie.** Liczenie SHA-256 z 200 GB przy każdym cyklu jest nie do przyjęcia
-energetycznie na urządzeniu zasilanym z akumulatora. Koszt zostanie zmierzony
-empirycznie na urządzeniu docelowym i wynik trafi do rozdziału eksperymentalnego.
+**Uzasadnienie.** Liczenie skrótu z całej biblioteki przy każdym cyklu wymaga
+odczytania jej w całości, co na urządzeniu zasilanym z akumulatora kosztuje tym
+więcej, im większa biblioteka. Przepustowość hashowania zostanie zmierzona
+empirycznie, a wynik pozwoli oszacować ten koszt dla dowolnego rozmiaru.
 
 **Odrzucone.** Pełne hashowanie przy każdym cyklu (koszt energetyczny), hashowanie
 przyrostowe wyłącznie plików nowych (nie wykrywa modyfikacji istniejących,
@@ -59,6 +60,11 @@ uruchamianym świadomie przez użytkownika.
 niemal darmowy, bo bajty i tak przechodzą przez procesor. Odrzucamy hashowanie
 jako metodę *wykrywania zmian*, nie jako metodę *kontroli integralności*.
 Pomylenie tych dwóch zastosowań jest częstym błędem.
+
+**Rewizja.** Decyzja pozostaje trybem domyślnym, ale przestała być jedyną —
+ADR-016 dokłada tryb dokładny, w którym tożsamością pliku jest jego skrót.
+Powód: metadane da się sfałszować, a przy zastosowaniach śledczych to nie jest
+scenariusz hipotetyczny.
 
 ---
 
@@ -204,8 +210,8 @@ Odnotowane jako kwestia otwarta.
 
 **Status:** przyjęta, do potwierdzenia pomiarem
 
-**Kontekst.** W około 200 GB znajduje się szacunkowo 100 tys. plików, z czego
-znaczna większość to drobne pliki poniżej 200 KB.
+**Kontekst.** Biblioteka multimedialna liczy zwykle dziesiątki tysięcy plików,
+z czego znaczna większość to drobiazgi poniżej kilkuset kilobajtów.
 
 **Decyzja.** Osobny zasób `POST /bundle` przyjmujący strumień plików z ramkowaniem
 długości. Próg wielkości podaje serwer w odpowiedzi `ping`.
@@ -284,7 +290,7 @@ Normalizacja zachodzi w jednym miejscu, na granicy odczytu z systemu plików.
 
 **Uzasadnienie.** Gdyby ten sam plik trafiał do manifestu raz z jednego, raz
 z drugiego źródła, jego tożsamość zmieniałaby się między cyklami i plik byłby
-wysyłany w kółko. Przy 200 GB byłaby to awaria, nie niedogodność.
+wysyłany w kółko. Przy dużej bibliotece byłaby to awaria, nie niedogodność.
 
 **Odrzucone.** Milisekundy (część źródeł ich nie dostarcza, więc i tak potrzebna
 byłaby konwersja w drugą stronę).
@@ -295,16 +301,16 @@ byłaby konwersja w drugą stronę).
 
 **Status:** przyjęta
 
-**Kontekst.** Pierwsza synchronizacja obejmuje około 200 GB. Rozważano wstępny
-zrzut kablem i dosyłanie wyłącznie różnicy.
+**Kontekst.** Pierwsza synchronizacja obejmuje całą bibliotekę i bywa długa.
+Rozważano wstępny zrzut kablem i dosyłanie wyłącznie różnicy.
 
 **Decyzja.** Ścieżką podstawową jest pełny transfer przez sieć, rozłożony na
 kilka nocy. Tryb adopcji istniejącego zrzutu jest funkcją dodatkową.
 
 **Uzasadnienie.** Kopiowanie przez MTP notorycznie nie zachowuje czasów
 modyfikacji, a FAT ma granulację dwóch sekund. Niezgodny mtime sprawiłby, że
-pierwsze uruchomienie uznałoby komplet plików za brakujące i wysłało całe 200 GB
-mimo istniejącego zrzutu. Transfer sieciowy wymusza porządną wznawialność, która
+pierwsze uruchomienie uznałoby komplet plików za brakujące i wysłało wszystko
+od nowa mimo istniejącego zrzutu. Transfer sieciowy wymusza porządną wznawialność, która
 i tak jest potrzebna, i eliminuje całą klasę błędów.
 
 **Odrzucone.** Wyłącznie zrzut kablem z obowiązkową adopcją (ryzyko pojedynczego
@@ -384,3 +390,82 @@ całkowite pominięcie problemu (dysk zapełniłby się bez wyjaśnienia).
 
 **Konsekwencje.** Decyzja o usunięciu należy wyłącznie do użytkownika i zapada
 ręcznie, poza aplikacją albo przez jawną akcję w panelu.
+
+---
+
+## ADR-016 — Integralność ponad oszczędność
+
+**Status:** przyjęta
+
+**Kontekst.** Praca powstaje na specjalizacji cyberbezpieczeństwo i informatyka
+śledcza. Wcześniejsze decyzje ważyły koszt energetyczny przeciwko wykrywalności
+zmian i konsekwentnie wybierały oszczędność (ADR-002). Przy takim profilu
+zastosowań ta waga jest ustawiona odwrotnie: kopia zapasowa, o której nie da się
+niczego wykazać, ma ograniczoną wartość dowodową.
+
+**Decyzja.** Integralność jest priorytetem, a jej koszt jest akceptowalny.
+Konkretnie:
+
+1. **Skrót każdego pliku jest obowiązkowy przy przyjęciu.** Serwer może odrzucić
+   transfer bez skrótu. Nie jest to już opcjonalne udogodnienie z §9 protokołu.
+2. **Rejestr integralności.** Serwer prowadzi trwały, dopisywany zapis: dla każdego
+   przyjętego pliku ścieżka, rozmiar, mtime, skrót i chwila przyjęcia. Rejestr jest
+   **łańcuchem skrótów** — każdy wpis obejmuje skrót wpisu poprzedniego, więc
+   wsteczna edycja samego rejestru jest wykrywalna.
+3. **Polityka wykrywania zmian jest wyborem użytkownika.** Tryb szybki zachowuje
+   ADR-002. Tryb dokładny liczy skrót każdego pliku przy każdym skanie i porównuje
+   go z rejestrem, przez co wykrywa **podmianę zachowującą metadane** — plik
+   o niezmienionym rozmiarze i czasie modyfikacji, ale innej zawartości.
+4. **Weryfikacja nie musi być próbką.** Użytkownik wybiera zakres; próbka pozostaje
+   domyślna ze względu na czas, nie ze względu na zasadę.
+
+**Uzasadnienie.** Rozróżnienie z ADR-002 pozostaje słuszne — hashowanie przy
+wykrywaniu zmian faktycznie kosztuje pełny odczyt danych. Zmienia się natomiast
+odpowiedź na pytanie, czy warto: przy zastosowaniach dowodowych wykrycie podmiany
+zachowującej metadane jest dokładnie tym, po co ten mechanizm istnieje. Manipulacja,
+która nie rusza rozmiaru ani mtime, jest banalnie prosta do wykonania i niewidoczna
+dla każdego systemu opartego wyłącznie na metadanych.
+
+Łańcuch skrótów w rejestrze kosztuje jedno dodatkowe wywołanie funkcji na plik,
+a zamienia listę skrótów w zapis, którego nie da się po cichu poprawić.
+
+**Odrzucone.** Wymuszenie trybu dokładnego bez możliwości wyboru (przy dużej
+bibliotece na słabszym sprzęcie oznaczałoby cykle trwające dobę i użytkownika,
+który wyłącza aplikację), podpisywanie rejestru kluczem serwera (klucz leży na tej
+samej maszynie, więc podpis nie chroni przed tym, kto ma do niej dostęp — łańcuch
+skrótów daje tę samą wykrywalność bez pozorowania mocniejszej gwarancji).
+
+**Konsekwencje.** Tryb dokładny wymaga pełnego odczytu pamięci telefonu przy każdym
+cyklu. Jest to widoczne w interfejsie i opisane, a nie ukryte za wartością domyślną.
+
+---
+
+## ADR-017 — Bez założeń o pojemności urządzenia
+
+**Status:** przyjęta
+
+**Kontekst.** Dokumentacja zakładała pierwszą synchronizację rzędu 200 GB
+i wyprowadzała z tej liczby część uzasadnień. Założenie okazało się związane
+z konkretnym egzemplarzem sprzętu — na urządzeniu o mniejszej pamięci jest
+fizycznie niemożliwe, a na większym zaniżone.
+
+**Decyzja.** Nigdzie nie zakładamy wielkości biblioteki ani pojemności urządzenia.
+Progi, które musimy mieć, są **względne** albo wynikają z ograniczeń niezależnych
+od rozmiaru danych.
+
+| Próg | Wobec czego | Dlaczego nie bezwzględny |
+|---|---|---|
+| zapas wolnego miejsca | `max(2% pojemności, niewielkie minimum)` | 2% na dysku 128 GB to za mało, na 8 TB za dużo — stąd oba człony |
+| próg paczkowania | narzut żądania HTTP wobec czasu transferu | zależy od sieci, nie od wielkości biblioteki |
+| rozmiar fragmentu | czas trwania pojedynczego żądania | zależy od przepustowości |
+| budżet pracy w tle | limit systemu Android | nie jest naszym wyborem |
+
+**Uzasadnienie.** Architektura broni się bez tej liczby. Wznawialność na trzech
+poziomach, skan przyrostowy i budżet mają sens przy bibliotece dowolnego rozmiaru —
+im większa, tym bardziej, ale próg wejścia nie istnieje. Przywiązanie uzasadnień
+do konkretnej liczby czyniło je fałszywymi wszędzie tam, gdzie ta liczba nie
+obowiązuje.
+
+**Odrzucone.** Podanie innej liczby zamiast 200 GB (ten sam błąd, inna wartość),
+skalowanie progów do rozmiaru biblioteki (wymagałoby jej znajomości przed pierwszym
+skanem, czyli zanim cokolwiek wiemy).

@@ -66,7 +66,21 @@ public sealed record AdminDevice(
     DateTimeOffset? LastActivity,
     /// <summary>Liczba plików obecnych w kopii, a nieobecnych już na telefonie (§5.6).</summary>
     int OrphanCount = 0,
-    long OrphanBytes = 0);
+    long OrphanBytes = 0,
+    /// <summary>Stan rejestru integralności urządzenia (§10). Null, gdy rejestr nie jest prowadzony.</summary>
+    AdminLedger? Ledger = null);
+
+/// <summary>
+/// Podsumowanie rejestru integralności jednego urządzenia.
+///
+/// Sama liczba wpisów niczego nie mówi bez odpowiedzi na pytanie, czy łańcuch trzyma —
+/// dlatego oba pola są tu razem i panel nie pokazuje jednego bez drugiego.
+/// </summary>
+public sealed record AdminLedger(
+    long Entries,
+    bool Intact,
+    long? BrokenAtSequence = null,
+    string? Problem = null);
 
 public sealed record AdminStatus(
     string ServerName,
@@ -87,7 +101,12 @@ public sealed record AdminStatus(
 public sealed record ManifestEntry(
     [property: JsonPropertyName("p")] string Path,
     [property: JsonPropertyName("s")] long Size,
-    [property: JsonPropertyName("m")] long Mtime);
+    [property: JsonPropertyName("m")] long Mtime,
+    /// <summary>
+    /// Skrót zawartości, gdy klient pracuje w trybie dokładnym (§5.2, ADR-016).
+    /// Nieobecny w trybie szybkim — tam tożsamość opiera się na metadanych.
+    /// </summary>
+    [property: JsonPropertyName("d")] string? Digest = null);
 
 public sealed record ManifestRequest(
     string Session,
@@ -112,7 +131,18 @@ public sealed record RejectedFile(
 public sealed record ManifestResponse(
     long Have,
     IReadOnlyList<NeededFile> Needed,
-    IReadOnlyList<RejectedFile> Rejected);
+    IReadOnlyList<RejectedFile> Rejected,
+    /// <summary>
+    /// Ścieżki, dla których klient podał skrót inny niż zapisany w rejestrze przy
+    /// przyjęciu, mimo zgodnego rozmiaru i czasu modyfikacji. Zmiana zachowująca
+    /// metadane nie zdarza się przypadkiem i klient odnotowuje ją w dzienniku.
+    ///
+    /// Pole jest **pomijane**, gdy nic nie jest rozbieżne — tak stanowi §5.2. Sam typ
+    /// dopuszczający null tego nie załatwia: System.Text.Json domyślnie wypisuje
+    /// `"divergent": null`, co jest czymś innym niż nieobecność pola.
+    /// </summary>
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [property: JsonPropertyName("divergent")] IReadOnlyList<string>? Divergent = null);
 
 // --- PUT /api/v1/file (§5.3) ---
 
@@ -181,6 +211,7 @@ public static class ErrorCodes
     public const string BadRequest = "bad_request";
     public const string OffsetMismatch = "offset_mismatch";
     public const string DigestMismatch = "digest_mismatch";
+    public const string DigestRequired = "digest_required";
     public const string PathRejected = "path_rejected";
     public const string InsufficientStorage = "insufficient_storage";
     public const string PayloadTooLarge = "payload_too_large";

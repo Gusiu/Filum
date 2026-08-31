@@ -22,8 +22,9 @@ data class ScannedFile(
  *
  * `MediaStore.DATE_MODIFIED` podaje **sekundy**, a `File.lastModified()` **milisekundy**.
  * Gdyby ten sam plik trafiał do manifestu raz z jednego, raz z drugiego źródła, jego
- * tożsamość zmieniałaby się między cyklami i byłby wysyłany w kółko. Przy 200 GB
- * to nie jest niedogodność, tylko awaria.
+ tożsamość zmieniałaby się między cyklami i byłby wysyłany w kółko. Na bibliotece
+ * dowolnej wielkości to nie jest niedogodność, tylko awaria — zmienia się tylko to,
+ * jak szybko użytkownik ją zauważy.
  */
 object Mtime {
 

@@ -21,9 +21,10 @@ import pl.wspa.filum.sync.Deadline
 /**
  * Cykl synchronizacji wykonywany w tle, jako usługa pierwszoplanowa typu `dataSync`.
  *
- * Praca jest z założenia przerywalna. Nie próbujemy dokończyć wszystkiego za jednym
- * razem — pierwsza synchronizacja to około 200 GB, więc i tak rozkłada się na kilka
- * nocy. Worker robi tyle, ile pozwala budżet, zapisuje stan i kończy się sam.
+ Praca jest z założenia przerywalna. Nie próbujemy dokończyć wszystkiego za jednym
+ * razem: pierwsza synchronizacja obejmuje całą bibliotekę urządzenia i przy typowym
+ * telefonie nie mieści się w jednym oknie pracy w tle, niezależnie od tego, ile ta
+ * biblioteka waży. Worker robi tyle, ile pozwala budżet, zapisuje stan i kończy sam.
  */
 class SyncWorker(
     context: Context,

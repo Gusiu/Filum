@@ -22,6 +22,7 @@ public sealed class AdminService(
     CertificateStore certificates,
     DeviceStats stats,
     OrphanReporter orphans,
+    IntegrityLedger ledger,
     PairingService pairing)
 {
     public AdminStatus Snapshot()
@@ -35,7 +36,8 @@ public sealed class AdminService(
                 return new AdminDevice(
                     device.Pin, device.Slug, device.Label, device.Enabled, device.PairedAt,
                     count, bytes, LastActivity(device.Slug),
-                    report?.Count ?? 0, report?.Bytes ?? 0);
+                    report?.Count ?? 0, report?.Bytes ?? 0,
+                    LedgerOf(device.Slug));
             })
             .ToList();
 
@@ -77,6 +79,22 @@ public sealed class AdminService(
     /// czyli dokładnie ta chwila, w której kopia jest najbardziej potrzebna.
     /// </summary>
     public bool Forget(string pin) => registry.Forget(pin);
+
+    /// <summary>
+    /// Stan rejestru urządzenia.
+    ///
+    /// Weryfikacja przechodzi cały rejestr, więc przy stu tysiącach wpisów kosztuje
+    /// odczyt kilkunastu megabajtów tekstu. To odczyt sekwencyjny raz na wejście
+    /// do panelu, a nie na żądanie telefonu — a bez tego panel pokazywałby liczbę
+    /// wpisów bez informacji, czy cokolwiek z nich jest jeszcze wiarygodne.
+    /// </summary>
+    private AdminLedger? LedgerOf(string slug)
+    {
+        var result = ledger.Verify(slug);
+        if (result.Entries == 0 && result.Intact) return null;
+
+        return new AdminLedger(result.Entries, result.Intact, result.BrokenAtSequence, result.Problem);
+    }
 
     /// <summary>Kiedy do katalogu urządzenia trafiło coś ostatnio.</summary>
     private DateTimeOffset? LastActivity(string slug)

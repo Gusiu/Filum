@@ -51,6 +51,7 @@ class MainActivity : ComponentActivity() {
                                 onSyncNow = model::syncNow,
                                 onVerify = model::verify,
                                 onScheduleChange = model::setSchedule,
+                                onIntegrityPolicyChange = model::setIntegrityPolicy,
                                 onOpenLog = { model.show(Screen.LOG) },
                                 onOpenFolders = model::openFolders,
                                 onRequestStorageAccess = ::openStorageAccessSettings,

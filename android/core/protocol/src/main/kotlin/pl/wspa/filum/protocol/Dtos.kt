@@ -99,11 +99,42 @@ data class PingResponse(
  * Pozycja manifestu. Jednoliterowe nazwy nie są tu ozdobnikiem: przy 100 tys. plików
  * i partiach po 2000 narzut samych nazw pól w JSON przestaje być pomijalny.
  */
+/**
+ * Polityka wykrywania zmian (ADR-016).
+ *
+ * Mieszka w protokole, a nie w silniku, bo rozstrzyga o kształcie manifestu: w trybie
+ * dokładnym pozycja niesie skrót, w szybkim nie. Ustawienie użytkownika i pole na
+ * drucie muszą znaczyć to samo, więc jest to jeden typ, a nie dwa zsynchronizowane.
+ *
+ * Wybór należy do użytkownika, bo oba tryby są uzasadnione i różnią się ceną, nie
+ * poprawnością. Koszt trybu dokładnego zależy od wielkości biblioteki i szybkości
+ * pamięci urządzenia — czyli od rzeczy, których aplikacja nie zna z góry.
+ */
+enum class IntegrityPolicy {
+
+    /**
+     * Tożsamość z pary (rozmiar, czas modyfikacji) — ADR-002. Skan nie czyta zawartości
+     * plików, więc jest szybki, ale podmiana zachowująca metadane zostaje niezauważona.
+     */
+    FAST,
+
+    /**
+     * Skrót każdego pliku przy każdym skanie, zestawiany z rejestrem serwera. Wykrywa
+     * podmianę zachowującą metadane; kosztuje odczyt całej biblioteki w każdym cyklu.
+     */
+    THOROUGH,
+}
+
 @Serializable
 data class ManifestEntry(
     @SerialName("p") val path: String,
     @SerialName("s") val size: Long,
     @SerialName("m") val mtime: Long,
+    /**
+     * Skrót zawartości — tylko w trybie dokładnym (§5.2, ADR-016). W trybie szybkim
+     * pole nie jest wysyłane, bo jego policzenie wymaga odczytania każdego pliku.
+     */
+    @SerialName("d") val digest: String? = null,
 )
 
 @Serializable
@@ -145,6 +176,12 @@ data class ManifestResponse(
     @SerialName("have") val have: Long,
     @SerialName("needed") val needed: List<NeededFile> = emptyList(),
     @SerialName("rejected") val rejected: List<RejectedFile> = emptyList(),
+    /**
+     * Ścieżki, dla których skrót nie zgadza się z zapisanym w rejestrze serwera mimo
+     * niezmienionych metadanych. Serwer wpisuje je również do `needed`, więc kopia
+     * zostanie uzupełniona; ta lista istnieje po to, żeby dało się to **odnotować**.
+     */
+    @SerialName("divergent") val divergent: List<String> = emptyList(),
 )
 
 // --- PUT /file (§5.3) ---

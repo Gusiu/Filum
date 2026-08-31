@@ -1,0 +1,409 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using Filum.Protocol;
+
+namespace Filum.Core.Tests;
+
+/// <summary>
+/// Rejestr integralności (ADR-016).
+///
+/// Rejestr odpowiada na pytanie, którego nie da się zadać samej kopii plików: co
+/// i kiedy serwer przyjął, i czy od tamtej pory ktoś to ruszył. Łańcuch skrótów
+/// zamienia listę wpisów w zapis, którego nie da się po cichu poprawić — i to jest
+/// jedyna właściwość, dla której ten rejestr istnieje, więc testy celują w nią.
+/// </summary>
+public class IntegrityLedgerTests
+{
+    private const long Mtime = 1_756_400_000;
+
+    private static string Digest(string content) =>
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(content)));
+
+    private static string LedgerPath(Harness h) =>
+        Path.Combine(h.Paths.MetaRoot(Harness.Slug), "integrity.jsonl");
+
+    private static LedgerEntry Append(Harness h, string path, string content) =>
+        h.Ledger.Append(Harness.Slug, path, content.Length, Mtime, Digest(content));
+
+    [Fact]
+    public void PierwszyWpis_ZaczynaLancuchOdKotwicy()
+    {
+        using var h = new Harness();
+
+        var entry = h.Ledger.Append(Harness.Slug, "a.txt", 10, Mtime, Digest("aaa"));
+
+        Assert.Equal(1, entry.Sequence);
+        Assert.Equal(IntegrityLedger.Genesis, entry.Previous);
+    }
+
+    [Fact]
+    public void KazdyWpis_WskazujeNaPoprzedni()
+    {
+        using var h = new Harness();
+
+        Append(h, "a.txt", "aaa");
+        var second = Append(h, "b.txt", "bbb");
+
+        Assert.Equal(2, second.Sequence);
+        Assert.NotEqual(IntegrityLedger.Genesis, second.Previous);
+    }
+
+    [Fact]
+    public void NietkniętyRejestr_JestSpojny()
+    {
+        using var h = new Harness();
+        for (var i = 1; i <= 20; i++) Append(h, $"plik{i}.txt", $"zawartość {i}");
+
+        var result = h.Ledger.Verify(Harness.Slug);
+
+        Assert.True(result.Intact, result.Problem);
+        Assert.Equal(20, result.Entries);
+        Assert.Null(result.BrokenAtSequence);
+    }
+
+    [Fact]
+    public void PustyRejestr_JestSpojny()
+    {
+        using var h = new Harness();
+
+        var result = h.Ledger.Verify(Harness.Slug);
+
+        Assert.True(result.Intact);
+        Assert.Equal(0, result.Entries);
+    }
+
+    // --- właściwość, dla której rejestr w ogóle istnieje ---
+
+    [Fact]
+    public void PodmianaWpisu_JestWykrywana()
+    {
+        // Ktoś z dostępem do dysku zmienia skrót w rejestrze, żeby podmieniony plik
+        // wyglądał na oryginalny. Wpis sam w sobie wygląda poprawnie — niezgodność
+        // ujawnia dopiero łańcuch, bo następny wiersz wskazuje na starą postać.
+        using var h = new Harness();
+        Append(h, "a.txt", "aaa");
+        Append(h, "b.txt", "bbb");
+        Append(h, "c.txt", "ccc");
+
+        var lines = File.ReadAllLines(LedgerPath(h));
+        lines[1] = lines[1].Replace(Digest("bbb"), Digest("podmienione"));
+        File.WriteAllLines(LedgerPath(h), lines);
+
+        var result = h.Ledger.Verify(Harness.Slug);
+
+        Assert.False(result.Intact);
+        Assert.Equal(3, result.BrokenAtSequence);
+    }
+
+    [Fact]
+    public void UsuniecieWpisu_JestWykrywane()
+    {
+        // Usunięcie wiersza to najprostszy sposób, żeby plik „nigdy nie istniał".
+        using var h = new Harness();
+        Append(h, "a.txt", "aaa");
+        Append(h, "kompromitujacy.txt", "bbb");
+        Append(h, "c.txt", "ccc");
+
+        var lines = File.ReadAllLines(LedgerPath(h)).ToList();
+        lines.RemoveAt(1);
+        File.WriteAllLines(LedgerPath(h), lines);
+
+        var result = h.Ledger.Verify(Harness.Slug);
+
+        Assert.False(result.Intact);
+        Assert.Contains("brakuje", result.Problem, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void DopisanieWpisuWSrodku_JestWykrywane()
+    {
+        using var h = new Harness();
+        Append(h, "a.txt", "aaa");
+        Append(h, "b.txt", "bbb");
+
+        var lines = File.ReadAllLines(LedgerPath(h)).ToList();
+        lines.Insert(1, lines[0]);
+        File.WriteAllLines(LedgerPath(h), lines);
+
+        Assert.False(h.Ledger.Verify(Harness.Slug).Intact);
+    }
+
+    [Fact]
+    public void DopisanieNaKoncu_JestPoprawne()
+    {
+        // Rejestr jest dopisywany z definicji — nowe wpisy nie mogą go unieważniać.
+        using var h = new Harness();
+        Append(h, "a.txt", "aaa");
+        Assert.True(h.Ledger.Verify(Harness.Slug).Intact);
+
+        Append(h, "b.txt", "bbb");
+        Assert.True(h.Ledger.Verify(Harness.Slug).Intact);
+    }
+
+    [Fact]
+    public void UszkodzonyWiersz_JestWykrywany()
+    {
+        using var h = new Harness();
+        Append(h, "a.txt", "aaa");
+        File.AppendAllText(LedgerPath(h), "to nie jest json\n");
+
+        Assert.False(h.Ledger.Verify(Harness.Slug).Intact);
+    }
+
+    [Fact]
+    public void OstatniSkrotPliku_PochodziZNajnowszegoWpisu()
+    {
+        // Plik może trafić do rejestru wiele razy — liczy się stan bieżący.
+        using var h = new Harness();
+        Append(h, "notatka.txt", "wersja pierwsza");
+        Append(h, "notatka.txt", "wersja druga");
+
+        Assert.Equal(Digest("wersja druga"), h.Ledger.DigestOf(Harness.Slug, "notatka.txt"));
+    }
+
+    [Fact]
+    public void RejestrJestCzytelnyDlaObcegoNarzedzia()
+    {
+        // Cała wartość rejestru polega na tym, że da się go sprawdzić **bez** tej
+        // aplikacji. Znacznik kolejności bajtów sprawiał, że pierwszy wiersz nie był
+        // poprawnym JSON-em dla standardowych parserów — a rejestr dowodowy, do którego
+        // odczytu potrzeba wiedzy o konwencji zapisu jednej implementacji, jest wart
+        // tyle, ile zaufanie do tej implementacji. Czyli tyle, co nic.
+        using var h = new Harness();
+        Append(h, "a.txt", "aaa");
+        Append(h, "b.txt", "bbb");
+
+        var raw = File.ReadAllBytes(LedgerPath(h));
+
+        Assert.False(raw.Length >= 3 && raw[0] == 0xEF && raw[1] == 0xBB && raw[2] == 0xBF,
+                     "rejestr zaczyna się znacznikiem kolejności bajtów");
+
+        // Odczyt bez udziału naszego kodu — dokładnie tak, jak zrobiłaby to strona trzecia.
+        foreach (var line in File.ReadAllLines(LedgerPath(h)).Where(l => l.Length > 0))
+        {
+            using var parsed = JsonDocument.Parse(line);
+            Assert.True(parsed.RootElement.TryGetProperty("d", out _));
+        }
+    }
+
+    [Fact]
+    public void NieznanyPlik_NieMaSkrotu()
+    {
+        using var h = new Harness();
+
+        Assert.Null(h.Ledger.DigestOf(Harness.Slug, "nigdy-nie-byl.txt"));
+    }
+}
+
+/// <summary>Wymóg skrótu przy przyjęciu pliku (ADR-016).</summary>
+public class DigestRequirementTests
+{
+    private const long Mtime = 1_756_400_000;
+
+    [Fact]
+    public async Task PrzyWlaczonymWymogu_PlikBezSkrotuJestOdrzucany()
+    {
+        using var h = new Harness(o => o.RequireDigest = true);
+
+        var outcome = await h.WriteWholeAsync("a.txt", Harness.Bytes("zawartość"), Mtime, withDigest: false);
+
+        Assert.Equal(ChunkStatus.DigestRequired, outcome.Status);
+        Assert.False(h.StoredExists("a.txt"));
+    }
+
+    [Fact]
+    public async Task PrzyWlaczonymWymogu_PlikZeSkrotemPrzechodzi()
+    {
+        using var h = new Harness(o => o.RequireDigest = true);
+
+        var outcome = await h.WriteWholeAsync("a.txt", Harness.Bytes("zawartość"), Mtime, withDigest: true);
+
+        Assert.Equal(ChunkStatus.Ok, outcome.Status);
+        Assert.True(h.StoredExists("a.txt"));
+    }
+
+    [Fact]
+    public async Task OdrzuceniePrzedZapisem_NieZostawiaFragmentu()
+    {
+        // Ważne, żeby odmowa nastąpiła zanim cokolwiek trafi na dysk: inaczej
+        // każde żądanie bez skrótu zostawiałoby śmieci w katalogu przejściowym.
+        using var h = new Harness(o => o.RequireDigest = true);
+
+        await h.WriteWholeAsync("a.txt", Harness.Bytes("zawartość"), Mtime, withDigest: false);
+
+        Assert.Equal(-1, h.PartLength("a.txt"));
+    }
+
+    [Fact]
+    public async Task PrzyjetyPlik_TrafiaDoRejestru()
+    {
+        using var h = new Harness(o => o.RequireDigest = true);
+        var content = Harness.Bytes("zawartość do rejestru");
+
+        await h.WriteWholeAsync("DCIM/a.jpg", content, Mtime, withDigest: true);
+
+        var entry = h.Ledger.Read(Harness.Slug).Single();
+        Assert.Equal("DCIM/a.jpg", entry.Path);
+        Assert.Equal(content.Length, entry.Size);
+        Assert.Equal(Mtime, entry.Mtime);
+        Assert.Equal(Harness.Digest(content), entry.Digest);
+        Assert.True(h.Ledger.Verify(Harness.Slug).Intact);
+    }
+
+    [Fact]
+    public async Task NieudanyTransfer_NieZostawiaWpisu()
+    {
+        // Wpis o pliku, który ostatecznie nie wylądował na dysku, byłby gorszy
+        // niż brak wpisu — sugerowałby posiadanie czegoś, czego nie ma.
+        using var h = new Harness(o => o.RequireDigest = true);
+        var wrongDigest = Harness.Digest(Harness.Bytes("coś zupełnie innego"));
+
+        await h.WriteAsync("a.txt", Harness.Bytes("zawartość"), 9, Mtime, 0, wrongDigest);
+
+        Assert.Empty(h.Ledger.Read(Harness.Slug));
+    }
+
+    [Fact]
+    public async Task KolejneWersjeTegoSamegoPliku_ZostawiajaSladObu()
+    {
+        // Rejestr jest zapisem przyjęć, nie stanem bieżącym. Poprzednia wersja pliku
+        // leży w .filum/versions, a jej skrót zostaje w rejestrze — razem dają
+        // odtwarzalną historię, a nie tylko migawkę.
+        using var h = new Harness(o => o.RequireDigest = true);
+
+        await h.WriteWholeAsync("notatka.txt", Harness.Bytes("pierwsza"), Mtime, withDigest: true);
+        await h.WriteWholeAsync("notatka.txt", Harness.Bytes("druga"), Mtime + 100, withDigest: true);
+
+        var entries = h.Ledger.Read(Harness.Slug).ToList();
+        Assert.Equal(2, entries.Count);
+        Assert.Equal(Harness.Digest(Harness.Bytes("pierwsza")), entries[0].Digest);
+        Assert.Equal(Harness.Digest(Harness.Bytes("druga")), entries[1].Digest);
+        Assert.True(h.Ledger.Verify(Harness.Slug).Intact);
+    }
+}
+
+/// <summary>
+/// Tryb dokładny: manifest niesie skrót, a serwer zestawia go z rejestrem (ADR-016).
+///
+/// Sedno jest w różnicy między dwoma trybami. Tryb szybki porównuje metadane i nie
+/// ma jak zauważyć podmiany, która je zachowała — to znana cena ADR-002, nie usterka.
+/// Tryb dokładny zauważa, bo pyta o co innego.
+/// </summary>
+public class ThoroughModeTests
+{
+    private const long Mtime = 1_756_400_000;
+
+    /// <summary>Kładzie plik i zapisuje go w rejestrze — stan po udanej synchronizacji.</summary>
+    private static void Accept(Harness h, string path, string content)
+    {
+        var bytes = Harness.Bytes(content);
+        h.Seed(path, bytes, Mtime);
+        h.Ledger.Append(Harness.Slug, path, bytes.Length, Mtime, Harness.Digest(bytes));
+    }
+
+    /// <summary>Podmienia zawartość, zachowując rozmiar i czas modyfikacji.</summary>
+    private static void SubstituteInPlace(Harness h, string path, string content)
+    {
+        h.Seed(path, Harness.Bytes(content), Mtime);
+    }
+
+    private static ManifestEntry Entry(string path, string content, bool withDigest) =>
+        new(path, Harness.Bytes(content).Length, Mtime,
+            withDigest ? Harness.Digest(Harness.Bytes(content)) : null);
+
+    [Fact]
+    public void ZgodnySkrot_PlikUznanyZaPosiadany()
+    {
+        using var h = new Harness();
+        Accept(h, "notatka.txt", "zawartość");
+
+        var result = h.Manifest.Resolve(Harness.Slug, [Entry("notatka.txt", "zawartość", withDigest: true)]);
+
+        Assert.Equal(1, result.Have);
+        Assert.Empty(result.Needed);
+        Assert.Empty(result.Divergent);
+    }
+
+    [Fact]
+    public void PodmianaZachowujacaMetadane_JestWykrywana()
+    {
+        // Ktoś zmienił plik na telefonie tak, żeby rozmiar i mtime zostały nietknięte.
+        // Dla trybu szybkiego to ten sam plik. Skrót mówi co innego.
+        using var h = new Harness();
+        Accept(h, "umowa.pdf", "treść oryginalna");
+        SubstituteInPlace(h, "umowa.pdf", "treść podmieniona");
+
+        var result = h.Manifest.Resolve(
+            Harness.Slug, [Entry("umowa.pdf", "treść podmieniona", withDigest: true)]);
+
+        Assert.Equal("umowa.pdf", Assert.Single(result.Divergent));
+        Assert.Equal(0, result.Have);
+    }
+
+    [Fact]
+    public void WykrytaPodmiana_TrafiaDoPobraniaZWersjonowaniem()
+    {
+        // Rozbieżność nie może kończyć się samym zgłoszeniem: kopia ma zostać
+        // uzupełniona, a poprzednia wersja odłożona, żeby dało się porównać obie.
+        using var h = new Harness();
+        Accept(h, "umowa.pdf", "treść oryginalna");
+        SubstituteInPlace(h, "umowa.pdf", "treść podmieniona");
+
+        var result = h.Manifest.Resolve(
+            Harness.Slug, [Entry("umowa.pdf", "treść podmieniona", withDigest: true)]);
+
+        var needed = Assert.Single(result.Needed);
+        Assert.Equal("umowa.pdf", needed.Path);
+        Assert.Equal(0, needed.Offset);
+        Assert.True(needed.Versioned);
+    }
+
+    [Fact]
+    public void TrybSzybki_NieWykrywaPodmianyZachowujacejMetadane()
+    {
+        // Test dokumentuje ograniczenie, a nie życzenie. Bez skrótu serwer dysponuje
+        // wyłącznie rozmiarem i czasem — a te się zgadzają. To jest właśnie powód,
+        // dla którego tryb dokładny istnieje.
+        using var h = new Harness();
+        Accept(h, "umowa.pdf", "treść oryginalna");
+        SubstituteInPlace(h, "umowa.pdf", "treść podmieniona");
+
+        var result = h.Manifest.Resolve(
+            Harness.Slug, [Entry("umowa.pdf", "treść podmieniona", withDigest: false)]);
+
+        Assert.Equal(1, result.Have);
+        Assert.Empty(result.Divergent);
+    }
+
+    [Fact]
+    public void PlikSpozaRejestru_NieJestZglaszanyJakoRozbiezny()
+    {
+        // Plik wstawiony do kopii ręcznie albo przyjęty przed włączeniem rejestru.
+        // Nie ma z czym porównywać, a domysł byłby fałszywym alarmem przy pierwszym
+        // skanie w trybie dokładnym — czyli dokładnie wtedy, gdy alarm ma znaczyć coś.
+        using var h = new Harness();
+        h.Seed("stary.txt", Harness.Bytes("zawartość"), Mtime);
+
+        var result = h.Manifest.Resolve(Harness.Slug, [Entry("stary.txt", "zawartość", withDigest: true)]);
+
+        Assert.Equal(1, result.Have);
+        Assert.Empty(result.Divergent);
+    }
+
+    [Fact]
+    public void ZmianaRozmiaru_ZglaszanaJakoZwyklaAktualizacja()
+    {
+        // Rozbieżność ma znaczyć „metadane kłamią". Zwykła edycja pliku zmienia mtime
+        // albo rozmiar i nie jest niczym podejrzanym — mieszanie tych dwóch sytuacji
+        // pozbawiłoby zgłoszenie wartości.
+        using var h = new Harness();
+        Accept(h, "notatka.txt", "krótka");
+
+        var result = h.Manifest.Resolve(
+            Harness.Slug, [Entry("notatka.txt", "zdecydowanie dłuższa treść", withDigest: true)]);
+
+        Assert.Single(result.Needed);
+        Assert.Empty(result.Divergent);
+    }
+}
