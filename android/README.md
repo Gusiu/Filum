@@ -39,7 +39,7 @@ się na zwykłej maszynie wirtualnej, bez emulatora i w sekundach.
 
 ## Testy
 
-186 testów jednostkowych, wszystkie na JVM:
+189 testów jednostkowych, wszystkie na JVM:
 
 - **reguły ścieżek** — te same wektory `docs/testvectors/paths.tsv` co implementacja w C#,
 - **przypięcie klucza** — wektory ze stałych certyfikatów z odciskami policzonymi przez openssl,
@@ -48,7 +48,9 @@ się na zwykłej maszynie wirtualnej, bez emulatora i w sekundach.
 - **skaner** — prawdziwe pliki w katalogu tymczasowym,
 - **silnik** — pełne atrapy kolejki i serwera, sprawdzające przejścia stanów,
 - **decyzja o ponowieniu pracy w tle** — wydzielona z workera, żeby dała się przetestować,
-- **paczkowanie małych plików** — podział, limity i częściowe niepowodzenie paczki.
+- **paczkowanie małych plików** — podział, limity i częściowe niepowodzenie paczki,
+- **polityka integralności** — czy tryb dokładny dokłada skrót do manifestu, czy skrót
+  towarzyszy każdemu fragmentowi i czy zgłoszona rozbieżność trafia do dziennika.
 
 ### Test zgodności między implementacjami
 
@@ -72,6 +74,11 @@ Test wysyła cztery pliki, w tym nazwę z dwukropkiem i nazwę z polskimi znakam
 a potem żąda manifestu po raz drugi. Serwer musi wtedy zgłosić, że ma komplet —
 rozjazd w jednostkach `mtime` albo w normalizacji Unicode ujawniłby się właśnie
 tutaj, jako ponowna prośba o te same pliki.
+
+Warto go uruchamiać po każdej zmianie w kształcie odpowiedzi. Ostatnia taka zmiana
+dodała do manifestu pole opcjonalne: serwer wypisywał je jako `null`, klient uznawał
+`null` za błąd składni i przerywał synchronizację. Komplet testów jednostkowych po
+obu stronach był zielony — bo każda strona robiła dokładnie to, co jej autor zamierzył.
 
 ## Stan
 

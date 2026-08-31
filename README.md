@@ -30,9 +30,13 @@ Zbiór plików przechowywanych przez Filum jest monotoniczny — może wyłączn
   pod znaną ścieżką nie nadpisuje poprzedniej — stara wersja jest odkładana.
 - **Przezroczyste składowanie.** Na dysku leży zwykłe drzewo katalogów,
   przeglądalne w Eksploratorze. Odtworzenie nie wymaga tej aplikacji.
-- **Integralność jest sprawdzalna.** Skrót każdego pliku trafia do dopisywanego
-  rejestru spiętego łańcuchem skrótów, więc kopię da się zweryfikować, a wsteczna
-  edycja samego rejestru jest wykrywalna.
+- **Integralność jest sprawdzalna.** Skrót każdego przyjętego pliku trafia do
+  dopisywanego rejestru, w którym każdy wiersz niesie skrót poprzedniego. Usunięcie
+  albo podmiana wpisu rozspójnia wszystko, co po nim następuje. Rejestr jest zwykłym
+  plikiem JSONL — da się go sprawdzić bez tej aplikacji, kilkoma wierszami kodu.
+- **Wykrywanie zmian jest wyborem użytkownika.** Tryb szybki porównuje rozmiar
+  i czas modyfikacji; tryb dokładny liczy skrót każdego pliku przy każdym skanie
+  i wykrywa podmianę, która metadanych nie ruszyła.
 - **Transfer wznawialny** na trzech poziomach: w środku pliku, w środku kolejki
   i w środku kampanii rozłożonej na wiele cykli.
 - **Adres nie jest tożsamością.** Serwer rozpoznaje się po kluczu publicznym,
@@ -76,15 +80,20 @@ Etapy 1–9 z [tabeli kolejności budowy](docs/ARCHITECTURE.md#8-kolejność-bud
 | wykrywanie serwera przez mDNS | działa |
 | agregacja małych plików w paczki | działa |
 | kontrola integralności i raport sierot | działa |
+| rejestr przyjęć spięty łańcuchem skrótów | działa, weryfikowalny niezależnie |
+| tryb dokładny wykrywania zmian (skrót w manifeście) | działa |
 | serwer jako usługa Windows | działa, nierejestrowany |
 | **test zgodności klient↔serwer** | przechodzi |
-| **160 testów serwera, 186 testów klienta** | zielone |
+| **184 testy serwera, 189 testów klienta** | zielone |
 | skaner kodu QR aparatem telefonu | niezaczęte |
 
 Serwer i klient są pisane niezależnie, w różnych językach, i pogodzone wyłącznie
 przez specyfikację oraz wspólne wektory testowe. `EndToEndTest` uruchamia prawdziwy
 klient kotlinowy przeciwko prawdziwemu serwerowi w C# i sprawdza, czy oba wyliczają
 tę samą tożsamość pliku — szczegóły w [android/README.md](android/README.md).
+Ten test zarabia na siebie: rozbieżność między pominiętym a pustym polem w odpowiedzi
+manifestu przechodziła przez komplet testów jednostkowych po obu stronach i wyszła
+dopiero tutaj.
 
 Cykl nie był jeszcze przejechany na prawdziwym telefonie: `MediaStore`, Android
 Keystore i uprawnienie do pamięci da się sprawdzić wyłącznie na urządzeniu.
