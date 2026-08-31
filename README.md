@@ -30,10 +30,11 @@ Zbiór plików przechowywanych przez Filum jest monotoniczny — może wyłączn
   pod znaną ścieżką nie nadpisuje poprzedniej — stara wersja jest odkładana.
 - **Przezroczyste składowanie.** Na dysku leży zwykłe drzewo katalogów,
   przeglądalne w Eksploratorze. Odtworzenie nie wymaga tej aplikacji.
-- **Bez hashowania przy każdym cyklu.** Plik identyfikuje trójka
-  `(ścieżka, rozmiar, mtime)`. Liczenie SHA-256 z 200 GB co noc zabiłoby baterię.
+- **Integralność jest sprawdzalna.** Skrót każdego pliku trafia do dopisywanego
+  rejestru spiętego łańcuchem skrótów, więc kopię da się zweryfikować, a wsteczna
+  edycja samego rejestru jest wykrywalna.
 - **Transfer wznawialny** na trzech poziomach: w środku pliku, w środku kolejki
-  i w środku wielonocnej kampanii.
+  i w środku kampanii rozłożonej na wiele cykli.
 - **Adres nie jest tożsamością.** Serwer rozpoznaje się po kluczu publicznym,
   a klient trzyma zbiór tras i ściga je równolegle: sieć lokalna, mDNS, sieć
   nakładkowa. Zmiana routera czy wyjście z domu nie wymagają konfiguracji.
@@ -55,10 +56,10 @@ od zera na podstawie samego dokumentu jest dowodem, że dokument jest kompletny.
 
 ## Środowisko docelowe
 
-- Telefon: Samsung Galaxy S24 Ultra, Android 15+, `targetSdk 36`
+- Telefon: Android 11 lub nowszy (`minSdk 30`), `targetSdk 36`
 - Instalacja poza sklepem — wymagane `MANAGE_EXTERNAL_STORAGE`
-- Komputer: Windows 11, NTFS
-- Pierwsza synchronizacja: około 200 GB, rozłożona na kilka nocy
+- Komputer: Windows 10/11, NTFS
+- Biblioteka dowolnego rozmiaru; pierwsza synchronizacja rozkłada się na tyle cykli, ile potrzeba
 
 ## Stan prac
 

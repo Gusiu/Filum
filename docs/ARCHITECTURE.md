@@ -164,7 +164,7 @@ musi być wznawialna na **trzech poziomach**.
 
 1. w środku pliku — przesunięcie bajtowe (`X-Filum-Offset`),
 2. w środku kolejki — `FileEntry` przeżywa restart procesu i telefonu,
-3. w środku kampanii — 200 GB rozłożone na kilka nocy.
+3. w środku kampanii — biblioteka rozłożona na tyle cykli, ile potrzeba.
 
 Mając te trzy, limit przestaje mieć znaczenie: `Worker` robi tyle, ile zdąży,
 zapisuje stan i kończy się sam.
@@ -274,8 +274,11 @@ Eksperymenty warto zaplanować od początku, bo część wymaga przygotowania da
 2. **Równoległość transferów** — 1 / 3 / 8 jednoczesnych wysyłek.
 3. **PC na Wi-Fi kontra PC na kablu.** Gdy oba urządzenia są bezprzewodowe, każdy
    bajt przechodzi przez to samo pasmo dwukrotnie. Różnica jest duża i mierzalna.
-4. **Koszt SHA-256 z ~200 GB na urządzeniu docelowym** — empiryczne uzasadnienie
-   ADR-002, czyli decyzji o rezygnacji z hashowania jako metody wykrywania zmian.
+4. **Koszt SHA-256 wobec rozmiaru biblioteki** — przepustowość hashowania w MB/s
+   na urządzeniu testowym, przeliczona na czas pełnego skanu dla kilku rozmiarów
+   biblioteki. Daje liczby, na których opiera się wybór między trybem szybkim
+   a dokładnym (ADR-016), zamiast pojedynczego pomiaru przywiązanego do jednego
+   egzemplarza sprzętu.
 5. **Zużycie energii na GB** przy różnych ustawieniach.
 6. **Czas skanu**: `MediaStore` z generacją kontra pełny spacer po katalogach.
 7. **Porównanie z istniejącymi narzędziami** (Syncthing, FolderSync, Resilio) —

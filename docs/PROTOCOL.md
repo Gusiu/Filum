@@ -27,9 +27,12 @@ Niezmienniki, na których opiera się cała reszta specyfikacji:
   katalogów w systemie plików. Odtworzenie nie może wymagać tej aplikacji.
 - **I4 — tożsamość przez klucz.** Strony rozpoznają się po kluczu publicznym,
   nigdy po adresie sieciowym (§3).
-- **I5 — tożsamość pliku bez skrótu.** Plik identyfikuje trójka
-  `(ścieżka, rozmiar, mtime)`. Skróty kryptograficzne służą wyłącznie kontroli
-  integralności, nigdy wykrywaniu zmian (§9).
+- **I5 — tożsamość pliku zależy od polityki.** Domyślnie plik identyfikuje trójka
+  `(ścieżka, rozmiar, mtime)`; w trybie dokładnym częścią tożsamości jest skrót
+  zawartości (§9, ADR-016). Wybór należy do klienta i jest widoczny w manifeście.
+- **I6 — przyjęcie jest rejestrowane.** Każdy przyjęty plik trafia do dopisywanego
+  rejestru integralności spiętego łańcuchem skrótów. Rejestr pozwala wykazać, co
+  i kiedy serwer przyjął, a wsteczna edycja samego rejestru jest wykrywalna (§10).
 
 ## 2. Warstwa transportowa
 
@@ -472,8 +475,10 @@ przez urządzenie, które z definicji nigdy niczego nie kasuje.
 
 Rozróżniamy dwa zastosowania skrótów kryptograficznych, których **nie wolno mylić**:
 
-- **Wykrywanie zmian** — odrzucone (I5, ADR-002). Liczenie SHA-256 z ~200 GB przy
-  każdym cyklu jest nie do przyjęcia energetycznie na urządzeniu mobilnym.
+- **Wykrywanie zmian** — domyślnie odrzucone (I5, ADR-002): pełny odczyt biblioteki
+  przy każdym cyklu jest kosztowny energetycznie. Klient może jednak włączyć tryb
+  dokładny (ADR-016), w którym skrót staje się tożsamością pliku i wykrywa podmianę
+  zachowującą metadane.
 - **Kontrola integralności transferu** — dozwolona i tania, bo bajty i tak przechodzą
   przez procesor po obu stronach. Klient MOŻE liczyć skrót przyrostowo w trakcie
   odczytu i podać go w `X-Filum-Digest`.
@@ -490,7 +495,7 @@ uruchamiana świadomie przez użytkownika.
 
 ## 10. Tryb adopcji (opcjonalny, ADR-012)
 
-Przewidziany dla scenariusza, w którym użytkownik wgrał pierwsze ~200 GB kablem.
+Przewidziany dla scenariusza, w którym użytkownik wgrał pierwszy zrzut kablem.
 Kopiowanie przez MTP notorycznie nie zachowuje mtime, więc porównanie z §5.2
 uznałoby komplet plików za brakujące.
 

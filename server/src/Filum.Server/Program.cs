@@ -34,6 +34,7 @@ builder.Services.AddSingleton<DeviceRegistry>();
 builder.Services.AddSingleton<SpacePolicy>();
 builder.Services.AddSingleton<VersionStore>();
 builder.Services.AddSingleton<ManifestResolver>();
+builder.Services.AddSingleton<IntegrityLedger>();
 builder.Services.AddSingleton<TransferStore>();
 builder.Services.AddSingleton<BundleReader>();
 builder.Services.AddSingleton<VerifyService>();

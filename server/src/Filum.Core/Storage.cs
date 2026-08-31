@@ -34,6 +34,16 @@ public sealed class FilumOptions
     public int Port { get; set; } = 8765;
 
     /// <summary>
+    /// Czy skrót przy przyjęciu pliku jest obowiązkowy (ADR-016).
+    ///
+    /// Domyślnie tak: bez skrótu nie ma czego wpisać do rejestru integralności,
+    /// a kopia bez zapisu przyjęcia ma ograniczoną wartość dowodową. Wyłączenie
+    /// przywraca zachowanie sprzed ADR-016 i jest przewidziane dla instalacji,
+    /// w których liczy się wyłącznie odtworzenie danych.
+    /// </summary>
+    public bool RequireDigest { get; set; } = true;
+
+    /// <summary>
     /// Rozgłaszanie usługi przez mDNS (§4.1 protokołu).
     ///
     /// Da się wyłączyć, bo w sieciach firmowych multicast bywa zablokowany, a wtedy

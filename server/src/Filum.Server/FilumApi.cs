@@ -208,6 +208,10 @@ public static class FilumApi
                 "Przesunięcie nie zgadza się ze stanem fragmentu na serwerze.",
                 outcome.ExpectedOffset),
 
+            ChunkStatus.DigestRequired => Error(
+                StatusCodes.Status400BadRequest, ErrorCodes.DigestRequired,
+                "Serwer wymaga skrótu przy przyjęciu pliku; nagłówek X-Filum-Digest jest obowiązkowy."),
+
             ChunkStatus.DigestMismatch => Error(
                 StatusCodes.Status409Conflict, ErrorCodes.DigestMismatch,
                 "Skrót odebranego pliku nie zgadza się z zadeklarowanym.",

@@ -70,6 +70,10 @@ public sealed class FilumApp : WebApplicationFactory<Program>
         // naraz wchodzi sobie w drogę. Rozgłaszanie sprawdzamy osobno, na żywym serwerze.
         builder.UseSetting("Filum:EnableMdns", "false");
 
+        // Testy zasobów HTTP sprawdzają parsowanie nagłówków i kody odpowiedzi;
+        // politykę integralności ma własny zestaw, który włącza wymóg jawnie.
+        builder.UseSetting("Filum:RequireDigest", "false");
+
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<IClientCertificateProvider>();

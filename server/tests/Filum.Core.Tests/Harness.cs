@@ -34,20 +34,31 @@ public sealed class Harness : IDisposable
 
     public Harness(Action<FilumOptions>? configure = null)
     {
-        Options = new FilumOptions { Root = _root.Path };
+        Options = new FilumOptions
+        {
+            Root = _root.Path,
+
+            // Testy mechaniki transferu — wznawiania, przesunięć, wersjonowania —
+            // sprawdzają co innego niż politykę integralności i podawanie w każdym
+            // z nich skrótu tylko zaciemniałoby intencję. Sam wymóg ma własne testy
+            // w IntegrityTests, gdzie jest włączany jawnie.
+            RequireDigest = false,
+        };
         configure?.Invoke(Options);
 
         Paths = new StoragePaths(_root.Path);
         Space = new SpacePolicy(Options);
         Versions = new VersionStore(Paths);
         Manifest = new ManifestResolver(Paths, Options);
-        Transfers = new TransferStore(Paths, Options, Versions, Space);
+        Ledger = new IntegrityLedger(Paths);
+        Transfers = new TransferStore(Paths, Options, Versions, Space, Ledger);
     }
 
     public FilumOptions Options { get; }
     public StoragePaths Paths { get; }
     public SpacePolicy Space { get; }
     public VersionStore Versions { get; }
+    public IntegrityLedger Ledger { get; }
     public ManifestResolver Manifest { get; }
     public TransferStore Transfers { get; }
 

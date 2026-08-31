@@ -181,6 +181,7 @@ public static class ErrorCodes
     public const string BadRequest = "bad_request";
     public const string OffsetMismatch = "offset_mismatch";
     public const string DigestMismatch = "digest_mismatch";
+    public const string DigestRequired = "digest_required";
     public const string PathRejected = "path_rejected";
     public const string InsufficientStorage = "insufficient_storage";
     public const string PayloadTooLarge = "payload_too_large";
