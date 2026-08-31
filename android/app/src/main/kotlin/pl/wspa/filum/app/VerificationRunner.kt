@@ -25,14 +25,13 @@ sealed interface VerificationResult {
 /**
  * Kontrola integralności kopii (§5.5 protokołu, ADR-002).
  *
- * Wykrywanie zmian celowo nie używa skrótów — liczenie SHA-256 z 200 GB przy każdym
- * cyklu jest nie do przyjęcia energetycznie. Ta operacja odpowiada jednak na inne
- * pytanie: czy to, co leży na dysku komputera, jest nadal tym, co tam wysłaliśmy.
- * Nośnik potrafi po cichu przekłamać bajt, a kopia zapasowa, która o tym nie wie,
- * jest kopią złudzenia.
+ To nie jest to samo, co wykrywanie zmian z §9.3. Tamto pyta, czy plik na telefonie
+ * jest nadal tym samym plikiem; ta operacja pyta, czy to, co leży na dysku komputera,
+ * jest nadal tym, co tam wysłaliśmy. Nośnik potrafi po cichu przekłamać bajt, a kopia
+ * zapasowa, która o tym nie wie, jest kopią złudzenia.
  *
- * Sprawdzamy **próbkę**, nie całość. Pełna weryfikacja 200 GB oznaczałaby odczyt
- * całej pamięci telefonu i całego dysku serwera; losowa próbka wykrywa systematyczne
+ * Sprawdzamy **próbkę**, nie całość: pełna weryfikacja oznaczałaby odczyt całej
+ * pamięci telefonu i całego dysku serwera, a losowa próbka wykrywa systematyczne
  * uszkodzenie nośnika przy koszcie liczonym w sekundach.
  */
 class VerificationRunner(private val container: AppContainer) {
@@ -90,10 +89,17 @@ class VerificationRunner(private val container: AppContainer) {
     }
 
     /**
-     * Losowa próbka z bieżącego skanu.
+     * Losowa próbka warstwowa z bieżącego skanu.
      *
      * Losowa, nie „pierwsze N": uszkodzenie nośnika nie zaczyna się od początku
      * alfabetu, a stała próbka sprawdzałaby w kółko te same pliki.
+     *
+     * Warstwowa, bo zwykłe losowanie z ograniczeniem rozmiaru miało wadę, której
+     * nie widać po wyniku: pliki powyżej progu nie trafiały do próbki **nigdy**.
+     * Przy typowej bibliotece telefonu to znaczyło, że nagrania wideo — czyli
+     * dane najbardziej kosztowne do odtworzenia — jako jedyne pozostawały trwale
+     * poza jakąkolwiek kontrolą. Osobna pula dla plików dużych kosztuje kilka
+     * odczytów więcej, a usuwa całą tę martwą strefę.
      */
     private suspend fun sample(size: Int): List<ScannedFile> {
         val exclusions = ExclusionRules(
@@ -101,11 +107,15 @@ class VerificationRunner(private val container: AppContainer) {
         )
         val root = File(pl.wspa.filum.scan.Environment.externalStorageRootPath())
 
-        return FilesystemScanner(root, exclusions).walk()
-            .filter { it.size <= MAX_SAMPLE_FILE_BYTES }
+        val (large, small) = FilesystemScanner(root, exclusions).walk()
             .toList()
-            .shuffled()
-            .take(size)
+            .partition { it.size > LARGE_FILE_BYTES }
+
+        val fromLarge = large.shuffled().take(size / LARGE_SHARE_DIVISOR)
+
+        // Niewykorzystaną część puli oddajemy drugiej warstwie zamiast zmniejszać
+        // próbkę: telefon bez dużych plików ma sprawdzać tyle samo, co każdy inny.
+        return (fromLarge + small.shuffled().take(size - fromLarge.size)).shuffled()
     }
 
     private fun digestOf(file: File): String? = runCatching {
@@ -129,10 +139,21 @@ class VerificationRunner(private val container: AppContainer) {
         const val DEFAULT_SAMPLE = 100
 
         /**
-         * Pomijamy w próbce wielkie pliki. Skrót liczy telefon **i** serwer, więc
-         * kilka nagrań wideo zamieniłoby sprawdzenie próbki w kilkuminutowy odczyt
-         * po obu stronach.
+         * Od tego rozmiaru plik liczy się do puli „dużych".
+         *
+         * Próg nie wyklucza z próbki, tylko rozdziela ją na dwie warstwy. Skrót liczy
+         * telefon **i** serwer, więc gdyby losowanie było jednorodne, jedna seria
+         * nagrań wideo zamieniłaby sprawdzenie w kilkuminutowy odczyt po obu stronach.
          */
-        const val MAX_SAMPLE_FILE_BYTES = 32L * 1024 * 1024
+        const val LARGE_FILE_BYTES = 32L * 1024 * 1024
+
+        /**
+         * Jaka część próbki jest zarezerwowana dla plików dużych — tutaj jedna piąta.
+         *
+         * Są rzadsze, ale zajmują większość miejsca. Udział proporcjonalny do liczby
+         * plików sprawiłby, że przy tysiącach zdjęć nagranie trafiałoby do próbki
+         * raz na kilkadziesiąt sprawdzeń.
+         */
+        const val LARGE_SHARE_DIVISOR = 5
     }
 }

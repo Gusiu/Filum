@@ -13,8 +13,8 @@ import java.text.Normalizer
 /**
  * Normalizacja czasu modyfikacji (ADR-011).
  *
- * To wygląda na drobiazg, a jest jedną z dwóch rzeczy, które przy 200 GB potrafią
- * zamienić działającą aplikację w taką, która wysyła wszystko w kółko.
+ To wygląda na drobiazg, a jest jedną z dwóch rzeczy, które potrafią zamienić
+ * działającą aplikację w taką, która wysyła całą bibliotekę w kółko.
  */
 class MtimeTest {
 

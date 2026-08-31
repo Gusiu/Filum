@@ -12,7 +12,7 @@ import java.io.File
  *
  * MediaStore prowadzi monotoniczny licznik zmian na wolumen. Zapamiętujemy jego stan
  * po skanie i przy następnym pytamy **jednym zapytaniem**, co zmieniło się od tamtej
- * pory. Dla zdjęć i wideo, czyli zdecydowanej większości z 200 GB, daje to różnicę
+ pory. Dla zdjęć i wideo, czyli zwykle większości biblioteki, daje to różnicę
  * w milisekundach zamiast w minutach pełnego obchodu drzewa.
  *
  * Ograniczenia, przez które pełny obchód nadal jest potrzebny:
