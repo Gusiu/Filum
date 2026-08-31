@@ -178,7 +178,13 @@ public static class FilumApi
             if (request.Final) orphans.Complete(slug, request.Session);
         }
 
-        return Results.Ok(new ManifestResponse(resolution.Have, resolution.Needed, resolution.Rejected));
+        return Results.Ok(new ManifestResponse(
+            resolution.Have,
+            resolution.Needed,
+            resolution.Rejected,
+            // Pustej listy nie wysyłamy: w trybie szybkim byłaby w każdej odpowiedzi
+            // i tylko zwiększała ruch, a klient i tak nie ma z niej co odczytać.
+            resolution.Divergent.Count > 0 ? resolution.Divergent : null));
     }
 
     // --- PUT /api/v1/file (§5.3) ---

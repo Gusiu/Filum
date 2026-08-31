@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import pl.wspa.filum.data.Schedule
+import pl.wspa.filum.protocol.IntegrityPolicy
 
 @Composable
 fun HomeScreen(
@@ -32,6 +33,7 @@ fun HomeScreen(
     onSyncNow: () -> Unit,
     onVerify: () -> Unit,
     onScheduleChange: (Schedule) -> Unit,
+    onIntegrityPolicyChange: (IntegrityPolicy) -> Unit,
     onOpenLog: () -> Unit,
     onOpenFolders: () -> Unit,
     onRequestStorageAccess: () -> Unit,
@@ -107,11 +109,15 @@ fun HomeScreen(
 
         HorizontalDivider()
 
+        IntegrityPolicySelector(state.settings.integrityPolicy, onIntegrityPolicyChange)
+
+        HorizontalDivider()
+
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Kontrola integralności", style = MaterialTheme.typography.titleSmall)
             Text(
                 "Sprawdza, czy kopie na komputerze nadal odpowiadają plikom w telefonie. " +
-                    "Losowa próbka, uruchamiana ręcznie — pełne sprawdzenie 200 GB " +
+                    "Losowa próbka, uruchamiana ręcznie — sprawdzenie całej biblioteki " +
                     "oznaczałoby odczyt całej pamięci po obu stronach.",
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -161,6 +167,53 @@ private fun ScheduleSelector(current: Schedule, onChange: (Schedule) -> Unit) {
             style = MaterialTheme.typography.bodySmall,
         )
     }
+}
+
+/**
+ * Wybór polityki wykrywania zmian (ADR-016).
+ *
+ * Opis mówi wprost, czego tryb szybki nie zauważy. Przełącznik bez tej informacji
+ * byłby wyborem między „szybko" a „wolno", a to nie jest różnica, o którą tu chodzi.
+ */
+@Composable
+private fun IntegrityPolicySelector(current: IntegrityPolicy, onChange: (IntegrityPolicy) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Wykrywanie zmian", style = MaterialTheme.typography.titleSmall)
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.selectableGroup(),
+        ) {
+            IntegrityPolicy.entries.forEach { policy ->
+                FilterChip(
+                    selected = policy == current,
+                    onClick = { onChange(policy) },
+                    label = { Text(label(policy)) },
+                )
+            }
+        }
+
+        Text(
+            when (current) {
+                IntegrityPolicy.FAST ->
+                    "Plik uznajemy za zmieniony, gdy zmienił się jego rozmiar albo czas " +
+                        "modyfikacji. Skan nie czyta zawartości, więc jest szybki — ale " +
+                        "podmiana, która zachowała te dwie wartości, zostanie przeoczona."
+
+                IntegrityPolicy.THOROUGH ->
+                    "Każdy plik jest liczony skrótem przy każdym skanie i porównywany " +
+                        "z zapisem serwera. Wykrywa podmianę zachowującą metadane. " +
+                        "Kosztuje odczyt całej biblioteki w każdym cyklu, więc trwa dłużej " +
+                        "i zużywa więcej baterii."
+            },
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+}
+
+private fun label(policy: IntegrityPolicy): String = when (policy) {
+    IntegrityPolicy.FAST -> "Szybkie"
+    IntegrityPolicy.THOROUGH -> "Dokładne"
 }
 
 private fun label(schedule: Schedule): String = when (schedule) {

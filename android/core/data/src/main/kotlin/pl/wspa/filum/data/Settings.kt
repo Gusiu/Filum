@@ -6,6 +6,7 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
+import pl.wspa.filum.protocol.IntegrityPolicy
 
 /** Jak często aplikacja ma się budzić sama. */
 enum class Schedule {
@@ -27,10 +28,20 @@ data class SettingsEntity(
     /**
      * Cykl automatyczny wymaga ładowania i sieci nielimitowanej (§3.6 architektury).
      * Wyłączenie tych warunków jest możliwe, ale to świadoma decyzja użytkownika —
-     * 200 GB przez sieć komórkową to nie jest coś, co ma się stać przypadkiem.
+     * wysłanie całej biblioteki przez sieć komórkową nie ma się zdarzyć przypadkiem.
      */
     val requireCharging: Boolean = true,
     val unmeteredOnly: Boolean = true,
+
+    /**
+     * Jak wykrywamy zmianę pliku (ADR-016).
+     *
+     * Domyślnie tryb szybki, bo tryb dokładny czyta całą bibliotekę przy każdym cyklu
+     * i na dużym zbiorze bywa kosztowny. Włączenie go jest świadomym wyborem, tak samo
+     * jak wyłączenie warunków powyżej — z tą różnicą, że tutaj płaci się czasem,
+     * a zyskuje wykrywalność podmiany zachowującej metadane.
+     */
+    val integrityPolicy: IntegrityPolicy = IntegrityPolicy.FAST,
 ) {
     companion object {
         const val SINGLETON_ID = 1L

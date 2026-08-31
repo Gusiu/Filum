@@ -4,6 +4,7 @@ import pl.wspa.filum.net.ApiResult
 import pl.wspa.filum.net.BundleEntry
 import pl.wspa.filum.protocol.BundleResponse
 import pl.wspa.filum.protocol.FileChunkResponse
+import pl.wspa.filum.protocol.IntegrityPolicy
 import pl.wspa.filum.protocol.ManifestRequest
 import pl.wspa.filum.protocol.ManifestResponse
 import pl.wspa.filum.scan.ScannedFile
@@ -104,14 +105,13 @@ data class SyncConfig(
     val chunkBytes: Long = 32L * 1024 * 1024,
 
     /**
-     * Próg liczenia skrótu kontrolnego (§9 protokołu).
+     * Jak wykrywamy, że plik się zmienił (ADR-016).
      *
-     * Skrót wymaga dodatkowego odczytu całego pliku, bo nagłówek musi powstać przed
-     * wysłaniem ciała. Dla plików małych i średnich drugi odczyt idzie z pamięci
-     * podręcznej systemu i jest praktycznie darmowy; dla wielogigabajtowego nagrania
-     * podwoiłby operacje wejścia-wyjścia, więc go pomijamy.
+     * Nie zależy od niej wysyłanie skrótu przy transferze — ten jest liczony zawsze
+     * i serwer go wymaga. Zależy od niej to, czy w ogóle **zapytamy**, czy plik uznany
+     * za niezmieniony jest tym samym plikiem.
      */
-    val digestMaxBytes: Long = 64L * 1024 * 1024,
+    val integrityPolicy: IntegrityPolicy = IntegrityPolicy.FAST,
 
     /** Po tylu nieudanych podejściach uznajemy plik za trwale problematyczny. */
     val maxAttempts: Int = 5,

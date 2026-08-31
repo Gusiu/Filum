@@ -43,21 +43,27 @@ public sealed record PartMetadata(
 public sealed record ManifestResolution(
     long Have,
     IReadOnlyList<NeededFile> Needed,
-    IReadOnlyList<RejectedFile> Rejected);
+    IReadOnlyList<RejectedFile> Rejected,
+    IReadOnlyList<string> Divergent);
 
 /// <summary>
 /// Odpowiada na pytanie „czego wam brakuje" przez porównanie z systemem plików.
 /// Serwer nie utrzymuje indeksu zawartości (ADR-003) — źródłem prawdy jest dysk,
 /// więc backup przeniesiony na inny nośnik albo ręcznie zmieniony w Eksploratorze
 /// po prostu działa.
+///
+/// W trybie dokładnym klient dokłada do pozycji skrót, a wtedy dochodzi drugie
+/// pytanie: czy to na pewno ta sama zawartość, co poprzednio. Rejestr integralności
+/// pozwala odpowiedzieć bez czytania kopii z dysku (ADR-016).
 /// </summary>
-public sealed class ManifestResolver(StoragePaths paths, FilumOptions options)
+public sealed class ManifestResolver(StoragePaths paths, FilumOptions options, IntegrityLedger ledger)
 {
     public ManifestResolution Resolve(string slug, IReadOnlyList<ManifestEntry> entries)
     {
         var have = 0L;
         var needed = new List<NeededFile>();
         var rejected = new List<RejectedFile>();
+        var divergent = new List<string>();
 
         foreach (var entry in entries)
         {
@@ -74,7 +80,17 @@ public sealed class ManifestResolver(StoragePaths paths, FilumOptions options)
             {
                 if (present.Size == entry.Size && present.Mtime == entry.Mtime)
                 {
-                    have++;
+                    // Metadane się zgadzają, więc według ADR-002 plik jest ten sam.
+                    // Skrót — jeśli klient go podał — pozwala to zdanie sprawdzić.
+                    if (Diverged(slug, entry))
+                    {
+                        divergent.Add(entry.Path);
+                        needed.Add(new NeededFile(entry.Path, 0, Versioned: true));
+                    }
+                    else
+                    {
+                        have++;
+                    }
                 }
                 else
                 {
@@ -88,7 +104,23 @@ public sealed class ManifestResolver(StoragePaths paths, FilumOptions options)
             needed.Add(new NeededFile(entry.Path, ResumeOffset(slug, entry)));
         }
 
-        return new ManifestResolution(have, needed, rejected);
+        return new ManifestResolution(have, needed, rejected, divergent);
+    }
+
+    /// <summary>
+    /// Czy zawartość zmieniła się mimo niezmienionych metadanych.
+    ///
+    /// Brak wpisu w rejestrze **nie** jest przesłanką rozbieżności — plik mógł trafić
+    /// do kopii przed włączeniem rejestru albo zostać do niej wstawiony ręcznie.
+    /// Uznanie takiego pliku za podmieniony oznaczałoby fałszywy alarm przy każdej
+    /// pierwszej synchronizacji w trybie dokładnym.
+    /// </summary>
+    private bool Diverged(string slug, ManifestEntry entry)
+    {
+        if (entry.Digest is not { } reported) return false;
+
+        var recorded = ledger.DigestOf(slug, entry.Path);
+        return recorded is not null && !string.Equals(recorded, reported, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

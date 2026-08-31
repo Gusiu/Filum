@@ -140,6 +140,9 @@ class FakeTransport : SyncTransport {
     val digestsSeen = linkedMapOf<String, String?>()
     val putCalls = mutableListOf<Triple<String, Long, Long>>()
 
+    /** Skrót z każdego osobnego żądania PUT — nie tylko z domykającego. */
+    val digestsPerCall = mutableListOf<String?>()
+
     var manifestResponder: (ManifestRequest) -> ApiResult<ManifestResponse> = { request ->
         ApiResult.Ok(
             ManifestResponse(
@@ -158,8 +161,12 @@ class FakeTransport : SyncTransport {
 
     override suspend fun manifest(request: ManifestRequest): ApiResult<ManifestResponse> {
         requests += request
+        for (entry in request.files) manifestDigests[entry.path] = entry.digest
         return manifestResponder(request)
     }
+
+    /** Skróty zadeklarowane w manifeście — puste, dopóki klient jest w trybie szybkim. */
+    val manifestDigests = linkedMapOf<String, String?>()
 
     override suspend fun putFile(
         canonicalPath: String,
@@ -172,6 +179,7 @@ class FakeTransport : SyncTransport {
     ): ApiResult<FileChunkResponse> {
         putCount++
         putCalls += Triple(canonicalPath, offset, length)
+        digestsPerCall += digest
 
         putInterceptor(putCount, canonicalPath, offset)?.let { return it }
 

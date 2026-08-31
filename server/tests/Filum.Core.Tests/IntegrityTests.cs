@@ -1,5 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using Filum.Protocol;
 
 namespace Filum.Core.Tests;
 
@@ -161,6 +163,31 @@ public class IntegrityLedgerTests
     }
 
     [Fact]
+    public void RejestrJestCzytelnyDlaObcegoNarzedzia()
+    {
+        // Cała wartość rejestru polega na tym, że da się go sprawdzić **bez** tej
+        // aplikacji. Znacznik kolejności bajtów sprawiał, że pierwszy wiersz nie był
+        // poprawnym JSON-em dla standardowych parserów — a rejestr dowodowy, do którego
+        // odczytu potrzeba wiedzy o konwencji zapisu jednej implementacji, jest wart
+        // tyle, ile zaufanie do tej implementacji. Czyli tyle, co nic.
+        using var h = new Harness();
+        Append(h, "a.txt", "aaa");
+        Append(h, "b.txt", "bbb");
+
+        var raw = File.ReadAllBytes(LedgerPath(h));
+
+        Assert.False(raw.Length >= 3 && raw[0] == 0xEF && raw[1] == 0xBB && raw[2] == 0xBF,
+                     "rejestr zaczyna się znacznikiem kolejności bajtów");
+
+        // Odczyt bez udziału naszego kodu — dokładnie tak, jak zrobiłaby to strona trzecia.
+        foreach (var line in File.ReadAllLines(LedgerPath(h)).Where(l => l.Length > 0))
+        {
+            using var parsed = JsonDocument.Parse(line);
+            Assert.True(parsed.RootElement.TryGetProperty("d", out _));
+        }
+    }
+
+    [Fact]
     public void NieznanyPlik_NieMaSkrotu()
     {
         using var h = new Harness();
@@ -253,5 +280,130 @@ public class DigestRequirementTests
         Assert.Equal(Harness.Digest(Harness.Bytes("pierwsza")), entries[0].Digest);
         Assert.Equal(Harness.Digest(Harness.Bytes("druga")), entries[1].Digest);
         Assert.True(h.Ledger.Verify(Harness.Slug).Intact);
+    }
+}
+
+/// <summary>
+/// Tryb dokładny: manifest niesie skrót, a serwer zestawia go z rejestrem (ADR-016).
+///
+/// Sedno jest w różnicy między dwoma trybami. Tryb szybki porównuje metadane i nie
+/// ma jak zauważyć podmiany, która je zachowała — to znana cena ADR-002, nie usterka.
+/// Tryb dokładny zauważa, bo pyta o co innego.
+/// </summary>
+public class ThoroughModeTests
+{
+    private const long Mtime = 1_756_400_000;
+
+    /// <summary>Kładzie plik i zapisuje go w rejestrze — stan po udanej synchronizacji.</summary>
+    private static void Accept(Harness h, string path, string content)
+    {
+        var bytes = Harness.Bytes(content);
+        h.Seed(path, bytes, Mtime);
+        h.Ledger.Append(Harness.Slug, path, bytes.Length, Mtime, Harness.Digest(bytes));
+    }
+
+    /// <summary>Podmienia zawartość, zachowując rozmiar i czas modyfikacji.</summary>
+    private static void SubstituteInPlace(Harness h, string path, string content)
+    {
+        h.Seed(path, Harness.Bytes(content), Mtime);
+    }
+
+    private static ManifestEntry Entry(string path, string content, bool withDigest) =>
+        new(path, Harness.Bytes(content).Length, Mtime,
+            withDigest ? Harness.Digest(Harness.Bytes(content)) : null);
+
+    [Fact]
+    public void ZgodnySkrot_PlikUznanyZaPosiadany()
+    {
+        using var h = new Harness();
+        Accept(h, "notatka.txt", "zawartość");
+
+        var result = h.Manifest.Resolve(Harness.Slug, [Entry("notatka.txt", "zawartość", withDigest: true)]);
+
+        Assert.Equal(1, result.Have);
+        Assert.Empty(result.Needed);
+        Assert.Empty(result.Divergent);
+    }
+
+    [Fact]
+    public void PodmianaZachowujacaMetadane_JestWykrywana()
+    {
+        // Ktoś zmienił plik na telefonie tak, żeby rozmiar i mtime zostały nietknięte.
+        // Dla trybu szybkiego to ten sam plik. Skrót mówi co innego.
+        using var h = new Harness();
+        Accept(h, "umowa.pdf", "treść oryginalna");
+        SubstituteInPlace(h, "umowa.pdf", "treść podmieniona");
+
+        var result = h.Manifest.Resolve(
+            Harness.Slug, [Entry("umowa.pdf", "treść podmieniona", withDigest: true)]);
+
+        Assert.Equal("umowa.pdf", Assert.Single(result.Divergent));
+        Assert.Equal(0, result.Have);
+    }
+
+    [Fact]
+    public void WykrytaPodmiana_TrafiaDoPobraniaZWersjonowaniem()
+    {
+        // Rozbieżność nie może kończyć się samym zgłoszeniem: kopia ma zostać
+        // uzupełniona, a poprzednia wersja odłożona, żeby dało się porównać obie.
+        using var h = new Harness();
+        Accept(h, "umowa.pdf", "treść oryginalna");
+        SubstituteInPlace(h, "umowa.pdf", "treść podmieniona");
+
+        var result = h.Manifest.Resolve(
+            Harness.Slug, [Entry("umowa.pdf", "treść podmieniona", withDigest: true)]);
+
+        var needed = Assert.Single(result.Needed);
+        Assert.Equal("umowa.pdf", needed.Path);
+        Assert.Equal(0, needed.Offset);
+        Assert.True(needed.Versioned);
+    }
+
+    [Fact]
+    public void TrybSzybki_NieWykrywaPodmianyZachowujacejMetadane()
+    {
+        // Test dokumentuje ograniczenie, a nie życzenie. Bez skrótu serwer dysponuje
+        // wyłącznie rozmiarem i czasem — a te się zgadzają. To jest właśnie powód,
+        // dla którego tryb dokładny istnieje.
+        using var h = new Harness();
+        Accept(h, "umowa.pdf", "treść oryginalna");
+        SubstituteInPlace(h, "umowa.pdf", "treść podmieniona");
+
+        var result = h.Manifest.Resolve(
+            Harness.Slug, [Entry("umowa.pdf", "treść podmieniona", withDigest: false)]);
+
+        Assert.Equal(1, result.Have);
+        Assert.Empty(result.Divergent);
+    }
+
+    [Fact]
+    public void PlikSpozaRejestru_NieJestZglaszanyJakoRozbiezny()
+    {
+        // Plik wstawiony do kopii ręcznie albo przyjęty przed włączeniem rejestru.
+        // Nie ma z czym porównywać, a domysł byłby fałszywym alarmem przy pierwszym
+        // skanie w trybie dokładnym — czyli dokładnie wtedy, gdy alarm ma znaczyć coś.
+        using var h = new Harness();
+        h.Seed("stary.txt", Harness.Bytes("zawartość"), Mtime);
+
+        var result = h.Manifest.Resolve(Harness.Slug, [Entry("stary.txt", "zawartość", withDigest: true)]);
+
+        Assert.Equal(1, result.Have);
+        Assert.Empty(result.Divergent);
+    }
+
+    [Fact]
+    public void ZmianaRozmiaru_ZglaszanaJakoZwyklaAktualizacja()
+    {
+        // Rozbieżność ma znaczyć „metadane kłamią". Zwykła edycja pliku zmienia mtime
+        // albo rozmiar i nie jest niczym podejrzanym — mieszanie tych dwóch sytuacji
+        // pozbawiłoby zgłoszenie wartości.
+        using var h = new Harness();
+        Accept(h, "notatka.txt", "krótka");
+
+        var result = h.Manifest.Resolve(
+            Harness.Slug, [Entry("notatka.txt", "zdecydowanie dłuższa treść", withDigest: true)]);
+
+        Assert.Single(result.Needed);
+        Assert.Empty(result.Divergent);
     }
 }

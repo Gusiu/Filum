@@ -6,6 +6,7 @@ import pl.wspa.filum.crypto.FilumTls
 import pl.wspa.filum.data.EndpointEntity
 import pl.wspa.filum.data.PairedServerEntity
 import pl.wspa.filum.data.ScanStateEntity
+import pl.wspa.filum.data.SettingsEntity
 import pl.wspa.filum.data.SyncSessionEntity
 import pl.wspa.filum.net.EndpointKind
 import pl.wspa.filum.net.EndpointRacer
@@ -92,6 +93,10 @@ class SyncRunner(private val container: AppContainer) {
             "Połączono przez ${reached.endpoint} w ${reached.elapsedMillis} ms.",
         )
 
+        // Domyślne ustawienia, dopóki użytkownik niczego nie zmienił — pierwszy cykl
+        // po instalacji nie ma jeszcze wiersza w bazie.
+        val settings = container.database.settings().get() ?: SettingsEntity()
+
         val sessionId = UUID.randomUUID().toString()
         container.database.sessions().start(
             SyncSessionEntity(sessionId, mode, startedAt = System.currentTimeMillis())
@@ -102,11 +107,14 @@ class SyncRunner(private val container: AppContainer) {
             queue = container.queue,
             journal = journal,
             // Limity bierzemy z odpowiedzi na ping; klient nie zakłada własnych (§5.1).
+            // Polityka integralności jest wyjątkiem — o niej decyduje użytkownik
+            // urządzenia, a nie serwer, bo to jego czas i bateria za nią płacą.
             config = SyncConfig(
                 manifestBatch = reached.ping.limits.manifestBatch,
                 smallFileThreshold = reached.ping.limits.smallFileThreshold.toLong(),
                 bundleMaxBytes = reached.ping.limits.bundleMaxBytes.toLong(),
                 bundleMaxCount = reached.ping.limits.bundleMaxCount,
+                integrityPolicy = settings.integrityPolicy,
             ),
         )
 

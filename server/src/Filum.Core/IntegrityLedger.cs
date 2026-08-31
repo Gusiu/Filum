@@ -18,7 +18,7 @@ public sealed record LedgerEntry(
     [property: JsonPropertyName("s")] long Size,
     [property: JsonPropertyName("m")] long Mtime,
     [property: JsonPropertyName("d")] string Digest,
-    /// <summary>Skrót poprzedniego wiersza. Spina rejestr w łańcuch (§10 protokołu).</summary>
+    /// <summary>Skrót poprzedniego wiersza. Spina rejestr w łańcuch (§9.2 protokołu).</summary>
     [property: JsonPropertyName("prev")] string Previous);
 
 public sealed record LedgerVerification(
@@ -49,10 +49,30 @@ public sealed class IntegrityLedger(StoragePaths paths)
 {
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
 
+    /// <summary>
+    /// UTF-8 **bez znacznika kolejności bajtów**.
+    ///
+    /// `Encoding.UTF8` dopisuje BOM przy tworzeniu pliku, przez co pierwszy wiersz
+    /// przestaje być poprawnym JSON-em dla wszystkiego, co nie zna tej konwencji.
+    /// Cała wartość tego rejestru polega na tym, że da się go sprawdzić **bez** tej
+    /// aplikacji — trzema wierszami w dowolnym języku. Znacznik, który to psuje,
+    /// jest wadą, a nie szczegółem zapisu.
+    /// </summary>
+    private static readonly Encoding Utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+
     /// <summary>Wartość pola `prev` w pierwszym wierszu. Kotwica łańcucha.</summary>
     public const string Genesis = "genesis";
 
     private readonly object _gate = new();
+
+    /// <summary>
+    /// Ścieżka do ostatnio przyjętego skrótu, budowane leniwie przy pierwszym pytaniu.
+    ///
+    /// Bez tego każde sprawdzenie przechodziłoby rejestr od początku, a partia manifestu
+    /// liczy do dwóch tysięcy pozycji — przy rejestrze o stu tysiącach wpisów oznaczałoby
+    /// to setki milionów odczytów wierszy na jedno żądanie.
+    /// </summary>
+    private readonly Dictionary<string, Dictionary<string, string>> _index = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Dopisuje wpis o przyjętym pliku.
@@ -79,7 +99,7 @@ public sealed class IntegrityLedger(StoragePaths paths)
                 Digest: digest,
                 Previous: previous);
 
-            File.AppendAllText(LongPath.Extended(file), Serialize(entry) + "\n", Encoding.UTF8);
+            File.AppendAllText(LongPath.Extended(file), Serialize(entry) + "\n", Utf8);
             return entry;
         }
     }
@@ -87,14 +107,27 @@ public sealed class IntegrityLedger(StoragePaths paths)
     /// <summary>Ostatni znany skrót pliku pod tą ścieżką; null, gdy nigdy nie był przyjęty.</summary>
     public string? DigestOf(string slug, string canonicalPath)
     {
-        string? found = null;
-
-        foreach (var entry in Read(slug))
+        lock (_gate)
         {
-            if (entry.Path == canonicalPath) found = entry.Digest;
+            return IndexFor(slug).GetValueOrDefault(canonicalPath);
         }
+    }
 
-        return found;
+    /// <summary>Zrzuca zbudowany indeks; kolejne pytanie odczyta rejestr od nowa.</summary>
+    public void Invalidate(string slug)
+    {
+        lock (_gate) _index.Remove(slug);
+    }
+
+    private Dictionary<string, string> IndexFor(string slug)
+    {
+        if (_index.TryGetValue(slug, out var existing)) return existing;
+
+        var built = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var entry in Read(slug)) built[entry.Path] = entry.Digest;
+
+        _index[slug] = built;
+        return built;
     }
 
     /// <summary>
@@ -167,7 +200,7 @@ public sealed class IntegrityLedger(StoragePaths paths)
         var file = LongPath.Extended(LedgerFile(slug));
         if (!File.Exists(file)) yield break;
 
-        foreach (var line in File.ReadLines(file, Encoding.UTF8))
+        foreach (var line in File.ReadLines(file, Utf8))
         {
             if (line.Length > 0) yield return line;
         }
@@ -180,7 +213,7 @@ public sealed class IntegrityLedger(StoragePaths paths)
         if (!File.Exists(extended)) return (0, Genesis);
 
         string? last = null;
-        foreach (var line in File.ReadLines(extended, Encoding.UTF8))
+        foreach (var line in File.ReadLines(extended, Utf8))
         {
             if (line.Length > 0) last = line;
         }

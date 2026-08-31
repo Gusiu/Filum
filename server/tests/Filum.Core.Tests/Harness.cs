@@ -49,8 +49,8 @@ public sealed class Harness : IDisposable
         Paths = new StoragePaths(_root.Path);
         Space = new SpacePolicy(Options);
         Versions = new VersionStore(Paths);
-        Manifest = new ManifestResolver(Paths, Options);
         Ledger = new IntegrityLedger(Paths);
+        Manifest = new ManifestResolver(Paths, Options, Ledger);
         Transfers = new TransferStore(Paths, Options, Versions, Space, Ledger);
     }
 

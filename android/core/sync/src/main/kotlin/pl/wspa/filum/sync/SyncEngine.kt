@@ -3,10 +3,12 @@ package pl.wspa.filum.sync
 import pl.wspa.filum.net.ApiResult
 import pl.wspa.filum.net.BundleEntry
 import pl.wspa.filum.protocol.FailureKind
+import pl.wspa.filum.protocol.IntegrityPolicy
 import pl.wspa.filum.protocol.ManifestEntry
 import pl.wspa.filum.protocol.ManifestRequest
 import pl.wspa.filum.scan.ScannedFile
 import java.io.File
+import java.io.IOException
 import java.security.MessageDigest
 import kotlin.math.min
 
@@ -16,7 +18,7 @@ import kotlin.math.min
  * Całość jest zbudowana wokół jednej zasady: **każdy krok zapisuje stan**. Zabicie
  * procesu w dowolnym momencie kosztuje najwyżej jeden fragment pliku, bo wznawialność
  * działa na trzech poziomach — w środku pliku (przesunięcie), w środku kolejki
- * (baza przeżywa restart) i w środku kampanii (200 GB rozłożone na kilka nocy).
+ * (baza przeżywa restart) i w środku kampanii (pierwszy zrzut rozłożony na kilka nocy).
  *
  * Dzięki temu limit sześciu godzin usługi pierwszoplanowej przestaje być problemem:
  * silnik robi tyle, ile zdąży, i kończy sam.
@@ -74,7 +76,9 @@ class SyncEngine(
                 mode = mode,
                 batch = index,
                 final = isLast,
-                files = batch.map { ManifestEntry(it.canonicalPath, it.size, it.mtimeSeconds) },
+                files = batch.map {
+                    ManifestEntry(it.canonicalPath, it.size, it.mtimeSeconds, digestFor(it, deadline))
+                },
             )
 
             when (val response = transport.manifest(request)) {
@@ -108,12 +112,43 @@ class SyncEngine(
         return null
     }
 
+    /**
+     * Skrót do manifestu — liczony wyłącznie w trybie dokładnym.
+     *
+     * Termin sprawdzamy tutaj, a nie tylko między partiami: partia liczy do dwóch
+     * tysięcy pozycji, a przy dużych plikach jej zahaszowanie potrafi trwać dłużej
+     * niż całe pozostałe okno pracy w tle. Pominięcie skrótu jest bezpieczne —
+     * serwer potraktuje pozycję jak w trybie szybkim.
+     */
+    private fun digestFor(file: ScannedFile, deadline: Deadline): String? {
+        if (config.integrityPolicy != IntegrityPolicy.THOROUGH) return null
+        if (deadline.reached()) return null
+
+        return try {
+            sha256(File(file.absolutePath))
+        } catch (e: IOException) {
+            // Plik zniknął albo jest nieczytelny. Nie ma sensu przerywać uzgadniania —
+            // transfer i tak zgłosi to samo, tylko z konkretniejszym komunikatem.
+            null
+        }
+    }
+
     private suspend fun applyManifest(
         batch: List<ScannedFile>,
         response: pl.wspa.filum.protocol.ManifestResponse,
     ) {
         val needed = response.needed.associate { it.path to it.offset }
         val rejected = response.rejected.associate { it.path to it.error }
+
+        // Zawartość zmieniona przy nietkniętych metadanych. Plik i tak trafi do kolejki,
+        // bo serwer wpisał go do "needed" — ale to jest zdarzenie, o którym użytkownik
+        // ma się dowiedzieć, a nie zwykła aktualizacja.
+        for (path in response.divergent) {
+            journal.record(
+                JournalLevel.WARN, "integrity_divergent",
+                "$path: zawartość różni się od zapisanej w rejestrze mimo zgodnego rozmiaru i czasu modyfikacji.",
+            )
+        }
 
         // Serwer podaje liczbę posiadanych plików, ale nie ich listę. Wszystko, czego
         // nie ma ani w "needed", ani w "rejected", serwer już ma — i nie wysyłamy tego.
@@ -338,15 +373,15 @@ class SyncEngine(
         var offset = entry.bytesSent
         var mismatches = 0
 
-        // Skrót liczymy tylko wtedy, gdy plik idzie w całości w tej sesji — przy
-        // wznowieniu trzeba by go odczytać od początku, co przeczy sensowi wznawiania (§9).
-        val digest = if (offset == 0L && entry.size <= config.digestMaxBytes) sha256(file) else null
+        // Skrót liczymy zawsze, także przy wznowieniu. Wznawianie oszczędza transmisję,
+        // a nie odczyt z pamięci telefonu — a serwer bez skrótu i tak niczego nie przyjmie
+        // (ADR-016). Cena to jeden lokalny odczyt pliku; korzyść to wpis w rejestrze.
+        val digest = sha256(file)
 
         while (offset < entry.size) {
             if (deadline.reached()) return SendResult.INTERRUPTED
 
             val length = min(config.chunkBytes, entry.size - offset)
-            val isFinal = offset + length >= entry.size
 
             val result = transport.putFile(
                 canonicalPath = entry.canonicalPath,
@@ -355,9 +390,10 @@ class SyncEngine(
                 mtime = entry.mtime,
                 offset = offset,
                 length = length,
-                // Serwer sprawdza skrót przy domknięciu transferu, więc ma sens
-                // wyłącznie na ostatnim fragmencie (§8.2 protokołu).
-                digest = if (isFinal) digest else null,
+                // Skrót idzie z każdym fragmentem, choć serwer sprawdza go dopiero przy
+                // domknięciu. Inaczej wymóg z ADR-016 odrzucałby fragmenty pośrednie,
+                // a kilkadziesiąt bajtów nagłówka na 32 MB ciała nie robi różnicy.
+                digest = digest,
             )
 
             when (result) {

@@ -29,10 +29,10 @@ Niezmienniki, na których opiera się cała reszta specyfikacji:
   nigdy po adresie sieciowym (§3).
 - **I5 — tożsamość pliku zależy od polityki.** Domyślnie plik identyfikuje trójka
   `(ścieżka, rozmiar, mtime)`; w trybie dokładnym częścią tożsamości jest skrót
-  zawartości (§9, ADR-016). Wybór należy do klienta i jest widoczny w manifeście.
+  zawartości (§9.3, ADR-016). Wybór należy do klienta i jest widoczny w manifeście.
 - **I6 — przyjęcie jest rejestrowane.** Każdy przyjęty plik trafia do dopisywanego
   rejestru integralności spiętego łańcuchem skrótów. Rejestr pozwala wykazać, co
-  i kiedy serwer przyjął, a wsteczna edycja samego rejestru jest wykrywalna (§10).
+  i kiedy serwer przyjął, a wsteczna edycja samego rejestru jest wykrywalna (§9.2).
 
 ## 2. Warstwa transportowa
 
@@ -236,7 +236,8 @@ Klient zgłasza, co ma; serwer odpowiada, czego mu brakuje.
   "batch": 3,              // numer partii, od 0
   "final": false,          // true w ostatniej partii sesji
   "files": [
-    { "p": "DCIM/Camera/IMG_0001.JPG", "s": 4812233, "m": 1756400000 }
+    { "p": "DCIM/Camera/IMG_0001.JPG", "s": 4812233, "m": 1756400000 },
+    { "p": "Documents/umowa.pdf", "s": 20481, "m": 1756400000, "d": "9f86d0…" }
   ]
 }
 ```
@@ -246,6 +247,8 @@ Klient zgłasza, co ma; serwer odpowiada, czego mu brakuje.
   Tylko wtedy serwer wylicza raport sierot (§5.6).
 - `mode: "delta"` oznacza przyrost od poprzedniego skanu i nie powoduje
   wyliczania sierot.
+- `d` jest opcjonalne i występuje wyłącznie w trybie dokładnym (§9.3). Klient,
+  który go nie podaje, dostaje odpowiedź wyznaczoną wyłącznie z metadanych.
 
 Odpowiedź `200`:
 ```jsonc
@@ -258,7 +261,8 @@ Odpowiedź `200`:
   ],
   "rejected": [
     { "p": "dziwna/../ścieżka.txt", "error": "traversal" }
-  ]
+  ],
+  "divergent": ["Documents/umowa.pdf"]
 }
 ```
 
@@ -276,8 +280,19 @@ Odpowiedź `200`:
   na `PUT`, czyli po jednym zmarnowanym żądaniu na każdy taki plik — a przy
   wysyłce po sieci komórkowej to realny koszt.
 
+- `divergent` wymienia ścieżki, dla których klient podał `d` inne niż zapisane
+  w rejestrze przy przyjęciu, **mimo zgodnego rozmiaru i czasu modyfikacji** (§9.3).
+  Serwer umieszcza je również w `needed`, więc kopia zostanie uzupełniona; osobna
+  lista istnieje po to, żeby klient mógł to odnotować jako zdarzenie, a nie jako
+  zwykłą aktualizację. Pole jest pomijane, gdy lista jest pusta.
+
+  Brak wpisu w rejestrze **nie jest** przesłanką rozbieżności: plik mógł trafić do
+  kopii przed uruchomieniem rejestru albo zostać do niej wstawiony ręcznie.
+
 Serwer wyznacza `have`/`needed` przez porównanie `(rozmiar, mtime)` z systemem
-plików. Serwer **nie utrzymuje własnego indeksu zawartości** (ADR-003).
+plików. Serwer **nie utrzymuje własnego indeksu zawartości** (ADR-003) — rejestr
+z §9.2 jest zapisem przyjęć, a nie indeksem: źródłem prawdy o zawartości kopii
+pozostaje dysk.
 
 Tolerancja mtime: **0 sekund**. Wyjątkiem jest tryb adopcji (§10).
 
@@ -473,23 +488,86 @@ przez urządzenie, które z definicji nigdy niczego nie kasuje.
 
 ## 9. Integralność
 
-Rozróżniamy dwa zastosowania skrótów kryptograficznych, których **nie wolno mylić**:
+Rozróżniamy trzy zastosowania skrótów kryptograficznych, których **nie wolno mylić**.
+Wszystkie trzy używają SHA-256 zapisanego szesnastkowo małymi literami.
 
-- **Wykrywanie zmian** — domyślnie odrzucone (I5, ADR-002): pełny odczyt biblioteki
-  przy każdym cyklu jest kosztowny energetycznie. Klient może jednak włączyć tryb
-  dokładny (ADR-016), w którym skrót staje się tożsamością pliku i wykrywa podmianę
-  zachowującą metadane.
-- **Kontrola integralności transferu** — dozwolona i tania, bo bajty i tak przechodzą
-  przez procesor po obu stronach. Klient MOŻE liczyć skrót przyrostowo w trakcie
-  odczytu i podać go w `X-Filum-Digest`.
+### 9.1 Kontrola integralności transferu
 
-Zastrzeżenie: przy transferze wznawianym w kilku sesjach klient musiałby odczytać
-plik od początku, żeby domknąć skrót. Dlatego `X-Filum-Digest` jest **opcjonalny**
-w `PUT /file` — klient POWINIEN go podawać, gdy plik przechodzi w jednym przebiegu,
-i pomijać przy wznowieniu. W `POST /bundle` jest wymagany.
+Odpowiada na pytanie: czy do serwera dotarło to, co telefon wysłał.
 
-Pełna weryfikacja istniejącej kopii odbywa się przez `POST /verify` (§5.5),
-uruchamiana świadomie przez użytkownika.
+`X-Filum-Digest` jest **wymagany** przy domyślnej konfiguracji serwera (ADR-016).
+Serwer odrzuca żądanie kodem `400 digest_required`, **zanim** przyjmie jakiekolwiek
+bajty — przyjęcie danych, których i tak nie da się wpisać do rejestru, byłoby
+marnowaniem transferu po obu stronach.
+
+Nagłówek niesie skrót **całego pliku** i klient podaje go w każdym fragmencie,
+także przy wznawianiu. Serwer sprawdza go dopiero przy domknięciu transferu (§8.2),
+ale wymaga go od każdego żądania: gdyby przyjmował fragmenty pośrednie bez skrótu,
+wymóg nie obowiązywałby dla żadnego pliku dzielonego na części.
+
+Koszt to jeden lokalny odczyt pliku przez telefon. Wznawianie oszczędza transmisję,
+a nie odczyt z pamięci urządzenia — więc pominięcie skrótu przy wznowieniu nie
+oszczędzałoby tego, co jest w tym scenariuszu drogie, a zostawiałoby poza rejestrem
+akurat pliki największe.
+
+Instalacja, której zależy wyłącznie na odzyskiwaniu danych, może wymóg wyłączyć
+(`Filum:RequireDigest`). Wtedy skrót jest opcjonalny, a pliki bez niego nie trafiają
+do rejestru.
+
+### 9.2 Rejestr przyjęć
+
+Odpowiada na pytanie: co i kiedy serwer przyjął, i czy od tamtej pory ktoś to ruszył.
+
+Każdy przyjęty plik dopisuje wiersz do `.filum/meta/integrity.jsonl` urządzenia:
+
+```jsonc
+{ "n": 1, "at": 1756400000, "p": "DCIM/IMG_0001.JPG",
+  "s": 4812233, "m": 1756400000, "d": "9f86d0…", "prev": "genesis" }
+```
+
+`prev` zawiera skrót **poprzedniego wiersza w jego dokładnej postaci tekstowej**.
+Pierwszy wiersz kotwiczy łańcuch wartością `genesis`. Hashowany jest zapisany tekst,
+a nie odtworzony obiekt: gdyby serializacja kiedykolwiek zmieniła kolejność pól albo
+format liczb, hashowanie obiektu unieważniłoby całą dotychczasową historię, choć
+nikt by jej nie tknął.
+
+Skutek: usunięcie, podmiana albo wstawienie dowolnego wiersza rozspójnia wszystko,
+co po nim następuje. Rejestr, którego nie da się po cichu poprawić, jest czymś
+jakościowo innym niż lista skrótów.
+
+**Czego to nie daje.** Łańcuch wykrywa manipulację częściową. Nie chroni przed
+odtworzeniem całego rejestru od zera przez kogoś, kto ma dostęp do dysku serwera.
+Podpisanie kluczem serwera niczego by nie zmieniło, bo ten klucz leży na tej samej
+maszynie. Uczciwa gwarancja brzmi: **wykrywalność manipulacji częściowej, nie
+niemożliwość manipulacji**. Podniesienie jej wymagałoby zaufanego zewnętrznego
+świadka i wykracza poza zakres projektu (§11).
+
+### 9.3 Wykrywanie zmian po stronie klienta
+
+Odpowiada na pytanie: czy plik, który wygląda na niezmieniony, jest tym samym plikiem.
+
+Polityka jest wyborem użytkownika (ADR-016), bo oba tryby są uzasadnione i różnią
+się ceną, a nie poprawnością:
+
+| Tryb | Manifest niesie `d` | Wykrywa podmianę zachowującą metadane | Koszt skanu |
+|---|---|---|---|
+| szybki (domyślny) | nie | nie | same metadane |
+| dokładny | tak | tak | odczyt całej biblioteki w każdym cyklu |
+
+W trybie szybkim tożsamością pliku pozostaje `(ścieżka, rozmiar, mtime)` — I5 i ADR-002.
+W trybie dokładnym serwer zestawia `d` z rejestrem z §9.2 i zgłasza niezgodność
+w polu `divergent` (§5.2).
+
+Klient MOŻE pominąć `d` dla pojedynczych pozycji, gdy zabraknie mu budżetu pracy
+w tle w trakcie liczenia — serwer potraktuje je jak w trybie szybkim. Cichy brak
+skrótu jest lepszy niż przerwana synchronizacja.
+
+### 9.4 Weryfikacja istniejącej kopii
+
+Pełne sprawdzenie zgodności kopii z oryginałem odbywa się przez `POST /verify` (§5.5),
+uruchamiane świadomie przez użytkownika. Próbka MUSI obejmować pliki wszystkich
+rozmiarów: wykluczenie dużych plików „dla szybkości" zostawia największe i najtrudniejsze
+do odtworzenia dane trwale poza kontrolą.
 
 ---
 
@@ -516,3 +594,9 @@ Tryb MUSI być jednorazowy, jawnie włączany w panelu serwera i ograniczony cza
   rozdzielone przez `<device-slug>`, ale warto rozważyć widok scalony w panelu.
 - Polityka retencji wersji w `.filum/versions/` — obecnie brak, katalog rośnie
   bez ograniczeń.
+- Zaufany zewnętrzny świadek dla rejestru z §9.2. Łańcuch wykrywa manipulację
+  częściową, ale ktoś z dostępem do dysku może odtworzyć rejestr od zera. Podniesienie
+  gwarancji wymagałoby okresowego publikowania skrótu ostatniego wiersza poza serwerem
+  — u drugiego uczestnika, w usłudze znacznika czasu albo na nośniku tylko do odczytu.
+  Każdy z tych wariantów wprowadza zależność, której projekt dotąd nie ma, więc
+  decyzja wymaga osobnego rozważenia.

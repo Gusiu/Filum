@@ -13,6 +13,7 @@ import pl.wspa.filum.protocol.ErrorResponse
 import pl.wspa.filum.protocol.FileChunkResponse
 import pl.wspa.filum.protocol.HttpStatus
 import pl.wspa.filum.protocol.ManifestRequest
+import pl.wspa.filum.protocol.IntegrityPolicy
 import pl.wspa.filum.protocol.ManifestResponse
 import pl.wspa.filum.protocol.NeededFile
 import pl.wspa.filum.scan.ScannedFile
@@ -199,20 +200,11 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `duzy plik nie placi za dodatkowy odczyt`(@TempDir dir: Path) = runTest {
-        // Skrót wymaga przeczytania całego pliku przed wysłaniem, bo nagłówek powstaje
-        // przed ciałem. Dla wielogigabajtowego nagrania podwoiłoby to operacje dyskowe.
-        setUp()
-        val a = plik(dir, "duzy.bin", "x".repeat(100))
-
-        run(listOf(a), config = SyncConfig(digestMaxBytes = 10))
-
-        assertNull(transport.digestsSeen["duzy.bin"])
-    }
-
-    @Test
-    fun `wznawiany plik nie dostaje skrotu`(@TempDir dir: Path) = runTest {
-        // Policzenie skrótu wymagałoby odczytu od początku, co przeczy sensowi wznawiania.
+    fun `wznawiany plik tez dostaje skrot`(@TempDir dir: Path) = runTest {
+        // Wcześniej skrót przy wznawianiu pomijaliśmy, żeby nie czytać pliku od początku.
+        // To była oszczędność na niewłaściwej rzeczy: wznawianie ratuje transmisję, a nie
+        // odczyt z pamięci telefonu — i zostawiało wznawiane pliki poza rejestrem, czyli
+        // dokładnie te największe, przy których najbardziej zależy nam na potwierdzeniu.
         setUp()
         val a = plik(dir, "klip.mp4", "0123456789")
         transport.received["klip.mp4"] = StringBuilder("01234")
@@ -220,7 +212,67 @@ class SyncEngineTest {
 
         run(listOf(a))
 
-        assertNull(transport.digestsSeen["klip.mp4"])
+        assertEquals(64, transport.digestsSeen["klip.mp4"]!!.length)
+    }
+
+    @Test
+    fun `skrot idzie z kazdym fragmentem`(@TempDir dir: Path) = runTest {
+        // Serwer sprawdza skrót dopiero przy domknięciu, ale wymaga go od każdego
+        // żądania (ADR-016). Wysyłanie tylko na ostatnim fragmencie oznaczałoby
+        // odrzucenie wszystkich wcześniejszych.
+        setUp()
+        val a = plik(dir, "duzy.bin", "x".repeat(100))
+
+        run(listOf(a), config = SyncConfig(chunkBytes = 30))
+
+        val fragmenty = transport.putCalls.count { it.first == "duzy.bin" }
+        assertTrue(fragmenty > 1, "plik miał pójść w kilku fragmentach, poszedł w $fragmenty")
+        assertEquals(fragmenty, transport.digestsPerCall.count { it != null })
+    }
+
+    // --- tryb dokładny (ADR-016) ---
+
+    @Test
+    fun `tryb szybki nie liczy skrotow do manifestu`(@TempDir dir: Path) = runTest {
+        setUp()
+        val a = plik(dir, "a.txt", "zawartość")
+
+        run(listOf(a), config = SyncConfig(integrityPolicy = IntegrityPolicy.FAST))
+
+        assertNull(transport.manifestDigests["a.txt"])
+    }
+
+    @Test
+    fun `tryb dokladny dokłada skrot do manifestu`(@TempDir dir: Path) = runTest {
+        // To jest jedyna różnica widoczna dla serwera — i to ona pozwala mu zestawić
+        // deklarację klienta z rejestrem, zanim cokolwiek zostanie przesłane.
+        setUp()
+        val a = plik(dir, "a.txt", "zawartość")
+
+        run(listOf(a), config = SyncConfig(integrityPolicy = IntegrityPolicy.THOROUGH))
+
+        assertEquals(64, transport.manifestDigests["a.txt"]?.length)
+    }
+
+    @Test
+    fun `rozbieznosc zgloszona przez serwer trafia do dziennika`(@TempDir dir: Path) = runTest {
+        // Plik i tak wróci przez "needed", więc bez wpisu w dzienniku podmiana
+        // zachowująca metadane byłaby nieodróżnialna od zwykłej edycji.
+        setUp()
+        val a = plik(dir, "umowa.pdf", "treść")
+        transport.manifestResponder = {
+            ApiResult.Ok(
+                ManifestResponse(
+                    have = 0,
+                    needed = listOf(NeededFile("umowa.pdf", 0)),
+                    divergent = listOf("umowa.pdf"),
+                ),
+            )
+        }
+
+        run(listOf(a), config = SyncConfig(integrityPolicy = IntegrityPolicy.THOROUGH))
+
+        assertTrue(journal.has("integrity_divergent"))
     }
 
     // --- błędy ---

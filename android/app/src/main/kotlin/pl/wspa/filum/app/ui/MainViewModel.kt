@@ -18,6 +18,7 @@ import pl.wspa.filum.app.work.SyncScheduler
 import pl.wspa.filum.data.LogEventEntity
 import pl.wspa.filum.data.PairedServerEntity
 import pl.wspa.filum.data.Schedule
+import pl.wspa.filum.protocol.IntegrityPolicy
 import pl.wspa.filum.data.ExclusionEntity
 import pl.wspa.filum.data.SettingsEntity
 import pl.wspa.filum.data.SyncSessionEntity
@@ -196,6 +197,14 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
                 fileCount = directory.list()?.size ?: -1,
                 suggested = directory.name in ExclusionRules.SUGGESTED_FOR_EXCLUSION,
             )
+        }
+    }
+
+    fun setIntegrityPolicy(policy: IntegrityPolicy) {
+        viewModelScope.launch {
+            val updated = _state.value.settings.copy(integrityPolicy = policy)
+            withContext(Dispatchers.IO) { container.database.settings().save(updated) }
+            _state.value = _state.value.copy(settings = updated)
         }
     }
 

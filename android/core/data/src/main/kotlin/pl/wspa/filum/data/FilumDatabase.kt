@@ -17,7 +17,7 @@ import androidx.room.RoomDatabase
         LogEventEntity::class,
         SettingsEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class FilumDatabase : RoomDatabase() {

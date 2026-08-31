@@ -187,6 +187,14 @@ class FilumApiClient(
             ignoreUnknownKeys = true
             encodeDefaults = true
             explicitNulls = false
+
+            // Jawny `null` w polu, które ma wartość domyślną, ma znaczyć to samo co brak
+            // pola. Bez tego odpowiedź `{"divergent":null}` wywracała **całe** parsowanie
+            // manifestu, choć chodziło o pole opcjonalne i puste — jedna strona pomijała
+            // pole, druga wypisywała null, i to wystarczyło, żeby synchronizacja stanęła.
+            // Nieznane klucze już ignorujemy; nie ma powodu, żeby znany klucz z nullem
+            // był traktowany surowiej.
+            coerceInputValues = true
         }
     }
 }
