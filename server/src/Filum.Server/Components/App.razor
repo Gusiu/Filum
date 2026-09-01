@@ -1,10 +1,10 @@
 @*
-    Powłoka panelu. Style są wpisane wprost, bo panel ma dwie strony i nie potrzebuje
-    ani biblioteki komponentów, ani potoku zasobów statycznych — jedna rzecz mniej
-    do zainstalowania u użytkownika i mniej rzeczy, które mogą się nie wczytać.
+    The panel's shell. The styles are inline because the panel has three pages and needs
+    neither a component library nor a static-asset pipeline — one less thing to install on
+    the user's machine, and fewer things that can fail to load.
 *@
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="en">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -13,24 +13,24 @@
     <style>
         :root {
             color-scheme: light dark;
-            --tlo: #fbfbfa;
-            --karta: #ffffff;
-            --tekst: #1a1a18;
-            --przygaszony: #6b6b66;
-            --kreska: #e3e3df;
-            --akcent: #2f6f4e;
-            --ostrzezenie: #9a5b12;
+            --bg: #fbfbfa;
+            --card: #ffffff;
+            --text: #1a1a18;
+            --muted: #6b6b66;
+            --rule: #e3e3df;
+            --accent: #2f6f4e;
+            --warning: #9a5b12;
         }
 
         @@media (prefers-color-scheme: dark) {
             :root {
-                --tlo: #15161a;
-                --karta: #1d1e23;
-                --tekst: #ececea;
-                --przygaszony: #9a9a94;
-                --kreska: #2e3038;
-                --akcent: #6fbf90;
-                --ostrzezenie: #d59a4e;
+                --bg: #15161a;
+                --card: #1d1e23;
+                --text: #ececea;
+                --muted: #9a9a94;
+                --rule: #2e3038;
+                --accent: #6fbf90;
+                --warning: #d59a4e;
             }
         }
 
@@ -38,8 +38,8 @@
 
         body {
             margin: 0;
-            background: var(--tlo);
-            color: var(--tekst);
+            background: var(--bg);
+            color: var(--text);
             font: 15px/1.55 "Segoe UI", system-ui, sans-serif;
         }
 
@@ -48,45 +48,45 @@
         h1 { font-size: 1.6rem; margin: 0 0 .25rem; }
         h2 { font-size: 1.1rem; margin: 2rem 0 .75rem; font-weight: 600; }
 
-        nav { display: flex; gap: 1rem; margin: 1rem 0 2rem; border-bottom: 1px solid var(--kreska); }
+        nav { display: flex; gap: 1rem; margin: 1rem 0 2rem; border-bottom: 1px solid var(--rule); }
         nav a {
-            padding: .5rem 0; text-decoration: none; color: var(--przygaszony);
+            padding: .5rem 0; text-decoration: none; color: var(--muted);
             border-bottom: 2px solid transparent;
         }
-        nav a:hover { color: var(--tekst); }
-        nav a.aktywny { color: var(--tekst); border-bottom-color: var(--akcent); }
+        nav a:hover { color: var(--text); }
+        nav a.active { color: var(--text); border-bottom-color: var(--accent); }
 
-        .karta {
-            background: var(--karta); border: 1px solid var(--kreska);
+        .card {
+            background: var(--card); border: 1px solid var(--rule);
             border-radius: .6rem; padding: 1.1rem 1.25rem; margin-bottom: 1rem;
         }
 
-        .pola { display: grid; grid-template-columns: max-content 1fr; gap: .35rem 1.25rem; }
-        .pola dt { color: var(--przygaszony); }
-        .pola dd { margin: 0; }
+        .fields { display: grid; grid-template-columns: max-content 1fr; gap: .35rem 1.25rem; }
+        .fields dt { color: var(--muted); }
+        .fields dd { margin: 0; }
 
         .mono { font-family: Consolas, "Cascadia Mono", monospace; font-size: .9em; }
-        .przygaszony { color: var(--przygaszony); }
-        .ostrzezenie { color: var(--ostrzezenie); }
+        .muted { color: var(--muted); }
+        .warning { color: var(--warning); }
 
         table { width: 100%; border-collapse: collapse; }
-        th, td { text-align: left; padding: .6rem .5rem; border-bottom: 1px solid var(--kreska); }
-        th { color: var(--przygaszony); font-weight: 500; }
+        th, td { text-align: left; padding: .6rem .5rem; border-bottom: 1px solid var(--rule); }
+        th { color: var(--muted); font-weight: 500; }
 
         button {
             font: inherit; padding: .45rem .9rem; border-radius: .4rem;
-            border: 1px solid var(--kreska); background: var(--karta); color: var(--tekst);
+            border: 1px solid var(--rule); background: var(--card); color: var(--text);
             cursor: pointer;
         }
-        button:hover { border-color: var(--akcent); }
-        button.glowny { background: var(--akcent); border-color: var(--akcent); color: #fff; }
+        button:hover { border-color: var(--accent); }
+        button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 
         .qr { background: #fff; padding: 1rem; border-radius: .6rem; width: max-content; }
         .qr svg { display: block; width: 15rem; height: 15rem; }
 
-        code.kod {
+        code.code {
             display: block; word-break: break-all; padding: .75rem;
-            background: var(--tlo); border: 1px solid var(--kreska); border-radius: .4rem;
+            background: var(--bg); border: 1px solid var(--rule); border-radius: .4rem;
         }
     </style>
 </head>

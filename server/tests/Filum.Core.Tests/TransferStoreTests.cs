@@ -12,7 +12,7 @@ public class TransferStoreTests
     private const long Mtime = 1_756_400_000;
 
     [Fact]
-    public async Task Wysylka_JednymKawalkiem_LadujeWFiles()
+    public async Task AnUpload_InOnePiece_LandsInFiles()
     {
         using var h = new Harness();
         var content = Harness.Bytes("zawartość zdjęcia");
@@ -26,7 +26,7 @@ public class TransferStoreTests
     }
 
     [Fact]
-    public async Task WTrakcieTransferu_PlikNiePojawiaSieWFiles()
+    public async Task DuringATransfer_TheFileNeverAppearsInFiles()
     {
         // Niezmiennik I3: użytkownik ma w każdej chwili oglądać spójne drzewo,
         // więc fragmenty nie mogą być widoczne w katalogu files/.
@@ -42,7 +42,7 @@ public class TransferStoreTests
     }
 
     [Fact]
-    public async Task Wznowienie_SklejaPlikPoprawnie()
+    public async Task Resuming_ReassemblesTheFileCorrectly()
     {
         using var h = new Harness();
         var content = Harness.Bytes("0123456789ABCDEF");
@@ -56,7 +56,7 @@ public class TransferStoreTests
     }
 
     [Fact]
-    public async Task Wznowienie_ZeZlymPrzesunieciem_PodajeOczekiwane()
+    public async Task Resuming_AtAWrongOffset_ReportsTheExpectedOne()
     {
         using var h = new Harness();
         var content = Harness.Bytes("0123456789");
@@ -69,7 +69,7 @@ public class TransferStoreTests
     }
 
     [Fact]
-    public async Task Wznowienie_GdyPlikSieZmienil_KazeZaczacOdZera()
+    public async Task Resuming_WhenTheFileChanged_ForcesAStartFromZero()
     {
         // Scenariusz z życia: nagranie wideo było jeszcze zapisywane przy poprzedniej
         // próbie. Sklejenie starego fragmentu z nowymi bajtami dałoby plik, który
@@ -85,7 +85,7 @@ public class TransferStoreTests
     }
 
     [Fact]
-    public async Task Domkniecie_ZePoprawnymSkrotem_Przechodzi()
+    public async Task Commit_WithACorrectDigest_Succeeds()
     {
         using var h = new Harness();
         var content = Harness.Bytes("dane do sprawdzenia");
@@ -97,7 +97,7 @@ public class TransferStoreTests
     }
 
     [Fact]
-    public async Task Domkniecie_ZeZlymSkrotem_OdrzucaFragmentINieTworzyPliku()
+    public async Task Commit_WithAWrongDigest_DropsThePartAndCreatesNoFile()
     {
         using var h = new Harness();
         var content = Harness.Bytes("dane do sprawdzenia");
@@ -111,7 +111,7 @@ public class TransferStoreTests
     }
 
     [Fact]
-    public async Task NadmiarBajtow_JestZglaszany_ANieCichoObcinany()
+    public async Task ExcessBytes_AreReported_NotSilentlyTruncated()
     {
         using var h = new Harness();
         var content = Harness.Bytes("0123456789");
@@ -126,7 +126,7 @@ public class TransferStoreTests
     // --- niezmiennik I2: nigdy nie nadpisujemy ---
 
     [Fact]
-    public async Task NowaWersja_OdkladaStaraKopieDoVersions()
+    public async Task ANewVersion_FilesTheOldCopyIntoVersions()
     {
         using var h = new Harness();
         var stara = Harness.Bytes("wersja pierwsza");
@@ -148,7 +148,7 @@ public class TransferStoreTests
     }
 
     [Fact]
-    public async Task NazwaWersji_PochodziZMtimeStarejKopii_NieZChwiliWysylki()
+    public async Task VersionName_ComesFromTheOldCopysMtime_NotFromUploadTime()
     {
         using var h = new Harness();
         // 2025-01-15 10:30:00 UTC
@@ -162,7 +162,7 @@ public class TransferStoreTests
     }
 
     [Fact]
-    public async Task DwieKolejneWersje_ObieSaZachowane()
+    public async Task TwoSuccessiveVersions_AreBothKept()
     {
         using var h = new Harness();
 
@@ -175,7 +175,7 @@ public class TransferStoreTests
     }
 
     [Fact]
-    public async Task PowtorzonaWysylkaTejSamejWersji_NieNadpisujeArchiwum()
+    public async Task ReUploadingTheSameVersion_DoesNotOverwriteTheArchive()
     {
         // Ta sama para (rozmiar, mtime) trafia do archiwum dwa razy, więc nazwa wersji
         // się powtarza. Nadpisanie byłoby cichą utratą danych.
@@ -194,7 +194,7 @@ public class TransferStoreTests
     // --- ścieżki i miejsce na dysku ---
 
     [Fact]
-    public async Task SciezkaWychodzacaPozaKatalog_JestOdrzucana()
+    public async Task APathEscapingTheDirectory_IsRejected()
     {
         using var h = new Harness();
 
@@ -205,7 +205,7 @@ public class TransferStoreTests
     }
 
     [Fact]
-    public async Task BrakMiejscaNaDysku_ZatrzymujeZapis()
+    public async Task NoDiskSpace_StopsTheWrite()
     {
         using var h = new Harness(o => o.MinFreeBytes = long.MaxValue / 2);
 
@@ -216,7 +216,7 @@ public class TransferStoreTests
     }
 
     [Fact]
-    public async Task RownolegleTransferyRoznychPlikow_NieKoliduja()
+    public async Task ConcurrentTransfersOfDifferentFiles_DoNotCollide()
     {
         using var h = new Harness();
 

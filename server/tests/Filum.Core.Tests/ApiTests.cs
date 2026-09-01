@@ -48,7 +48,7 @@ public class ApiTests : IClassFixture<FilumApp>
     // --- ping ---
 
     [Fact]
-    public async Task Ping_ZwracaWersjeProtokoluILimity()
+    public async Task Ping_ReturnsTheProtocolVersionAndLimits()
     {
         var response = await _client.GetFromJsonAsync<PingResponse>("/api/v1/ping");
 
@@ -62,7 +62,7 @@ public class ApiTests : IClassFixture<FilumApp>
     // --- manifest ---
 
     [Fact]
-    public async Task Manifest_NieznanyPlik_TrafiaDoNeeded()
+    public async Task Manifest_UnknownFile_LandsInNeeded()
     {
         var request = new ManifestRequest("sesja-1", "delta", 0, true,
             [new ManifestEntry("DCIM/Camera/nowy.jpg", 128, Mtime)]);
@@ -76,7 +76,7 @@ public class ApiTests : IClassFixture<FilumApp>
     }
 
     [Fact]
-    public async Task Manifest_NieznanyTryb_Zwraca400()
+    public async Task Manifest_UnknownMode_Returns400()
     {
         var request = new ManifestRequest("sesja-1", "lustro", 0, true, []);
 
@@ -86,7 +86,7 @@ public class ApiTests : IClassFixture<FilumApp>
     }
 
     [Fact]
-    public async Task Manifest_ZaDuzaPartia_Zwraca413()
+    public async Task Manifest_OversizedBatch_Returns413()
     {
         var files = Enumerable.Range(0, 4)
             .Select(i => new ManifestEntry($"plik{i}.txt", 1, Mtime))
@@ -103,7 +103,7 @@ public class ApiTests : IClassFixture<FilumApp>
     // --- put ---
 
     [Fact]
-    public async Task Put_ZapisujePlikIRaportujeKompletnosc()
+    public async Task Put_StoresTheFileAndReportsCompletion()
     {
         var content = Encoding.UTF8.GetBytes("treść pliku przez HTTP");
 
@@ -119,7 +119,7 @@ public class ApiTests : IClassFixture<FilumApp>
     }
 
     [Fact]
-    public async Task Put_WznowienieZeZlymPrzesunieciem_Zwraca409ZOczekiwanym()
+    public async Task Put_ResumingAtAWrongOffset_Returns409WithTheExpectedOne()
     {
         var content = Encoding.UTF8.GetBytes("0123456789");
         await _client.SendAsync(Put("Movies/wznawiany.mp4", content[..4], content.Length, Mtime, 0));
@@ -133,7 +133,7 @@ public class ApiTests : IClassFixture<FilumApp>
     }
 
     [Fact]
-    public async Task Put_SciezkaWychodzacaPozaKatalog_Zwraca422()
+    public async Task Put_APathEscapingTheDirectory_Returns422()
     {
         var response = await _client.SendAsync(Put("../../ucieczka.txt", [1, 2, 3], 3, Mtime, 0));
         var error = await response.Content.ReadFromJsonAsync<ErrorResponse>();
@@ -143,7 +143,7 @@ public class ApiTests : IClassFixture<FilumApp>
     }
 
     [Fact]
-    public async Task Put_BrakWymaganegoNaglowka_Zwraca400()
+    public async Task Put_MissingRequiredHeader_Returns400()
     {
         var request = new HttpRequestMessage(HttpMethod.Put, "/api/v1/file")
         {
@@ -158,7 +158,7 @@ public class ApiTests : IClassFixture<FilumApp>
     }
 
     [Fact]
-    public async Task Put_ZepsuteKodowanieSciezki_Zwraca400()
+    public async Task Put_BrokenPathEncoding_Returns400()
     {
         var request = new HttpRequestMessage(HttpMethod.Put, "/api/v1/file")
         {
@@ -175,7 +175,7 @@ public class ApiTests : IClassFixture<FilumApp>
     }
 
     [Fact]
-    public async Task Put_PrzesuniecieWiekszeNizRozmiar_Zwraca400()
+    public async Task Put_OffsetBeyondTheSize_Returns400()
     {
         var response = await _client.SendAsync(Put("plik.txt", [1], 10, Mtime, 20));
 
@@ -183,7 +183,7 @@ public class ApiTests : IClassFixture<FilumApp>
     }
 
     [Fact]
-    public async Task PelnyCykl_ManifestPotwierdzaPlikPoWyslaniu()
+    public async Task FullCycle_TheManifestConfirmsTheFileAfterUpload()
     {
         var content = Encoding.UTF8.GetBytes("plik z pełnego cyklu");
         const string path = "DCIM/Camera/cykl.jpg";

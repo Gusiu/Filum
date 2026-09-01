@@ -27,7 +27,7 @@ public class IntegrityLedgerTests
         h.Ledger.Append(Harness.Slug, path, content.Length, Mtime, Digest(content));
 
     [Fact]
-    public void PierwszyWpis_ZaczynaLancuchOdKotwicy()
+    public void TheFirstEntry_StartsTheChainAtTheAnchor()
     {
         using var h = new Harness();
 
@@ -38,7 +38,7 @@ public class IntegrityLedgerTests
     }
 
     [Fact]
-    public void KazdyWpis_WskazujeNaPoprzedni()
+    public void EveryEntry_PointsAtThePreviousOne()
     {
         using var h = new Harness();
 
@@ -63,7 +63,7 @@ public class IntegrityLedgerTests
     }
 
     [Fact]
-    public void PustyRejestr_JestSpojny()
+    public void AnEmptyLedger_IsIntact()
     {
         using var h = new Harness();
 
@@ -76,7 +76,7 @@ public class IntegrityLedgerTests
     // --- właściwość, dla której rejestr w ogóle istnieje ---
 
     [Fact]
-    public void PodmianaWpisu_JestWykrywana()
+    public void AlteringAnEntry_IsDetected()
     {
         // Ktoś z dostępem do dysku zmienia skrót w rejestrze, żeby podmieniony plik
         // wyglądał na oryginalny. Wpis sam w sobie wygląda poprawnie — niezgodność
@@ -97,7 +97,7 @@ public class IntegrityLedgerTests
     }
 
     [Fact]
-    public void UsuniecieWpisu_JestWykrywane()
+    public void RemovingAnEntry_IsDetected()
     {
         // Usunięcie wiersza to najprostszy sposób, żeby plik „nigdy nie istniał".
         using var h = new Harness();
@@ -116,7 +116,7 @@ public class IntegrityLedgerTests
     }
 
     [Fact]
-    public void DopisanieWpisuWSrodku_JestWykrywane()
+    public void InsertingAnEntryInTheMiddle_IsDetected()
     {
         using var h = new Harness();
         Append(h, "a.txt", "aaa");
@@ -130,7 +130,7 @@ public class IntegrityLedgerTests
     }
 
     [Fact]
-    public void DopisanieNaKoncu_JestPoprawne()
+    public void AppendingAtTheEnd_IsValid()
     {
         // Rejestr jest dopisywany z definicji — nowe wpisy nie mogą go unieważniać.
         using var h = new Harness();
@@ -142,7 +142,7 @@ public class IntegrityLedgerTests
     }
 
     [Fact]
-    public void UszkodzonyWiersz_JestWykrywany()
+    public void ACorruptLine_IsDetected()
     {
         using var h = new Harness();
         Append(h, "a.txt", "aaa");
@@ -152,7 +152,7 @@ public class IntegrityLedgerTests
     }
 
     [Fact]
-    public void OstatniSkrotPliku_PochodziZNajnowszegoWpisu()
+    public void AFilesLatestDigest_ComesFromItsNewestEntry()
     {
         // Plik może trafić do rejestru wiele razy — liczy się stan bieżący.
         using var h = new Harness();
@@ -163,7 +163,7 @@ public class IntegrityLedgerTests
     }
 
     [Fact]
-    public void RejestrJestCzytelnyDlaObcegoNarzedzia()
+    public void TheLedgerIsReadableByAForeignTool()
     {
         // Cała wartość rejestru polega na tym, że da się go sprawdzić **bez** tej
         // aplikacji. Znacznik kolejności bajtów sprawiał, że pierwszy wiersz nie był
@@ -188,7 +188,7 @@ public class IntegrityLedgerTests
     }
 
     [Fact]
-    public void SkrotPoPrzyjeciu_JestWidocznyMimoWczesniejszegoZapytania()
+    public void ADigestAfterAcceptance_IsVisibleDespiteAnEarlierQuery()
     {
         // Rejestr trzyma indeks ścieżka -> skrót, budowany leniwie przy pierwszym pytaniu.
         // Zapytanie o plik, którego jeszcze nie ma, buduje ten indeks pusty — i jeżeli
@@ -205,7 +205,7 @@ public class IntegrityLedgerTests
     }
 
     [Fact]
-    public void NieznanyPlik_NieMaSkrotu()
+    public void AnUnknownFile_HasNoDigest()
     {
         using var h = new Harness();
 
@@ -219,7 +219,7 @@ public class DigestRequirementTests
     private const long Mtime = 1_756_400_000;
 
     [Fact]
-    public async Task PrzyWlaczonymWymogu_PlikBezSkrotuJestOdrzucany()
+    public async Task WithTheRequirementOn_AFileWithoutADigestIsRefused()
     {
         using var h = new Harness(o => o.RequireDigest = true);
 
@@ -230,7 +230,7 @@ public class DigestRequirementTests
     }
 
     [Fact]
-    public async Task PrzyWlaczonymWymogu_PlikZeSkrotemPrzechodzi()
+    public async Task WithTheRequirementOn_AFileWithADigestPasses()
     {
         using var h = new Harness(o => o.RequireDigest = true);
 
@@ -241,7 +241,7 @@ public class DigestRequirementTests
     }
 
     [Fact]
-    public async Task OdrzuceniePrzedZapisem_NieZostawiaFragmentu()
+    public async Task RejectionBeforeWriting_LeavesNoPartFile()
     {
         // Ważne, żeby odmowa nastąpiła zanim cokolwiek trafi na dysk: inaczej
         // każde żądanie bez skrótu zostawiałoby śmieci w katalogu przejściowym.
@@ -253,7 +253,7 @@ public class DigestRequirementTests
     }
 
     [Fact]
-    public async Task PrzyjetyPlik_TrafiaDoRejestru()
+    public async Task AnAcceptedFile_LandsInTheLedger()
     {
         using var h = new Harness(o => o.RequireDigest = true);
         var content = Harness.Bytes("zawartość do rejestru");
@@ -269,7 +269,7 @@ public class DigestRequirementTests
     }
 
     [Fact]
-    public async Task NieudanyTransfer_NieZostawiaWpisu()
+    public async Task AFailedTransfer_LeavesNoEntry()
     {
         // Wpis o pliku, który ostatecznie nie wylądował na dysku, byłby gorszy
         // niż brak wpisu — sugerowałby posiadanie czegoś, czego nie ma.
@@ -282,7 +282,7 @@ public class DigestRequirementTests
     }
 
     [Fact]
-    public async Task KolejneWersjeTegoSamegoPliku_ZostawiajaSladObu()
+    public async Task SuccessiveVersionsOfAFile_LeaveATraceOfBoth()
     {
         // Rejestr jest zapisem przyjęć, nie stanem bieżącym. Poprzednia wersja pliku
         // leży w .filum/versions, a jej skrót zostaje w rejestrze — razem dają
@@ -330,7 +330,7 @@ public class ThoroughModeTests
             withDigest ? Harness.Digest(Harness.Bytes(content)) : null);
 
     [Fact]
-    public void ZgodnySkrot_PlikUznanyZaPosiadany()
+    public void AMatchingDigest_CountsTheFileAsHeld()
     {
         using var h = new Harness();
         Accept(h, "notatka.txt", "zawartość");
@@ -343,7 +343,7 @@ public class ThoroughModeTests
     }
 
     [Fact]
-    public void PodmianaZachowujacaMetadane_JestWykrywana()
+    public void AMetadataPreservingSubstitution_IsDetected()
     {
         // Ktoś zmienił plik na telefonie tak, żeby rozmiar i mtime zostały nietknięte.
         // Dla trybu szybkiego to ten sam plik. Skrót mówi co innego.
@@ -359,7 +359,7 @@ public class ThoroughModeTests
     }
 
     [Fact]
-    public void WykrytaPodmiana_TrafiaDoPobraniaZWersjonowaniem()
+    public void ADetectedSubstitution_IsQueuedWithVersioning()
     {
         // Rozbieżność nie może kończyć się samym zgłoszeniem: kopia ma zostać
         // uzupełniona, a poprzednia wersja odłożona, żeby dało się porównać obie.
@@ -377,7 +377,7 @@ public class ThoroughModeTests
     }
 
     [Fact]
-    public void TrybSzybki_NieWykrywaPodmianyZachowujacejMetadane()
+    public void FastMode_DoesNotDetectAMetadataPreservingSubstitution()
     {
         // Test dokumentuje ograniczenie, a nie życzenie. Bez skrótu serwer dysponuje
         // wyłącznie rozmiarem i czasem — a te się zgadzają. To jest właśnie powód,
@@ -394,7 +394,7 @@ public class ThoroughModeTests
     }
 
     [Fact]
-    public void PlikSpozaRejestru_NieJestZglaszanyJakoRozbiezny()
+    public void AFileOutsideTheLedger_IsNotReportedAsDivergent()
     {
         // Plik wstawiony do kopii ręcznie albo przyjęty przed włączeniem rejestru.
         // Nie ma z czym porównywać, a domysł byłby fałszywym alarmem przy pierwszym
@@ -409,7 +409,7 @@ public class ThoroughModeTests
     }
 
     [Fact]
-    public void ZmianaRozmiaru_ZglaszanaJakoZwyklaAktualizacja()
+    public void ASizeChange_IsReportedAsAnOrdinaryUpdate()
     {
         // Rozbieżność ma znaczyć „metadane kłamią". Zwykła edycja pliku zmienia mtime
         // albo rozmiar i nie jest niczym podejrzanym — mieszanie tych dwóch sytuacji

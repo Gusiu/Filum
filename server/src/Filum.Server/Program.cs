@@ -8,12 +8,12 @@ using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Ten sam plik wykonywalny działa jako zwykły program i jako usługa Windows.
-// Wywołanie samo wykrywa, w którym trybie wystartowano, więc uruchomienie
-// z wiersza poleceń zachowuje się bez zmian.
+// The same executable runs as an ordinary program and as a Windows service.
+// The call detects which mode it started in, so launching from a command line
+// behaves no differently.
 //
-// Usługa jest potrzebna, żeby kopia działała także przy wylogowanym użytkowniku.
-// Nie może natomiast wyświetlać interfejsu - sesja 0 na to nie pozwala - dlatego
+// The service is what lets the backup keep working with no user logged in. What it
+// cannot do is display an interface - session 0 forbids it - which is why
 // ikona w zasobniku jest osobnym procesem (ADR-010).
 builder.Host.UseWindowsService(options => options.ServiceName = "Filum");
 
@@ -21,8 +21,8 @@ builder.Services.Configure<FilumOptions>(builder.Configuration.GetSection(FilumO
 builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<FilumOptions>>().Value);
 builder.Services.AddSingleton(TimeProvider.System);
 
-// Konfiguracja jest potrzebna, zanim powstanie kontener — Kestrel musi dostać
-// certyfikat już na etapie budowania nasłuchu.
+// Configuration is needed before the container exists — Kestrel has to be handed the
+// certificate while the listener is still being built.
 var options = builder.Configuration.GetSection(FilumOptions.SectionName).Get<FilumOptions>() ?? new FilumOptions();
 var backupRoot = FilumPaths.ResolveRoot(options);
 var configDirectory = FilumPaths.ResolveConfigDirectory(options);
@@ -45,19 +45,19 @@ builder.Services.AddSingleton<PairingRateLimiter>();
 builder.Services.AddSingleton<IClientCertificateProvider, ConnectionClientCertificateProvider>();
 builder.Services.AddSingleton<AdminService>();
 
-// Rozgłaszanie w sieci lokalnej. Wygoda, nie warunek działania: gdy multicast
+// Local network advertising. A convenience, not a precondition: when multicast
 // nie przejdzie, telefon nadal znajdzie serwer po zapisanych adresach (§4.2).
 builder.Services.AddSingleton<MdnsAdvertiser>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<MdnsAdvertiser>());
 
 // Panel serwera. Blazor po stronie serwera, bo stan i tak tu mieszka, a przy
-// dostępie wyłącznie z pętli zwrotnej opóźnienie kanału jest nieodczuwalne.
+// reached from loopback only, the channel's latency is imperceptible.
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 
 builder.WebHost.ConfigureKestrel(kestrel =>
 {
-    // Transfery bywają wielogigabajtowe, a domyślny limit ciała żądania to 30 MB.
-    // Ochroną przed nadmiarem jest X-Filum-Size i ograniczone kopiowanie w TransferStore,
+    // Transfers run to many gigabytes, while the default request body limit is 30 MB.
+    // The protection against excess is X-Filum-Size plus the bounded copy in TransferStore,
     // nie limit transportowy.
     kestrel.Limits.MaxRequestBodySize = null;
 
@@ -67,13 +67,13 @@ builder.WebHost.ConfigureKestrel(kestrel =>
         {
             https.ServerCertificate = certificates.Certificate;
 
-            // AllowCertificate, nie RequireCertificate: /api/v1/pair musi być osiągalne
-            // zanim urządzenie w ogóle ma czym się przedstawić.
+            // AllowCertificate, not RequireCertificate: /api/v1/pair has to be reachable
+            // before the device has anything to introduce itself with.
             https.ClientCertificateMode = ClientCertificateMode.AllowCertificate;
 
-            // Łańcuch zaufania nas nie interesuje — certyfikaty są samopodpisane z definicji
-            // (ADR-005). Właściwa weryfikacja to porównanie odcisku klucza z listą
-            // sparowanych urządzeń, w DeviceAuthenticationMiddleware.
+            // The trust chain is of no interest — the certificates are self-signed by
+            // definition (ADR-005). The real verification is comparing the key fingerprint
+            // against the list of paired devices, in DeviceAuthenticationMiddleware.
             https.ClientCertificateValidation = (_, _, _) => true;
         });
     });
@@ -85,9 +85,9 @@ app.UseMiddleware<DeviceAuthenticationMiddleware>();
 
 app.UseStaticFiles();
 
-// Wymagane przez interaktywne komponenty Blazora. Panel i tak jest dostępny wyłącznie
-// z pętli zwrotnej, ale to zabezpieczenie kosztuje jedną linię i chroni przed
-// żądaniem wywołanym z otwartej obok strony w przeglądarce.
+// Required by Blazor's interactive components. The panel is loopback-only anyway, but
+// this safeguard costs one line and guards against a request triggered by another page
+// open in the same browser.
 app.UseAntiforgery();
 
 app.MapFilumApi();
@@ -96,19 +96,19 @@ app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 app.Logger.LogInformation("Filum: katalog backupu {Root}", backupRoot);
 app.Logger.LogInformation("Filum: certyfikat {Path}", certificates.Path);
 app.Logger.LogInformation("Filum: odcisk klucza serwera {Pin}", certificates.Pin);
-app.Logger.LogInformation("Filum: nasłuch https://{Bind}:{Port}", options.Bind, options.Port);
+app.Logger.LogInformation("Filum: listening on https://{Bind}:{Port}", options.Bind, options.Port);
 
 var known = app.Services.GetRequiredService<DeviceRegistry>().All();
-app.Logger.LogInformation("Filum: sparowanych urządzeń: {Count}", known.Count);
+app.Logger.LogInformation("Filum: paired devices: {Count}", known.Count);
 if (known.Count == 0)
 {
     app.Logger.LogInformation(
-        "Filum: aby sparować telefon, otwórz panel pod https://127.0.0.1:{Port}/parowanie", options.Port);
+        "Filum: to pair a phone, open the panel at https://127.0.0.1:{Port}/pairing", options.Port);
 }
 
 app.Run();
 
-/// <summary>Rozwiązywanie katalogów, wspólne dla startu serwera i testów.</summary>
+/// <summary>Directory resolution, shared by server startup and the tests.</summary>
 public static class FilumPaths
 {
     public static string ResolveRoot(FilumOptions options)
@@ -123,7 +123,7 @@ public static class FilumPaths
 
     /// <summary>
     /// Katalog na klucz prywatny serwera. Celowo POZA katalogiem backupu: ten bywa
-    /// kopiowany na inny dysk albo odtwarzany z kopii, więc klucz wyciekłby razem z danymi.
+    /// copied to another disk or restored from a copy, so the key would travel with the data.
     /// </summary>
     public static string ResolveConfigDirectory(FilumOptions options) =>
         string.IsNullOrWhiteSpace(options.ConfigDirectory)

@@ -1,45 +1,45 @@
-@page "/parowanie"
+@page "/pairing"
 @inject AdminService Admin
 @rendermode InteractiveServer
 
 <main>
-    <h1>Parowanie telefonu</h1>
+    <h1>Pair a phone</h1>
 
     <nav>
-        <a href="/">Stan</a>
-        <a href="/parowanie" class="aktywny">Parowanie</a>
+        <a href="/">Status</a>
+        <a href="/pairing" class="active">Pairing</a>
     </nav>
 
     @if (pairing is null)
     {
-        <div class="karta">
+        <div class="card">
             <p>
-                Kod zawiera odcisk klucza tego serwera, więc telefon po zeskanowaniu wie,
-                komu ufać — i od tej chwili rozpoznaje serwer niezależnie od tego, pod jakim
-                adresem go zastanie.
+                The code carries this server's key fingerprint, so once the phone has scanned
+                it, it knows whom to trust — and from then on it recognises the server
+                whatever address it finds it under.
             </p>
-            <p class="przygaszony">
-                Kod jest jednorazowy i traci ważność po dziesięciu minutach.
+            <p class="muted">
+                The code is single-use and expires after ten minutes.
             </p>
-            <button class="glowny" @onclick="Generate">Wygeneruj kod</button>
+            <button class="primary" @onclick="Generate">Generate a code</button>
         </div>
     }
     else
     {
-        <div class="karta">
+        <div class="card">
             <div class="qr">@((MarkupString)pairing.QrSvg)</div>
         </div>
 
-        <div class="karta">
+        <div class="card">
             <p>
-                Zeskanuj kod aplikacją albo wklej poniższy ciąg do pola parowania.
+                Scan the code with the app, or paste the string below into its pairing field.
             </p>
-            <code class="kod">@pairing.Payload</code>
-            <p class="przygaszony">
-                Ważny jeszcze @(pairing.ExpiresInSeconds / 60) minut. Po sparowaniu telefon
-                przedstawia się własnym kluczem i token przestaje być potrzebny.
+            <code class="code">@pairing.Payload</code>
+            <p class="muted">
+                Valid for another @(pairing.ExpiresInSeconds / 60) minutes. Once paired, the
+                phone introduces itself with its own key and the token stops being needed.
             </p>
-            <button @onclick="Generate">Wygeneruj nowy</button>
+            <button @onclick="Generate">Generate a new one</button>
         </div>
     }
 </main>
@@ -48,11 +48,10 @@
     private PairingCode? pairing;
 
     /// <summary>
-    /// Kod powstaje dopiero po kliknięciu.
+    /// The code is created only once the button is clicked.
     ///
-    /// Generowanie go przy każdym wejściu na stronę zostawiałoby stertę ważnych
-    /// tokenów po zwykłym przeglądaniu panelu — a każdy z nich pozwala sparować
-    /// dowolne urządzenie.
+    /// Generating one on every page visit would leave a pile of valid tokens behind after
+    /// ordinary browsing of the panel — and each of them pairs an arbitrary device.
     /// </summary>
     private void Generate() => pairing = Admin.IssuePairingCode();
 }

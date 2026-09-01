@@ -50,7 +50,7 @@ public sealed class BundleReader(TransferStore transfers, FilumOptions options)
                     $"The bundle holds more than {options.BundleMaxCount} files.");
 
             if (header.Size < 0 || header.Size > options.BundleMaxBytes)
-                throw new BundleFormatException($"Niepoprawny rozmiar pliku {header.Path}.");
+                throw new BundleFormatException($"Invalid size for file {header.Path}.");
 
             consumed += header.Size;
             if (consumed > options.BundleMaxBytes)

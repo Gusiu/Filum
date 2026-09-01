@@ -6,11 +6,11 @@ using Filum.Protocol;
 namespace Filum.Server;
 
 /// <summary>
-/// Dostęp do certyfikatu klienta z bieżącego połączenia.
+/// Access to the client certificate of the current connection.
 ///
-/// Wydzielone za interfejs, bo TestServer nie zestawia prawdziwego TLS — bez tego
-/// logiki autoryzacji nie dałoby się przetestować inaczej niż uruchamiając cały
-/// serwer z siecią.
+/// Put behind an interface because TestServer does not establish real TLS — without it
+/// the authorisation logic could not be tested any way other than by running the whole
+/// server with a network.
 /// </summary>
 public interface IClientCertificateProvider
 {
@@ -29,29 +29,28 @@ public static class DeviceContext
     public static void Set(HttpContext context, DeviceRecord record) => context.Items[ItemKey] = record;
 
     /// <summary>
-    /// Urządzenie ustalone przez oprogramowanie pośredniczące. Rzuca, gdy zabrakło —
-    /// oznaczałoby to zasób wystawiony poza uwierzytelnieniem przez pomyłkę, a wtedy
-    /// głośna awaria jest znacznie lepsza niż zapis do przypadkowego katalogu.
+    /// The device established by the middleware. Throws when there is none — that would
+    /// mean a resource accidentally exposed outside authentication, and failing loudly is
+    /// far better than writing into an arbitrary directory.
     /// </summary>
     public static DeviceRecord Device(this HttpContext context) =>
         context.Items[ItemKey] as DeviceRecord
-        ?? throw new InvalidOperationException("Żądanie nie przeszło uwierzytelnienia urządzenia.");
+        ?? throw new InvalidOperationException("The request did not pass device authentication.");
 }
 
 /// <summary>
-/// Reguła dostępu do zasobów serwera.
+/// The access rule for the server's resources.
 ///
-/// Obowiązują trzy różne poziomy, bo chronią przed trzema różnymi rzeczami:
+/// Three different levels apply, because they protect against three different things:
 ///
 /// <list type="bullet">
-/// <item><b>Telefon</b> — mTLS z przypiętym kluczem (§3.2 protokołu). Chroni dane
-/// przed obcym urządzeniem w tej samej sieci.</item>
-/// <item><b>Parowanie</b> — token jednorazowy zamiast certyfikatu, bo urządzenie
+/// <item><b>Phone</b> — mTLS with a pinned key (protocol §3.2). Protects the data from a
+/// stranger's device on the same network.</item>
+/// <item><b>Pairing</b> — a single-use token instead of a certificate, because the device
 /// dopiero go zdobywa (§3.3).</item>
-/// <item><b>Panel i zasoby administracyjne</b> — wyłącznie pętla zwrotna. Osoba
-/// siedząca przy komputerze jest z definicji uprawniona; wystawienie panelu
-/// w sieci pozwalałoby obcemu urządzeniu wygenerować sobie token parowania
-/// albo odczytać zawartość kopii.</item>
+/// <item><b>Panel and administrative resources</b> — loopback only. The person sitting at
+/// the computer is entitled by definition; exposing the panel on the network would let a
+/// stranger's device mint itself a pairing token or read the contents of the backup.</item>
 /// </list>
 /// </summary>
 public sealed class DeviceAuthenticationMiddleware(
@@ -60,23 +59,23 @@ public sealed class DeviceAuthenticationMiddleware(
     IClientCertificateProvider certificates,
     ILogger<DeviceAuthenticationMiddleware> logger)
 {
-    /// <summary>Zasób parowania: token zamiast certyfikatu, dostępny z sieci.</summary>
+    /// <summary>The pairing resource: a token instead of a certificate, reachable from the network.</summary>
     private const string PairPath = "/api/v1/pair";
 
-    /// <summary>Wydawanie tokenów i zasoby administracyjne — tylko z tego komputera.</summary>
+    /// <summary>Token issuing and administrative resources — from this computer only.</summary>
     private static readonly string[] LoopbackOnlyPaths = ["/api/v1/pair/new", "/api/v1/admin"];
 
     public async Task InvokeAsync(HttpContext context)
     {
         var path = context.Request.Path;
 
-        // Wszystko poza /api to panel: strony, zasoby statyczne, kanał SignalR.
+        // Everything outside /api is the panel: pages, static assets, the SignalR channel.
         if (!path.StartsWithSegments("/api"))
         {
             if (!IsLoopback(context))
             {
                 await Deny(context, StatusCodes.Status403Forbidden, "forbidden",
-                           "Panel jest dostępny wyłącznie z komputera, na którym działa serwer.");
+                           "The panel is reachable only from the computer running the server.");
                 return;
             }
 
@@ -89,7 +88,7 @@ public sealed class DeviceAuthenticationMiddleware(
             if (!IsLoopback(context))
             {
                 await Deny(context, StatusCodes.Status403Forbidden, "forbidden",
-                           "Ten zasób jest dostępny wyłącznie z komputera, na którym działa serwer.");
+                           "This resource is reachable only from the computer running the server.");
                 return;
             }
 
@@ -107,7 +106,7 @@ public sealed class DeviceAuthenticationMiddleware(
         if (certificate is null)
         {
             await Deny(context, StatusCodes.Status401Unauthorized, "unauthorized",
-                       "Brak certyfikatu klienta. Sparuj urządzenie ponownie.");
+                       "No client certificate. Pair the device again.");
             return;
         }
 
@@ -116,16 +115,16 @@ public sealed class DeviceAuthenticationMiddleware(
 
         if (device is null)
         {
-            logger.LogWarning("Odrzucono nieznany klucz klienta {Pin}", pin);
+            logger.LogWarning("Rejected an unknown client key {Pin}", pin);
             await Deny(context, StatusCodes.Status401Unauthorized, "unauthorized",
-                       "Nieznany klucz urządzenia. Wymagane ponowne parowanie.");
+                       "Unknown device key. Pairing again is required.");
             return;
         }
 
         if (!device.Enabled)
         {
             await Deny(context, StatusCodes.Status403Forbidden, "device_disabled",
-                       "Urządzenie zostało wyłączone w panelu serwera.");
+                       "This device has been disabled in the server panel.");
             return;
         }
 
@@ -136,8 +135,8 @@ public sealed class DeviceAuthenticationMiddleware(
     /// <summary>
     /// Adres nieznany traktujemy jako zdalny.
     ///
-    /// Kestrel podaje go zawsze, ale gdyby kiedyś stanął za pośrednikiem, brak adresu
-    /// nie może otwierać panelu — przy wątpliwości wybieramy wariant restrykcyjny.
+    /// Kestrel always supplies it, but were it ever to sit behind a proxy, a missing
+    /// address must not open the panel — in doubt we take the restrictive branch.
     /// </summary>
     private static bool IsLoopback(HttpContext context)
     {

@@ -12,8 +12,8 @@ namespace Filum.Server;
 public static class FilumApi
 {
     /// <summary>
-    /// Limit z §5.5. Serwer liczy skróty swoich kopii, więc żądanie jest kosztowne —
-    /// przy braku limitu jedno wywołanie potrafiłoby zająć dysk na godziny.
+    /// The limit from §5.5. The server hashes its own copies, so the request is expensive
+    /// — with no limit, a single call could occupy the disk for hours.
     /// </summary>
     private const int MaxVerifyBatch = 256;
 
@@ -24,9 +24,9 @@ public static class FilumApi
         api.MapPost("/pair", Pair);
         api.MapGet("/pair/new", NewPairing);
 
-        // Zasoby administracyjne: wyłącznie z pętli zwrotnej, patrz
+        // Administrative resources: loopback only, see
         // DeviceAuthenticationMiddleware. Korzysta z nich ikona w zasobniku,
-        // która jest osobnym procesem i nie ma dostępu do stanu serwera inaczej.
+        // which is a separate process and has no other access to the server's state.
         api.MapGet("/admin/status", (AdminService admin) => Results.Ok(admin.Snapshot()));
 
         api.MapGet("/ping", Ping);
@@ -50,18 +50,18 @@ public static class FilumApi
         var source = context.Connection.RemoteIpAddress?.ToString() ?? "nieznany";
         if (!limiter.TryRegisterAttempt(source))
         {
-            logger.LogWarning("Przekroczono limit prób parowania z {Source}", source);
+            logger.LogWarning("Pairing attempt limit exceeded from {Source}", source);
             return Error(StatusCodes.Status429TooManyRequests, "rate_limited",
-                         "Za dużo prób parowania. Spróbuj ponownie za kilka minut.");
+                         "Too many pairing attempts. Try again in a few minutes.");
         }
 
         var authorization = context.Request.Headers.Authorization.ToString();
         if (!authorization.StartsWith("Bearer ", StringComparison.Ordinal))
-            return Error(StatusCodes.Status401Unauthorized, "unauthorized", "Brak tokenu parowania.");
+            return Error(StatusCodes.Status401Unauthorized, "unauthorized", "No pairing token.");
 
         if (!pairing.TryConsume(authorization["Bearer ".Length..]))
             return Error(StatusCodes.Status401Unauthorized, "unauthorized",
-                         "Token parowania jest nieznany, już zużyty albo wygasł.");
+                         "The pairing token is unknown, already used or expired.");
 
         X509Certificate2 certificate;
         try
@@ -71,24 +71,24 @@ public static class FilumApi
         catch (Exception ex) when (ex is FormatException or CryptographicException)
         {
             return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest,
-                         "Pole cert musi zawierać certyfikat DER zakodowany base64.");
+                         "The cert field must carry a base64-encoded DER certificate.");
         }
 
         var pin = CertificateStore.ComputePin(certificate);
         var device = registry.Register(pin, CleanLabel(request.Label));
 
-        logger.LogInformation("Sparowano urządzenie {Label} ({Slug}) o kluczu {Pin}",
+        logger.LogInformation("Paired device {Label} ({Slug}) with key {Pin}",
                               device.Label, device.Slug, pin);
 
         return Results.Ok(new PairResponse(pin, ServerIdentity.InstanceId, ProtocolVersion.Current));
     }
 
     /// <summary>
-    /// Wydaje token parowania i buduje ładunek kodu QR.
+    /// Issues a pairing token and builds the QR payload.
     ///
-    /// Dostępne wyłącznie z pętli zwrotnej: to jedyny zasób wydający sekret, a osoba
-    /// przy komputerze jest z definicji uprawniona do sparowania telefonu. Docelowo
-    /// woła to panel (etap 7); na razie służy do parowania z wiersza poleceń.
+    /// Reachable from loopback only: it is the one resource that hands out a secret, and
+    /// the person at the computer is entitled by definition to pair a phone. The panel is
+    /// what calls it; it also serves for pairing from a command line.
     /// </summary>
     private static IResult NewPairing(
         HttpContext context,
@@ -99,7 +99,7 @@ public static class FilumApi
         var remote = context.Connection.RemoteIpAddress;
         if (remote is null || !IPAddress.IsLoopback(remote))
             return Error(StatusCodes.Status403Forbidden, "forbidden",
-                         "Parowanie można rozpocząć tylko z komputera, na którym działa serwer.");
+                         "Pairing can only be started from the computer running the server.");
 
         var payload = new QrPayload(
             Environment.MachineName,
@@ -169,9 +169,9 @@ public static class FilumApi
         var slug = context.Device().Slug;
         var resolution = resolver.Resolve(slug, request.Files);
 
-        // Sieroty liczymy wyłącznie dla sesji zgłaszającej komplet plików (§5.6).
-        // Sesja przyrostowa nic nie wie o plikach, o których nie wspomniała, więc
-        // różnica wobec dysku nie miałaby znaczenia.
+        // Orphans are computed only for a session reporting the complete file set (§5.6).
+        // An incremental session knows nothing about the files it did not mention, so the
+        // difference against the disk would be meaningless.
         if (request.Mode == "full")
         {
             orphans.RecordBatch(slug, request.Session, request.Files.Select(f => f.Path));
@@ -182,8 +182,8 @@ public static class FilumApi
             resolution.Have,
             resolution.Needed,
             resolution.Rejected,
-            // Pustej listy nie wysyłamy: w trybie szybkim byłaby w każdej odpowiedzi
-            // i tylko zwiększała ruch, a klient i tak nie ma z niej co odczytać.
+            // An empty list is not sent: in fast mode it would appear in every response
+            // and only add traffic, with nothing for the client to read from it.
             resolution.Divergent.Count > 0 ? resolution.Divergent : null));
     }
 
@@ -207,30 +207,30 @@ public static class FilumApi
             ChunkStatus.PathRejected => Error(
                 StatusCodes.Status422UnprocessableEntity,
                 ErrorCodes.FromRejection(outcome.Rejection),
-                "Ścieżka nie nadaje się do składowania."),
+                "The path is unfit for storage."),
 
             ChunkStatus.OffsetMismatch => Error(
                 StatusCodes.Status409Conflict, ErrorCodes.OffsetMismatch,
-                "Przesunięcie nie zgadza się ze stanem fragmentu na serwerze.",
+                "The offset does not match the partial file on the server.",
                 outcome.ExpectedOffset),
 
             ChunkStatus.DigestRequired => Error(
                 StatusCodes.Status400BadRequest, ErrorCodes.DigestRequired,
-                "Serwer wymaga skrótu przy przyjęciu pliku; nagłówek X-Filum-Digest jest obowiązkowy."),
+                "The server requires a digest on acceptance; the X-Filum-Digest header is mandatory."),
 
             ChunkStatus.DigestMismatch => Error(
                 StatusCodes.Status409Conflict, ErrorCodes.DigestMismatch,
-                "Skrót odebranego pliku nie zgadza się z zadeklarowanym.",
+                "The received file's digest does not match the declared one.",
                 outcome.ExpectedOffset),
 
             ChunkStatus.TooMuchData => Error(
                 StatusCodes.Status400BadRequest, ErrorCodes.BadRequest,
-                "Ciało żądania jest dłuższe niż zadeklarowany rozmiar pliku.",
+                "The request body is longer than the declared file size.",
                 outcome.ExpectedOffset),
 
             ChunkStatus.InsufficientStorage => Error(
                 StatusCodes.Status507InsufficientStorage, ErrorCodes.InsufficientStorage,
-                $"Za mało miejsca na dysku; wolne {outcome.FreeBytes} B."),
+                $"Not enough disk space; {outcome.FreeBytes} B free."),
 
             _ => Error(StatusCodes.Status500InternalServerError, ErrorCodes.BadRequest, "Nieznany stan transferu.")
         };
@@ -247,15 +247,15 @@ public static class FilumApi
         {
             var results = await bundles.ReadAsync(context.Device().Slug, context.Request.Body, ct);
 
-            // Paczka może się powieść częściowo: jeden plik z odrzuconą ścieżką nie
-            // unieważnia pozostałych stu, które doszły poprawnie.
+            // A bundle may succeed partially: one file with a rejected path does not
+            // invalidate the hundred others that arrived correctly.
             return Results.Ok(new BundleResponse(
                 results.Select(r => new BundleFileResult(r.Path, r.Ok, r.Error, r.Versioned)).ToList()));
         }
         catch (BundleFormatException e)
         {
-            // Uszkodzone ramkowanie unieważnia całą paczkę: od tego miejsca nie wiemy
-            // już, gdzie kończy się jeden plik, a zaczyna następny.
+            // Broken framing invalidates the whole bundle: from that point on we no longer
+            // know where one file ends and the next begins.
             return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, e.Message);
         }
     }
@@ -273,7 +273,7 @@ public static class FilumApi
 
         if (request.Files.Count > MaxVerifyBatch)
             return Error(StatusCodes.Status413PayloadTooLarge, ErrorCodes.PayloadTooLarge,
-                         $"Naraz można sprawdzić najwyżej {MaxVerifyBatch} plików.");
+                         $"At most {MaxVerifyBatch} files can be checked at once.");
 
         return Results.Ok(await verifier.VerifyAsync(context.Device().Slug, request.Files, ct));
     }
@@ -286,11 +286,11 @@ public static class FilumApi
 
         return report is null
             ? Error(StatusCodes.Status404NotFound, "no_report",
-                    "Dla tej sesji nie ma raportu. Powstaje dopiero po zamknięciu sesji z pełnym manifestem.")
+                    "There is no report for this session. One is produced only after a session closes with a full manifest.")
             : Results.Ok(report);
     }
 
-    // --- nagłówki ---
+    // --- headers ---
 
     private static bool TryReadChunkHeaders(HttpRequest request, out ChunkRequest chunk, out string problem)
     {
@@ -299,7 +299,7 @@ public static class FilumApi
 
         if (!TryDecodePath(request.Headers[FilumHeaders.Path], out var path))
         {
-            problem = $"{FilumHeaders.Path} musi być poprawnym base64url bez dopełnienia.";
+            problem = $"{FilumHeaders.Path} must be valid base64url without padding.";
             return false;
         }
 
@@ -319,7 +319,7 @@ public static class FilumApi
         {
             if (rawDigest.Length != 64 || !rawDigest.All(Uri.IsHexDigit))
             {
-                problem = $"{FilumHeaders.Digest} musi być 64 znakami szesnastkowymi (SHA-256).";
+                problem = $"{FilumHeaders.Digest} must be 64 hexadecimal characters (SHA-256).";
                 return false;
             }
             digest = rawDigest;
@@ -336,21 +336,21 @@ public static class FilumApi
 
         if (string.IsNullOrEmpty(raw))
         {
-            problem = $"Brak nagłówka {header}.";
+            problem = $"Missing header {header}.";
             value = 0;
             return false;
         }
 
         if (!long.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out value) || value < 0)
         {
-            problem = $"{header} musi być nieujemną liczbą całkowitą, jest '{raw}'.";
+            problem = $"{header} must be a non-negative integer, got '{raw}'.";
             return false;
         }
 
         return true;
     }
 
-    /// <summary>base64url bez dopełnienia (§5.3). Dopełnienie dokładamy sami, bo Convert go wymaga.</summary>
+    /// <summary>base64url without padding (§5.3). We add the padding ourselves, since Convert needs it.</summary>
     private static bool TryDecodePath(string? value, out string decoded)
     {
         decoded = "";
@@ -376,11 +376,11 @@ public static class FilumApi
         }
     }
 
-    /// <summary>Etykieta jest tylko prezentacyjna (§3.2), ale trafia do nazwy katalogu — przycinamy.</summary>
+    /// <summary>The label is presentational only (§3.2) but ends up in a directory name — so it is trimmed.</summary>
     private static string CleanLabel(string? label)
     {
         var cleaned = (label ?? "").Trim();
-        if (cleaned.Length == 0) return "Urządzenie";
+        if (cleaned.Length == 0) return "Device";
         return cleaned.Length > 64 ? cleaned[..64] : cleaned;
     }
 
@@ -388,7 +388,7 @@ public static class FilumApi
         Results.Json(new ErrorResponse(code, message, expectedOffset), statusCode: status);
 }
 
-/// <summary>Identyfikator tej instalacji, stały przez czas życia procesu (odróżnia reinstalację).</summary>
+/// <summary>This installation's identifier, fixed for the process lifetime (it distinguishes a reinstall).</summary>
 public static class ServerIdentity
 {
     public static string InstanceId { get; } = Guid.NewGuid().ToString();

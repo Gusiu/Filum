@@ -21,7 +21,7 @@ public class VerifyServiceTests
     private static VerifyService Service(Harness h) => new(h.Paths, h.Options);
 
     [Fact]
-    public async Task NienaruszonyPlik_JestPotwierdzany()
+    public async Task AnIntactFile_IsConfirmed()
     {
         using var h = new Harness();
         h.Seed("DCIM/a.jpg", Harness.Bytes("zawartość"), Mtime);
@@ -37,7 +37,7 @@ public class VerifyServiceTests
     }
 
     [Fact]
-    public async Task PrzeklamanyBajt_JestWykrywany()
+    public async Task ACorruptedByte_IsDetected()
     {
         // To jest cały powód istnienia tego trybu: nośnik potrafi po cichu przekłamać
         // zawartość, a rozmiar i mtime pozostają bez zmian, więc zwykłe wykrywanie
@@ -55,7 +55,7 @@ public class VerifyServiceTests
     }
 
     [Fact]
-    public async Task BrakujacyPlik_JestZglaszanyOsobno()
+    public async Task MissingFile_IsReportedSeparately()
     {
         // Brak i przekłamanie znaczą co innego: pierwsze wymaga dosłania pliku,
         // drugie oznacza problem z nośnikiem.
@@ -71,7 +71,7 @@ public class VerifyServiceTests
     }
 
     [Fact]
-    public async Task SciezkaNieDoPrzyjecia_JestTraktowanaJakoBrak()
+    public async Task AnUnacceptablePath_IsTreatedAsMissing()
     {
         using var h = new Harness();
 
@@ -84,7 +84,7 @@ public class VerifyServiceTests
     }
 
     [Fact]
-    public async Task WieleSciezekNaraz_RozdzielaSieNaTrzyListy()
+    public async Task ManyPathsAtOnce_SplitIntoThreeLists()
     {
         using var h = new Harness();
         h.Seed("dobry.txt", Harness.Bytes("aaa"), Mtime);
@@ -125,7 +125,7 @@ public class OrphanReporterTests
     }
 
     [Fact]
-    public void PlikNieobecnyWManifescie_JestSierota()
+    public void AFileAbsentFromTheManifest_IsAnOrphan()
     {
         using var h = new Harness();
         h.Seed("DCIM/zostal.jpg", Harness.Bytes("aaa"), Mtime);
@@ -139,7 +139,7 @@ public class OrphanReporterTests
     }
 
     [Fact]
-    public void SierotyLiczoneSaZeScalonychPartii()
+    public void OrphansAreComputedFromTheMergedBatches()
     {
         // Sesja obejmująca sto tysięcy plików to pięćdziesiąt żądań; raport musi
         // widzieć sumę wszystkich, a nie tylko ostatniej partii.
@@ -157,7 +157,7 @@ public class OrphanReporterTests
     }
 
     [Fact]
-    public void SierotyPodawaneSaWPostaciKanonicznej()
+    public void OrphansAreReportedInCanonicalForm()
     {
         // Na dysku plik leży pod nazwą po sanityzacji, ale telefon zna wyłącznie
         // postać kanoniczną — raport w postaci dyskowej byłby dla niego bezużyteczny.
@@ -170,7 +170,7 @@ public class OrphanReporterTests
     }
 
     [Fact]
-    public void RaportDajeSieOdczytacPoZakonczeniuSesji()
+    public void TheReportCanBeReadOnceTheSessionCloses()
     {
         using var h = new Harness();
         h.Seed("a.txt", Harness.Bytes("a"), Mtime);
@@ -183,7 +183,7 @@ public class OrphanReporterTests
     }
 
     [Fact]
-    public void RaportDlaNieznanejSesji_NieIstnieje()
+    public void AReportForAnUnknownSession_DoesNotExist()
     {
         using var h = new Harness();
 
@@ -191,7 +191,7 @@ public class OrphanReporterTests
     }
 
     [Fact]
-    public void PlikiRoboczeSesji_SaSprzatanePoZakonczeniu()
+    public void SessionScratchFiles_AreCleanedUpAfterwards()
     {
         using var h = new Harness();
         h.Seed("a.txt", Harness.Bytes("a"), Mtime);
@@ -203,7 +203,7 @@ public class OrphanReporterTests
     }
 
     [Fact]
-    public void RaportNiczegoNieUsuwa()
+    public void TheReportDeletesNothing()
     {
         // Niezmiennik I1 obowiązuje także tutaj. Raport informuje, decyzja należy
         // do użytkownika i zapada poza aplikacją.
@@ -216,7 +216,7 @@ public class OrphanReporterTests
     }
 
     [Fact]
-    public void IdentyfikatorSesji_NieMozeWyjscPozaKatalog()
+    public void SessionIdentifier_CannotEscapeTheDirectory()
     {
         // Identyfikator pochodzi od klienta i trafia do nazwy pliku.
         using var h = new Harness();
@@ -229,7 +229,7 @@ public class OrphanReporterTests
     }
 
     [Fact]
-    public void NajnowszyRaport_JestDostepnyDlaPanelu()
+    public void TheLatestReport_IsAvailableToThePanel()
     {
         using var h = new Harness();
         h.Seed("a.txt", Harness.Bytes("a"), Mtime);

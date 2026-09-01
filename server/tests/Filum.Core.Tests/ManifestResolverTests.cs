@@ -14,7 +14,7 @@ public class ManifestResolverTests
     private static ManifestEntry Entry(string path, long size, long mtime) => new(path, size, mtime);
 
     [Fact]
-    public void PlikZgodnyCoDoRozmiaruIMtime_LiczySieJakoPosiadany()
+    public void AFileMatchingOnSizeAndMtime_CountsAsHeld()
     {
         using var h = new Harness();
         var content = Harness.Bytes("zawartość");
@@ -27,7 +27,7 @@ public class ManifestResolverTests
     }
 
     [Fact]
-    public void PlikNieobecny_TrafiaDoNeededOdZera()
+    public void AnAbsentFile_LandsInNeededFromZero()
     {
         using var h = new Harness();
 
@@ -41,7 +41,7 @@ public class ManifestResolverTests
     }
 
     [Fact]
-    public void PlikOInnymMtime_TrafiaDoNeededZeZnacznikiemWersjonowania()
+    public void AFileWithADifferentMtime_LandsInNeededFlaggedForVersioning()
     {
         using var h = new Harness();
         var content = Harness.Bytes("zawartość");
@@ -56,7 +56,7 @@ public class ManifestResolverTests
     }
 
     [Fact]
-    public void PlikOInnymRozmiarze_TrafiaDoNeededZeZnacznikiemWersjonowania()
+    public void AFileWithADifferentSize_LandsInNeededFlaggedForVersioning()
     {
         using var h = new Harness();
         h.Seed("Documents/notatka.txt", Harness.Bytes("krótka"), Mtime);
@@ -67,7 +67,7 @@ public class ManifestResolverTests
     }
 
     [Fact]
-    public async Task NiedokonczonyTransfer_DajePrzesuniecieWznowienia()
+    public async Task AnUnfinishedTransfer_YieldsAResumeOffset()
     {
         using var h = new Harness();
         var content = Harness.Bytes("0123456789ABCDEF");
@@ -79,7 +79,7 @@ public class ManifestResolverTests
     }
 
     [Fact]
-    public async Task FragmentDlaInnejWersjiPliku_NieJestUzywanyDoWznowienia()
+    public async Task PartFromADifferentVersion_IsNotUsedToResume()
     {
         using var h = new Harness();
         var content = Harness.Bytes("0123456789ABCDEF");
@@ -92,7 +92,7 @@ public class ManifestResolverTests
     }
 
     [Fact]
-    public void SciezkaNieDoPrzyjecia_TrafiaDoRejected_ANieDoNeeded()
+    public void AnUnacceptablePath_LandsInRejected_NotInNeeded()
     {
         // Bez tego klient dowiedziałby się o odrzuceniu dopiero z 422 przy PUT,
         // czyli po jednym zmarnowanym żądaniu na każdy taki plik.
@@ -111,7 +111,7 @@ public class ManifestResolverTests
     }
 
     [Fact]
-    public void RecznieUsunietyPlik_JestPonowieZgloszonyJakoPotrzebny()
+    public void AManuallyDeletedFile_IsReportedAsNeededAgain()
     {
         // Konsekwencja ADR-003: skoro źródłem prawdy jest dysk, to usunięcie pliku
         // w Eksploratorze musi zostać wykryte i plik dosłany.
@@ -130,7 +130,7 @@ public class ManifestResolverTests
     }
 
     [Fact]
-    public void PustaPartia_ZwracaPustaOdpowiedz()
+    public void AnEmptyBatch_ReturnsAnEmptyAnswer()
     {
         using var h = new Harness();
 

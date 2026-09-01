@@ -4,51 +4,51 @@
 
 <main>
     <h1>Filum</h1>
-    <p class="przygaszony">Kopia zapasowa telefonu na tym komputerze. Nic nie jest tu usuwane.</p>
+    <p class="muted">A backup of your phone on this computer. Nothing here is ever deleted.</p>
 
     <nav>
-        <a href="/" class="aktywny">Stan</a>
-        <a href="/parowanie">Parowanie</a>
+        <a href="/" class="active">Status</a>
+        <a href="/pairing">Pairing</a>
     </nav>
 
     @if (snapshot is null)
     {
-        <p>Wczytuję…</p>
+        <p>Loading…</p>
     }
     else
     {
-        <div class="karta">
-            <dl class="pola">
-                <dt>Serwer</dt>
-                <dd>@snapshot.ServerName <span class="przygaszony">wersja @snapshot.Version</span></dd>
+        <div class="card">
+            <dl class="fields">
+                <dt>Server</dt>
+                <dd>@snapshot.ServerName <span class="muted">version @snapshot.Version</span></dd>
 
-                <dt>Klucz</dt>
+                <dt>Key</dt>
                 <dd class="mono">@snapshot.Pin</dd>
 
-                <dt>Katalog kopii</dt>
+                <dt>Backup directory</dt>
                 <dd class="mono">@snapshot.BackupRoot</dd>
 
-                <dt>Wolne miejsce</dt>
+                <dt>Free space</dt>
                 <dd>
-                    @Format.Bytes(snapshot.FreeBytes) z @Format.Bytes(snapshot.TotalBytes)
+                    @Format.Bytes(snapshot.FreeBytes) of @Format.Bytes(snapshot.TotalBytes)
                     @if (snapshot.FreeBytes < 20L * 1024 * 1024 * 1024)
                     {
-                        <span class="ostrzezenie">— zostało niewiele</span>
+                        <span class="warning">— running low</span>
                     }
                 </dd>
 
-                <dt>Adresy</dt>
+                <dt>Addresses</dt>
                 <dd class="mono">@string.Join(", ", snapshot.Endpoints)</dd>
             </dl>
         </div>
 
-        <h2>Urządzenia</h2>
+        <h2>Devices</h2>
 
         @if (snapshot.Devices.Count == 0)
         {
-            <div class="karta">
-                <p>Nie sparowano jeszcze żadnego telefonu.</p>
-                <a href="/parowanie"><button class="glowny">Sparuj telefon</button></a>
+            <div class="card">
+                <p>No phone has been paired yet.</p>
+                <a href="/pairing"><button class="primary">Pair a phone</button></a>
             </div>
         }
         else
@@ -56,12 +56,12 @@
             <table>
                 <thead>
                 <tr>
-                    <th>Nazwa</th>
-                    <th>Plików</th>
-                    <th>Rozmiar</th>
-                    <th>Ostatnia zmiana</th>
-                    <th>Bez odpowiednika</th>
-                    <th>Rejestr</th>
+                    <th>Name</th>
+                    <th>Files</th>
+                    <th>Size</th>
+                    <th>Last change</th>
+                    <th>No counterpart</th>
+                    <th>Ledger</th>
                     <th></th>
                 </tr>
                 </thead>
@@ -73,9 +73,9 @@
                             @entry.Label
                             @if (!entry.Enabled)
                             {
-                                <span class="ostrzezenie"> — wyłączone</span>
+                                <span class="warning"> — disabled</span>
                             }
-                            <div class="mono przygaszony">@entry.Slug</div>
+                            <div class="mono muted">@entry.Slug</div>
                         </td>
                         <td>@entry.FileCount</td>
                         <td>@Format.Bytes(entry.BytesStored)</td>
@@ -83,36 +83,36 @@
                         <td>
                             @if (entry.OrphanCount > 0)
                             {
-                                <a href="@($"/sieroty/{entry.Slug}")">
+                                <a href="@($"/orphans/{entry.Slug}")">
                                     @entry.OrphanCount (@Format.Bytes(entry.OrphanBytes))
                                 </a>
                             }
                             else
                             {
-                                <span class="przygaszony">—</span>
+                                <span class="muted">—</span>
                             }
                         </td>
                         <td>
                             @if (entry.Ledger is not { } ledger)
                             {
-                                <span class="przygaszony">—</span>
+                                <span class="muted">—</span>
                             }
                             else if (ledger.Intact)
                             {
-                                <span>@ledger.Entries wpisów</span>
-                                <div class="przygaszony">łańcuch spójny</div>
+                                <span>@ledger.Entries entries</span>
+                                <div class="muted">chain intact</div>
                             }
                             else
                             {
-                                @* Naruszony łańcuch jest jedyną rzeczą w panelu, która znaczy
-                                   „ktoś tu grzebał". Musi się rzucać w oczy i podawać wiersz,
-                                   od którego zaczyna się rozjazd — bez tego zgłoszenie jest
-                                   alarmem, z którym nie da się nic zrobić. *@
-                                <span class="ostrzezenie">rejestr naruszony</span>
-                                <div class="przygaszony">
+                                @* A broken chain is the one thing in this panel that means
+                                   somebody has been at the files. It has to stand out and it
+                                   has to name the entry the divergence starts from — without
+                                   that, the report is an alarm nobody can act on. *@
+                                <span class="warning">ledger tampered with</span>
+                                <div class="muted">
                                     @if (ledger.BrokenAtSequence is { } at)
                                     {
-                                        <text>od wpisu @at. </text>
+                                        <text>from entry @at. </text>
                                     }
                                     @ledger.Problem
                                 </div>
@@ -120,7 +120,7 @@
                         </td>
                         <td>
                             <button @onclick="() => Toggle(entry)">
-                                @(entry.Enabled ? "Wyłącz" : "Włącz")
+                                @(entry.Enabled ? "Disable" : "Enable")
                             </button>
                         </td>
                     </tr>
@@ -128,9 +128,9 @@
                 </tbody>
             </table>
 
-            <p class="przygaszony">
-                Wyłączone urządzenie nie może już nic wysłać, ale jego dotychczasowa kopia
-                zostaje nietknięta.
+            <p class="muted">
+                A disabled device can no longer send anything, but the copy it has already
+                made stays untouched.
             </p>
         }
     }

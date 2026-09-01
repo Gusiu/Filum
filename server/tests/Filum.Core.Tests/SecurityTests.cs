@@ -14,7 +14,7 @@ namespace Filum.Core.Tests;
 public class CertificateStoreTests
 {
     [Fact]
-    public void OdciskKlucza_Ma43Znaki_IJestBase64Url()
+    public void KeyFingerprint_Is43Characters_AndBase64Url()
     {
         using var store = CertificateStore.InMemory().Certificate;
 
@@ -27,7 +27,7 @@ public class CertificateStoreTests
     }
 
     [Fact]
-    public void DwaCertyfikaty_MajaRozneOdciski()
+    public void TwoCertificates_HaveDifferentFingerprints()
     {
         using var first = CertificateStore.InMemory().Certificate;
         using var second = CertificateStore.InMemory().Certificate;
@@ -36,7 +36,7 @@ public class CertificateStoreTests
     }
 
     [Fact]
-    public void PonowneWczytanie_ZachowujeTenSamOdcisk()
+    public void ReloadingIt_KeepsTheSameFingerprint()
     {
         // Odcisk jest tożsamością serwera — gdyby zmieniał się przy restarcie,
         // każde uruchomienie unieważniałoby wszystkie sparowane telefony.
@@ -49,7 +49,7 @@ public class CertificateStoreTests
     }
 
     [Fact]
-    public void CertyfikatMaKluczPrywatny_WymaganyPrzezKestrela()
+    public void CertificateHasPrivateKey_AsKestrelRequires()
     {
         using var directory = new TempRoot();
 
@@ -63,7 +63,7 @@ public class CertificateStoreTests
 public class DeviceRegistryTests
 {
     [Fact]
-    public void Rejestracja_TworzyKatalogIZapisDevice()
+    public void Registration_CreatesTheDirectoryAndTheDeviceRecord()
     {
         using var h = new Harness();
         var registry = new DeviceRegistry(h.Paths);
@@ -75,7 +75,7 @@ public class DeviceRegistryTests
     }
 
     [Fact]
-    public void PonowneParowanieTymSamymKluczem_NieTworzyDrugiegoKatalogu()
+    public void PairingAgainWithTheSameKey_CreatesNoSecondDirectory()
     {
         // Inaczej użytkownik gubiłby dostęp do dotychczasowej kopii przy każdym
         // ponownym zeskanowaniu kodu QR.
@@ -91,7 +91,7 @@ public class DeviceRegistryTests
     }
 
     [Fact]
-    public void StanPrzezywaRestart_BoZrodlemPrawdyJestDysk()
+    public void StateSurvivesARestart_BecauseTheDiskIsTheSourceOfTruth()
     {
         using var h = new Harness();
         new DeviceRegistry(h.Paths).Register("PIN-AAA", "Telefon");
@@ -102,7 +102,7 @@ public class DeviceRegistryTests
     }
 
     [Fact]
-    public void WylaczenieUrzadzenia_JestTrwale()
+    public void DisablingADevice_Persists()
     {
         using var h = new Harness();
         var registry = new DeviceRegistry(h.Paths);
@@ -117,7 +117,7 @@ public class DeviceRegistryTests
     [InlineData("Galaxy S24 Ultra", "galaxy-s24-ultra-abcdef")]
     [InlineData("  ", "urzadzenie-abcdef")]
     [InlineData("Telefon@#$%Żony", "telefon-ony-abcdef")]
-    public void NazwaKatalogu_JestCzytelnaIBezpiecznaDlaNtfs(string label, string expected)
+    public void DirectoryName_IsLegibleAndSafeForNtfs(string label, string expected)
     {
         Assert.Equal(expected, DeviceRegistry.MakeSlug(label, "abcdef1234"));
     }
@@ -129,7 +129,7 @@ public class PairingServiceTests
     private static PairingService Service(FakeTimeProvider time) => new(time);
 
     [Fact]
-    public void Token_DzialaDokladnieRaz()
+    public void AToken_WorksExactlyOnce()
     {
         var time = new FakeTimeProvider();
         var service = Service(time);
@@ -140,7 +140,7 @@ public class PairingServiceTests
     }
 
     [Fact]
-    public void Token_WygasaPo10Minutach()
+    public void AToken_ExpiresAfter10Minutes()
     {
         var time = new FakeTimeProvider();
         var service = Service(time);
@@ -152,13 +152,13 @@ public class PairingServiceTests
     }
 
     [Fact]
-    public void NieznanyToken_JestOdrzucany()
+    public void AnUnknownToken_IsRejected()
     {
         Assert.False(Service(new FakeTimeProvider()).TryConsume("cokolwiek"));
     }
 
     [Fact]
-    public void LadunekKoduQr_ZawieraOdciskKluczaSerwera()
+    public void QrPayload_ContainsTheServerKeyFingerprint()
     {
         var payload = new QrPayload("PC", "PIN-SERWERA", "TOKEN", 8765, ["192.168.1.5:8765"], "filum-abc");
 
@@ -182,7 +182,7 @@ public class PairingServiceTests
 public class PairingRateLimiterTests
 {
     [Fact]
-    public void Po5ProbachZTegoSamegoAdresu_KolejnaJestOdrzucana()
+    public void After5AttemptsFromTheSameAddress_TheNextIsRefused()
     {
         var limiter = new PairingRateLimiter(new FakeTimeProvider());
 
@@ -192,7 +192,7 @@ public class PairingRateLimiterTests
     }
 
     [Fact]
-    public void InnyAdres_MaWlasnyLimit()
+    public void ADifferentAddress_HasItsOwnLimit()
     {
         var limiter = new PairingRateLimiter(new FakeTimeProvider());
         for (var i = 0; i < 5; i++) limiter.TryRegisterAttempt("10.0.0.1");
@@ -201,7 +201,7 @@ public class PairingRateLimiterTests
     }
 
     [Fact]
-    public void PoOknieCzasowym_LimitSieOdnawia()
+    public void AfterTheTimeWindow_TheLimitResets()
     {
         var time = new FakeTimeProvider();
         var limiter = new PairingRateLimiter(time);
@@ -219,7 +219,7 @@ public class PairingRateLimiterTests
 public class AuthenticationTests
 {
     [Fact]
-    public async Task ParowanieRejestrujeUrzadzenie_IOdblokowujeZasoby()
+    public async Task PairingRegistersTheDevice_AndUnlocksTheResources()
     {
         using var app = new FilumApp();
         var client = app.CreateClient();
@@ -234,7 +234,7 @@ public class AuthenticationTests
     }
 
     [Fact]
-    public async Task KodQr_NiesieOdciskKluczaSerwera()
+    public async Task QrCode_CarriesTheServerKeyFingerprint()
     {
         using var app = new FilumApp();
 
@@ -247,7 +247,7 @@ public class AuthenticationTests
     }
 
     [Fact]
-    public async Task Parowanie_BezTokenu_Zwraca401()
+    public async Task Pairing_WithoutAToken_Returns401()
     {
         using var app = new FilumApp();
 
@@ -257,7 +257,7 @@ public class AuthenticationTests
     }
 
     [Fact]
-    public async Task Parowanie_ZuzytymTokenem_Zwraca401()
+    public async Task Pairing_WithASpentToken_Returns401()
     {
         using var app = new FilumApp();
         var client = app.CreateClient();
@@ -271,7 +271,7 @@ public class AuthenticationTests
     }
 
     [Fact]
-    public async Task Parowanie_ZepsutymCertyfikatem_Zwraca400()
+    public async Task Pairing_WithABrokenCertificate_Returns400()
     {
         using var app = new FilumApp();
         var offer = await app.NewPairingAsync();
@@ -283,7 +283,7 @@ public class AuthenticationTests
     }
 
     [Fact]
-    public async Task NieznanyKluczKlienta_Zwraca401()
+    public async Task AnUnknownClientKey_Returns401()
     {
         using var app = new FilumApp();
         await app.PairAsync();
@@ -297,7 +297,7 @@ public class AuthenticationTests
     }
 
     [Fact]
-    public async Task WylaczoneUrzadzenie_Zwraca403()
+    public async Task ADisabledDevice_Returns403()
     {
         using var app = new FilumApp();
         await app.PairAsync();
@@ -313,7 +313,7 @@ public class AuthenticationTests
     }
 
     [Fact]
-    public async Task ZapisPlikuBezUwierzytelnienia_JestNiemozliwy()
+    public async Task WritingAFileWithoutAuthentication_IsImpossible()
     {
         // Najważniejszy test tego etapu: bez sparowanego klucza nie da się nic zapisać
         // na dysku, więc serwer wolno wystawić na sieć lokalną.
@@ -347,7 +347,7 @@ public class PanelAccessTests
     private static readonly IPAddress Obcy = IPAddress.Parse("192.168.1.77");
 
     [Fact]
-    public async Task Panel_ZPetliZwrotnej_JestDostepny()
+    public async Task Panel_FromLoopback_IsReachable()
     {
         using var app = new FilumApp();
 
@@ -357,7 +357,7 @@ public class PanelAccessTests
     }
 
     [Fact]
-    public async Task Panel_ZSieci_JestOdrzucany()
+    public async Task Panel_FromTheNetwork_IsRefused()
     {
         using var app = new FilumApp { RemoteAddress = Obcy };
 
@@ -367,7 +367,7 @@ public class PanelAccessTests
     }
 
     [Fact]
-    public async Task WydawanieTokenu_ZSieci_JestOdrzucane()
+    public async Task TokenIssuing_FromTheNetwork_IsRefused()
     {
         // Inaczej dowolne urządzenie w sieci mogłoby wygenerować sobie token
         // i sparować się bez wiedzy właściciela komputera.
@@ -379,7 +379,7 @@ public class PanelAccessTests
     }
 
     [Fact]
-    public async Task Status_ZSieci_JestOdrzucany()
+    public async Task Status_FromTheNetwork_IsRefused()
     {
         using var app = new FilumApp { RemoteAddress = Obcy };
 
@@ -389,7 +389,7 @@ public class PanelAccessTests
     }
 
     [Fact]
-    public async Task Status_ZPetliZwrotnej_PokazujeSparowaneUrzadzenia()
+    public async Task Status_FromLoopback_ShowsThePairedDevices()
     {
         using var app = new FilumApp();
         await app.PairAsync("Galaxy S24 Ultra");
@@ -403,7 +403,7 @@ public class PanelAccessTests
     }
 
     [Fact]
-    public async Task Parowanie_ZSieci_Jest_Dozwolone()
+    public async Task Pairing_FromTheNetwork_IsAllowed()
     {
         // Telefon paruje się przez sieć, więc /pair musi być osiągalne z zewnątrz.
         // Chroni go token jednorazowy, a nie adres źródłowy.
@@ -417,7 +417,7 @@ public class PanelAccessTests
     }
 
     [Fact]
-    public async Task Rozparowanie_NieUsuwaPlikow()
+    public async Task Unpairing_DeletesNoFiles()
     {
         // Najczęstszy powód rozparowania to zgubiony telefon — czyli dokładnie ta
         // chwila, w której kopia jest najbardziej potrzebna (niezmiennik I1).
@@ -441,7 +441,7 @@ public class PanelAccessTests
 public class PairingCodeRenderingTests
 {
     [Fact]
-    public async Task KodParowania_NiesieOdciskKluczaIRysujeSieJakoSvg()
+    public async Task PairingCode_CarriesTheKeyFingerprintAndRendersAsSvg()
     {
         using var app = new FilumApp();
         var admin = app.Services.GetRequiredService<AdminService>();
@@ -459,7 +459,7 @@ public class PairingCodeRenderingTests
     }
 
     [Fact]
-    public async Task KazdeWywolanie_DajeInnyToken()
+    public async Task EveryCall_YieldsADifferentToken()
     {
         // Token jest jednorazowy, więc dwa kody z rzędu nie mogą być tym samym kodem —
         // inaczej drugi telefon nie miałby czym się sparować.
@@ -483,7 +483,7 @@ public class PairingCodeRenderingTests
 public class MdnsAdvertiserTests
 {
     [Fact]
-    public void NazwaInstancji_ZgadzaSieZPolemWKodzieParowania()
+    public void InstanceName_MatchesTheFieldInThePairingCode()
     {
         // Telefon dopasowuje rozgłoszenie do serwera, z którym się sparował, po tym
         // właśnie ciągu — rozjazd między tymi dwoma miejscami sprawiłby, że
@@ -495,13 +495,13 @@ public class MdnsAdvertiserTests
     }
 
     [Fact]
-    public void TypUslugi_JestZgodnyZeSpecyfikacja()
+    public void TheServiceType_MatchesTheSpecification()
     {
         Assert.Equal("_filum._tcp", MdnsAdvertiser.ServiceType);
     }
 
     [Fact]
-    public async Task NieudaneRozglaszanie_NiePrzerywaStartuSerwera()
+    public async Task FailedAdvertising_DoesNotStopTheServerStarting()
     {
         // Rozgłaszanie jest wygodą, nie warunkiem działania: zapora albo sieć bez
         // obsługi multicastu nie mogą uniemożliwić przyjmowania kopii zapasowej.

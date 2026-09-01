@@ -1,53 +1,53 @@
-@page "/sieroty/{Slug}"
+@page "/orphans/{Slug}"
 @inject AdminService Admin
 @rendermode InteractiveServer
 
 <main>
-    <h1>Pliki bez odpowiednika w telefonie</h1>
+    <h1>Files with no counterpart on the phone</h1>
 
     <nav>
-        <a href="/">Stan</a>
-        <a href="/parowanie">Parowanie</a>
+        <a href="/">Status</a>
+        <a href="/pairing">Pairing</a>
     </nav>
 
     @if (report is null)
     {
-        <div class="karta">
-            <p>Dla tego urządzenia nie ma jeszcze raportu.</p>
-            <p class="przygaszony">
-                Powstaje po pełnym uzgodnieniu, które telefon wykonuje okresowo —
-                skan przyrostowy nie wie nic o plikach, o których nie wspomniał,
-                więc nie da się z niego wyliczyć różnicy.
+        <div class="card">
+            <p>There is no report for this device yet.</p>
+            <p class="muted">
+                One is produced after a full reconciliation, which the phone performs
+                periodically — an incremental scan knows nothing about the files it did not
+                mention, so no difference can be derived from it.
             </p>
         </div>
     }
     else if (report.Count == 0)
     {
-        <div class="karta">
-            <p>Kopia odpowiada zawartości telefonu — nie ma plików bez odpowiednika.</p>
-            <p class="przygaszony">Stan na @Format.Moment(report.GeneratedAt).</p>
+        <div class="card">
+            <p>The copy matches the phone's contents — no files are without a counterpart.</p>
+            <p class="muted">As of @Format.Moment(report.GeneratedAt).</p>
         </div>
     }
     else
     {
-        <div class="karta">
+        <div class="card">
             <p>
-                <strong>@report.Count</strong> plików o łącznym rozmiarze
-                <strong>@Format.Bytes(report.Bytes)</strong> jest w kopii, ale nie ma ich już
-                w telefonie. Zwykle to pliki usunięte albo przeniesione w inne miejsce.
+                <strong>@report.Count</strong> files totalling
+                <strong>@Format.Bytes(report.Bytes)</strong> are in the copy but no longer on
+                the phone. Usually these are files that were deleted or moved elsewhere.
             </p>
-            <p class="przygaszony">
-                Filum niczego z tym nie robi i nie zrobi — to jest kopia zapasowa,
-                a jej sensem jest przetrwanie usunięcia w telefonie. Lista służy do tego,
-                żeby decyzję mógł podjąć człowiek, jeśli zabraknie miejsca na dysku.
-                Stan na @Format.Moment(report.GeneratedAt).
+            <p class="muted">
+                Filum does nothing about this and never will — this is a backup, and its
+                whole point is to survive a deletion on the phone. The list exists so that a
+                person can make the decision, should the disk start running out of space.
+                As of @Format.Moment(report.GeneratedAt).
             </p>
         </div>
 
-        <div class="karta">
+        <div class="card">
             <table>
                 <thead>
-                <tr><th>Ścieżka w telefonie</th></tr>
+                <tr><th>Path on the phone</th></tr>
                 </thead>
                 <tbody>
                 @foreach (var path in report.Paths.Take(Limit))
@@ -59,10 +59,10 @@
 
             @if (report.Paths.Count > Limit)
             {
-                <p class="przygaszony">
-                    Pokazano @Limit z @report.Paths.Count. Pełna lista jest w pliku
+                <p class="muted">
+                    Showing @Limit of @report.Paths.Count. The full list is in
                     <span class="mono">.filum/orphans-@(report.Session).json</span>
-                    w katalogu urządzenia.
+                    in the device's directory.
                 </p>
             }
         </div>
@@ -70,7 +70,7 @@
 </main>
 
 @code {
-    /// <summary>Ile ścieżek pokazujemy na stronie. Reszta i tak jest w pliku raportu.</summary>
+    /// <summary>How many paths we show on the page. The rest are in the report file anyway.</summary>
     private const int Limit = 500;
 
     [Parameter]
