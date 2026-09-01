@@ -6,11 +6,11 @@ using System.Text.Json;
 namespace Filum.Core.Tests;
 
 /// <summary>
-/// Odczyt paczki małych plików (§5.4 protokołu, ADR-008).
+/// Reading a bundle of small files (protocol §5.4, ADR-008).
 ///
-/// Ramkowanie jest binarne, więc jedyne, co naprawdę może pójść nie tak, to granice:
-/// przesunięcie o bajt sprawia, że nagłówek następnego pliku czytamy ze środka
-/// zawartości poprzedniego. Testy celują właśnie w to.
+/// The framing is binary, so the one thing that can genuinely go wrong is the boundaries:
+/// slip by a byte and the next file's header gets read from the middle of the previous
+/// file's content. That is what these tests aim at.
 /// </summary>
 public class BundleReaderTests
 {
@@ -18,7 +18,7 @@ public class BundleReaderTests
 
     private static string Digest(byte[] content) => Convert.ToHexStringLower(SHA256.HashData(content));
 
-    /// <summary>Buduje paczkę w postaci, w jakiej wysyła ją klient.</summary>
+    /// <summary>Builds a bundle in the form the client sends it.</summary>
     private static byte[] Bundle(params (string Path, string Content, string? Digest)[] files)
     {
         using var stream = new MemoryStream();
@@ -70,8 +70,8 @@ public class BundleReaderTests
     [Fact]
     public async Task FileBoundariesHold_ContentDoesNotLeakBetweenThem()
     {
-        // Przesunięcie o jeden bajt objawiłoby się właśnie tutaj: drugi plik dostałby
-        // ogon pierwszego, a trzeci nagłówek czytalibyśmy ze środka danych.
+        // A one-byte slip would show up right here: the second file would get the tail of
+        // the first, and the third header would be read from the middle of the data.
         using var h = new Harness();
 
         await ReadAsync(h, Bundle(
@@ -102,7 +102,7 @@ public class BundleReaderTests
         Assert.Equal(Mtime, h.StoredMtime("a.txt"));
     }
 
-    // --- częściowe powodzenie ---
+    // --- partial success ---
 
     [Fact]
     public async Task AWrongDigest_RejectsOneFile_NotTheWholeBundle()
@@ -111,13 +111,13 @@ public class BundleReaderTests
 
         var results = await ReadAsync(h, Bundle(
             ("dobry.txt", "poprawna zawartosc", null),
-            ("zly.txt", "zawartosc", Digest(Encoding.UTF8.GetBytes("coś innego"))),
+            ("bad.txt", "content", Digest(Encoding.UTF8.GetBytes("something else"))),
             ("kolejny.txt", "tez poprawna", null)));
 
         Assert.True(results[0].Ok);
         Assert.False(results[1].Ok);
         Assert.Equal("digest_mismatch", results[1].Error);
-        Assert.True(results[2].Ok, "plik po odrzuconym musi dojść — ramki się nie przesunęły");
+        Assert.True(results[2].Ok, "the file after the rejected one must arrive — the frames did not slip");
 
         Assert.True(h.StoredExists("dobry.txt"));
         Assert.False(h.StoredExists("zly.txt"));
@@ -138,7 +138,7 @@ public class BundleReaderTests
         Assert.True(results[1].Ok);
     }
 
-    // --- niezmiennik I2: wersjonowanie działa też w paczce ---
+    // --- invariant I2: versioning applies inside a bundle too ---
 
     [Fact]
     public async Task ANewVersionInsideABundle_FilesTheOldCopyAway()
@@ -154,7 +154,7 @@ public class BundleReaderTests
         Assert.Equal("nowa wersja", Encoding.UTF8.GetString(h.ReadStored("notatka.txt")));
     }
 
-    // --- uszkodzone ramkowanie unieważnia całą paczkę ---
+    // --- broken framing invalidates the whole bundle ---
 
     [Fact]
     public async Task ATruncatedHeader_FailsTheWholeBundle()
@@ -178,8 +178,8 @@ public class BundleReaderTests
     [Fact]
     public async Task AHeaderWithoutADigest_IsRejected()
     {
-        // Skrót jest w paczce wymagany: bez niego nie wykrylibyśmy przesunięcia ramek,
-        // bo zawartość jednego pliku wyglądałaby jak poprawna zawartość innego.
+        // The digest is required inside a bundle: without it a frame slip would go
+        // unnoticed, because one file's content would look like another's, correctly.
         using var h = new Harness();
 
         var error = await Assert.ThrowsAsync<BundleFormatException>(
@@ -192,7 +192,7 @@ public class BundleReaderTests
     public async Task AHeaderThatIsNotJson_IsRejected()
     {
         using var h = new Harness();
-        var junk = Encoding.UTF8.GetBytes("to nie jest json");
+        var junk = Encoding.UTF8.GetBytes("this is not json");
         var bundle = new byte[4 + junk.Length];
         BinaryPrimitives.WriteUInt32BigEndian(bundle, (uint)junk.Length);
         junk.CopyTo(bundle, 4);

@@ -3,9 +3,9 @@ using Filum.Protocol;
 namespace Filum.Core.Tests;
 
 /// <summary>
-/// Cykl życia transferu (§5.3 i §8.2 protokołu). To jest miejsce, w którym błąd
-/// oznacza uszkodzony albo utracony plik użytkownika, więc testy celują przede
-/// wszystkim w ścieżki błędne, nie w scenariusz szczęśliwy.
+/// The transfer lifecycle (protocol §5.3 and §8.2). This is where a mistake means a
+/// corrupted or lost file belonging to the user, so the tests aim mostly at the failure
+/// paths rather than the happy one.
 /// </summary>
 public class TransferStoreTests
 {
@@ -15,7 +15,7 @@ public class TransferStoreTests
     public async Task AnUpload_InOnePiece_LandsInFiles()
     {
         using var h = new Harness();
-        var content = Harness.Bytes("zawartość zdjęcia");
+        var content = Harness.Bytes("photo content");
 
         var outcome = await h.WriteWholeAsync("DCIM/Camera/IMG_0001.JPG", content, Mtime);
 
@@ -28,8 +28,8 @@ public class TransferStoreTests
     [Fact]
     public async Task DuringATransfer_TheFileNeverAppearsInFiles()
     {
-        // Niezmiennik I3: użytkownik ma w każdej chwili oglądać spójne drzewo,
-        // więc fragmenty nie mogą być widoczne w katalogu files/.
+        // Invariant I3: the user is to see a consistent tree at any moment, so partial
+        // files must never be visible inside files/.
         using var h = new Harness();
         var content = Harness.Bytes("0123456789");
 
@@ -71,9 +71,9 @@ public class TransferStoreTests
     [Fact]
     public async Task Resuming_WhenTheFileChanged_ForcesAStartFromZero()
     {
-        // Scenariusz z życia: nagranie wideo było jeszcze zapisywane przy poprzedniej
-        // próbie. Sklejenie starego fragmentu z nowymi bajtami dałoby plik, który
-        // nigdy nie istniał — gorzej niż brak pliku, bo wygląda na poprawny.
+        // A real-life scenario: a video recording was still being written on the previous
+        // attempt. Splicing the old part onto new bytes would produce a file that never
+        // existed — worse than no file, because it looks correct.
         using var h = new Harness();
         var first = Harness.Bytes("0123456789");
 
@@ -101,7 +101,7 @@ public class TransferStoreTests
     {
         using var h = new Harness();
         var content = Harness.Bytes("dane do sprawdzenia");
-        var wrongDigest = Harness.Digest(Harness.Bytes("coś zupełnie innego"));
+        var wrongDigest = Harness.Digest(Harness.Bytes("something else entirely"));
 
         var outcome = await h.WriteAsync("Documents/plik.txt", content, content.Length, Mtime, 0, wrongDigest);
 
@@ -116,7 +116,7 @@ public class TransferStoreTests
         using var h = new Harness();
         var content = Harness.Bytes("0123456789");
 
-        // deklarujemy 5 bajtów, wysyłamy 10
+        // declare 5 bytes, send 10
         var outcome = await h.WriteAsync("Documents/plik.txt", content, 5, Mtime, 0);
 
         Assert.Equal(ChunkStatus.TooMuchData, outcome.Status);
@@ -130,14 +130,14 @@ public class TransferStoreTests
     {
         using var h = new Harness();
         var stara = Harness.Bytes("wersja pierwsza");
-        var nowa = Harness.Bytes("wersja druga, dłuższa");
+        var updated = Harness.Bytes("second version, longer");
 
         h.Seed("Documents/notatka.txt", stara, Mtime);
-        var outcome = await h.WriteWholeAsync("Documents/notatka.txt", nowa, Mtime + 3600);
+        var outcome = await h.WriteWholeAsync("Documents/notatka.txt", updated, Mtime + 3600);
 
         Assert.Equal(ChunkStatus.Ok, outcome.Status);
         Assert.NotNull(outcome.VersionedPath);
-        Assert.Equal(nowa, h.ReadStored("Documents/notatka.txt"));
+        Assert.Equal(updated, h.ReadStored("Documents/notatka.txt"));
 
         var archived = h.VersionFiles();
         Assert.Single(archived);
@@ -155,7 +155,7 @@ public class TransferStoreTests
         const long staryMtime = 1_736_937_000;
 
         h.Seed("Documents/notatka.txt", Harness.Bytes("stara"), staryMtime);
-        await h.WriteWholeAsync("Documents/notatka.txt", Harness.Bytes("nowa"), Mtime);
+        await h.WriteWholeAsync("Documents/notatka.txt", Harness.Bytes("updated"), Mtime);
 
         var expected = DateTimeOffset.FromUnixTimeSeconds(staryMtime).UtcDateTime.ToString("yyyyMMdd'T'HHmmss'Z'");
         Assert.Equal($"notatka.{expected}.txt", h.VersionFiles().Single());
@@ -177,8 +177,8 @@ public class TransferStoreTests
     [Fact]
     public async Task ReUploadingTheSameVersion_DoesNotOverwriteTheArchive()
     {
-        // Ta sama para (rozmiar, mtime) trafia do archiwum dwa razy, więc nazwa wersji
-        // się powtarza. Nadpisanie byłoby cichą utratą danych.
+        // The same (size, mtime) pair is archived twice, so the version name repeats.
+        // Overwriting would be silent data loss.
         using var h = new Harness();
 
         h.Seed("Documents/notatka.txt", Harness.Bytes("aaaa"), Mtime);
@@ -191,7 +191,7 @@ public class TransferStoreTests
         Assert.Contains(archived, name => name.Contains("-2", StringComparison.Ordinal));
     }
 
-    // --- ścieżki i miejsce na dysku ---
+    // --- paths and disk space ---
 
     [Fact]
     public async Task APathEscapingTheDirectory_IsRejected()
@@ -221,13 +221,13 @@ public class TransferStoreTests
         using var h = new Harness();
 
         var tasks = Enumerable.Range(0, 16).Select(i =>
-            h.WriteWholeAsync($"DCIM/Camera/IMG_{i:D4}.JPG", Harness.Bytes($"zawartość {i}"), Mtime + i));
+            h.WriteWholeAsync($"DCIM/Camera/IMG_{i:D4}.JPG", Harness.Bytes($"content {i}"), Mtime + i));
 
         var outcomes = await Task.WhenAll(tasks);
 
         Assert.All(outcomes, o => Assert.Equal(ChunkStatus.Ok, o.Status));
         Assert.All(outcomes, o => Assert.True(o.Complete));
         for (var i = 0; i < 16; i++)
-            Assert.Equal(Harness.Bytes($"zawartość {i}"), h.ReadStored($"DCIM/Camera/IMG_{i:D4}.JPG"));
+            Assert.Equal(Harness.Bytes($"content {i}"), h.ReadStored($"DCIM/Camera/IMG_{i:D4}.JPG"));
     }
 }

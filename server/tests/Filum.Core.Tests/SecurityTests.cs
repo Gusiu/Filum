@@ -10,7 +10,7 @@ using Microsoft.Extensions.Time.Testing;
 
 namespace Filum.Core.Tests;
 
-/// <summary>Certyfikat serwera i odciski kluczy (§3.1 protokołu, ADR-005).</summary>
+/// <summary>The server certificate and key fingerprints (protocol §3.1, ADR-005).</summary>
 public class CertificateStoreTests
 {
     [Fact]
@@ -38,8 +38,8 @@ public class CertificateStoreTests
     [Fact]
     public void ReloadingIt_KeepsTheSameFingerprint()
     {
-        // Odcisk jest tożsamością serwera — gdyby zmieniał się przy restarcie,
-        // każde uruchomienie unieważniałoby wszystkie sparowane telefony.
+        // The fingerprint is the server's identity — were it to change on restart, every
+        // start-up would invalidate every paired phone.
         using var directory = new TempRoot();
 
         var first = CertificateStore.LoadOrCreate(directory.Path);
@@ -59,7 +59,7 @@ public class CertificateStoreTests
     }
 }
 
-/// <summary>Rejestr sparowanych urządzeń.</summary>
+/// <summary>The registry of paired devices.</summary>
 public class DeviceRegistryTests
 {
     [Fact]
@@ -77,16 +77,16 @@ public class DeviceRegistryTests
     [Fact]
     public void PairingAgainWithTheSameKey_CreatesNoSecondDirectory()
     {
-        // Inaczej użytkownik gubiłby dostęp do dotychczasowej kopii przy każdym
+        // Otherwise the user would lose access to the existing copy on every
         // ponownym zeskanowaniu kodu QR.
         using var h = new Harness();
         var registry = new DeviceRegistry(h.Paths);
 
         var first = registry.Register("PIN-AAA", "Telefon");
-        var second = registry.Register("PIN-AAA", "Telefon po zmianie nazwy");
+        var second = registry.Register("PIN-AAA", "Phone after a rename");
 
         Assert.Equal(first.Slug, second.Slug);
-        Assert.Equal("Telefon po zmianie nazwy", second.Label);
+        Assert.Equal("Phone after a rename", second.Label);
         Assert.Single(registry.All());
     }
 
@@ -116,7 +116,7 @@ public class DeviceRegistryTests
     [Theory]
     [InlineData("Galaxy S24 Ultra", "galaxy-s24-ultra-abcdef")]
     [InlineData("  ", "urzadzenie-abcdef")]
-    [InlineData("Telefon@#$%Żony", "telefon-ony-abcdef")]
+    [InlineData("Phone@#$%Żony", "phone-ony-abcdef")]
     public void DirectoryName_IsLegibleAndSafeForNtfs(string label, string expected)
     {
         Assert.Equal(expected, DeviceRegistry.MakeSlug(label, "abcdef1234"));
@@ -214,7 +214,7 @@ public class PairingRateLimiterTests
 }
 
 /// <summary>
-/// Uwierzytelnianie przez HTTP: pełny przebieg parowania i odrzucanie nieuprawnionych.
+/// Authentication over HTTP: the full pairing exchange and the refusal of everyone else.
 /// </summary>
 public class AuthenticationTests
 {
@@ -277,7 +277,7 @@ public class AuthenticationTests
         var offer = await app.NewPairingAsync();
 
         var response = await app.PostPairAsync(
-            app.CreateClient(), offer!.Payload.Token, "Telefon", "to nie jest certyfikat");
+            app.CreateClient(), offer!.Payload.Token, "Phone", "this is not a certificate");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -315,8 +315,8 @@ public class AuthenticationTests
     [Fact]
     public async Task WritingAFileWithoutAuthentication_IsImpossible()
     {
-        // Najważniejszy test tego etapu: bez sparowanego klucza nie da się nic zapisać
-        // na dysku, więc serwer wolno wystawić na sieć lokalną.
+        // The most important test at this stage: without a paired key nothing can be
+        // written to the disk, which is what makes exposing the server on the LAN safe.
         using var app = new FilumApp();
 
         var request = new HttpRequestMessage(HttpMethod.Put, "/api/v1/file")
@@ -336,11 +336,11 @@ public class AuthenticationTests
 }
 
 /// <summary>
-/// Reguła dostępu do panelu i zasobów administracyjnych.
+/// The access rule for the panel and the administrative resources.
 ///
-/// Panel wydaje tokeny parowania i pokazuje, co leży w kopii, więc obce urządzenie
-/// w tej samej sieci nie może go dotknąć. Osoba przy komputerze jest jedynym
-/// uprawnionym odbiorcą — i to jest jedyne kryterium, jakie tu mamy.
+/// The panel issues pairing tokens and shows what is in the backup, so a stranger's device
+/// on the same network must not be able to touch it. The person at the computer is the
+/// only entitled audience — and that is the only criterion available here.
 /// </summary>
 public class PanelAccessTests
 {
@@ -369,8 +369,8 @@ public class PanelAccessTests
     [Fact]
     public async Task TokenIssuing_FromTheNetwork_IsRefused()
     {
-        // Inaczej dowolne urządzenie w sieci mogłoby wygenerować sobie token
-        // i sparować się bez wiedzy właściciela komputera.
+        // Otherwise any device on the network could mint itself a token and pair without
+        // the computer's owner knowing.
         using var app = new FilumApp { RemoteAddress = Obcy };
 
         var response = await app.CreateClient().GetAsync("/api/v1/pair/new");
@@ -405,8 +405,8 @@ public class PanelAccessTests
     [Fact]
     public async Task Pairing_FromTheNetwork_IsAllowed()
     {
-        // Telefon paruje się przez sieć, więc /pair musi być osiągalne z zewnątrz.
-        // Chroni go token jednorazowy, a nie adres źródłowy.
+        // The phone pairs over the network, so /pair has to be reachable from outside.
+        // What protects it is the single-use token, not the source address.
         using var app = new FilumApp();
         var offer = await app.NewPairingAsync();
 
@@ -419,14 +419,14 @@ public class PanelAccessTests
     [Fact]
     public async Task Unpairing_DeletesNoFiles()
     {
-        // Najczęstszy powód rozparowania to zgubiony telefon — czyli dokładnie ta
-        // chwila, w której kopia jest najbardziej potrzebna (niezmiennik I1).
+        // The most common reason to unpair is a lost phone — which is exactly the moment
+        // the backup matters most (invariant I1).
         using var app = new FilumApp();
         var slug = await app.PairAsync();
 
         var files = Path.Combine(app.Root, slug, "files", "DCIM");
         Directory.CreateDirectory(files);
-        await File.WriteAllTextAsync(Path.Combine(files, "a.jpg"), "zawartość");
+        await File.WriteAllTextAsync(Path.Combine(files, "a.jpg"), "content");
 
         var admin = app.Services.GetRequiredService<AdminService>();
         var registry = app.Services.GetRequiredService<DeviceRegistry>();
@@ -461,8 +461,8 @@ public class PairingCodeRenderingTests
     [Fact]
     public async Task EveryCall_YieldsADifferentToken()
     {
-        // Token jest jednorazowy, więc dwa kody z rzędu nie mogą być tym samym kodem —
-        // inaczej drugi telefon nie miałby czym się sparować.
+        // The token is single-use, so two codes in a row cannot be the same code —
+        // otherwise a second phone would have nothing to pair with.
         using var app = new FilumApp();
         var admin = app.Services.GetRequiredService<AdminService>();
 
@@ -479,15 +479,15 @@ public class PairingCodeRenderingTests
     }
 }
 
-/// <summary>Rozgłaszanie usługi w sieci lokalnej (§4.1 protokołu).</summary>
+/// <summary>Advertising the service on the local network (protocol §4.1).</summary>
 public class MdnsAdvertiserTests
 {
     [Fact]
     public void InstanceName_MatchesTheFieldInThePairingCode()
     {
-        // Telefon dopasowuje rozgłoszenie do serwera, z którym się sparował, po tym
-        // właśnie ciągu — rozjazd między tymi dwoma miejscami sprawiłby, że
-        // wykrywanie znajduje serwer, ale klient go nie rozpoznaje.
+        // The phone matches an advertisement to the server it paired with by exactly this
+        // string — a divergence between the two places would mean discovery finds the
+        // server while the client fails to recognise it.
         const string pin = "EhZa6VgNQovoNrFs_e2PcVbgKr8EQf4ZzTQI5slNr7A";
 
         Assert.Equal("filum-EhZa6VgN", MdnsAdvertiser.BuildInstanceName(pin));
@@ -503,8 +503,8 @@ public class MdnsAdvertiserTests
     [Fact]
     public async Task FailedAdvertising_DoesNotStopTheServerStarting()
     {
-        // Rozgłaszanie jest wygodą, nie warunkiem działania: zapora albo sieć bez
-        // obsługi multicastu nie mogą uniemożliwić przyjmowania kopii zapasowej.
+        // Advertising is a convenience, not a precondition: a firewall or a network
+        // without multicast must not stop the server from accepting a backup.
         using var app = new FilumApp();
 
         var response = await app.CreateClient().GetAsync("/api/v1/pair/new");

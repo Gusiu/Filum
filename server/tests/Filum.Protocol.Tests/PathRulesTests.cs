@@ -3,8 +3,8 @@ using System.Text;
 namespace Filum.Protocol.Tests;
 
 /// <summary>
-/// Testy reguł z docs/PATH-RULES.md. Zestaw wektorów jest wspólny z implementacją
-/// kotlinową — rozjazd między stronami ujawni się tutaj, a nie na urządzeniu.
+/// Tests for the rules in docs/PATH-RULES.md. The vector set is shared with the Kotlin
+/// implementation — a divergence between the two shows up here, not on a device.
 /// </summary>
 public class PathRulesTests
 {
@@ -40,17 +40,18 @@ public class PathRulesTests
     public void TheVectorFileIsComplete()
     {
         // Zabezpieczenie przed cichym okrojeniem pliku, np. przez edytor
-        // obcinający końcowe białe znaki albo błędny scalony merge.
+        // stripping trailing whitespace, or a badly resolved merge.
         Assert.True(TestVectors.Load().Count >= 30);
     }
 
-    // --- różnowartościowość: powód, dla którego kodujemy procentowo (ADR-009) ---
+    // --- injectivity: the reason we percent-encode at all (ADR-009) ---
 
     [Fact]
     public void Encoding_IsInjective_ForForbiddenCharacters()
     {
-        // Podmiana znaków zabronionych na '_' sprowadziłaby obie ścieżki do jednej
-        // i drugi plik cicho nadpisałby pierwszy. To jest test tej właśnie regresji.
+        // Replacing forbidden characters with '_' would collapse both paths into one and
+        // the second file would silently overwrite the first. This is the test for exactly
+        // that regression.
         var a = PathRules.Sanitize("Documents/a<b.txt").Stored;
         var b = PathRules.Sanitize("Documents/a_b.txt").Stored;
 
@@ -60,7 +61,7 @@ public class PathRulesTests
     [Fact]
     public void Encoding_IsInjective_ForTextThatLooksEncoded()
     {
-        // Gdyby '%' nie było kodowane jako pierwsze, obie nazwy zderzyłyby się
+        // If '%' were not encoded first, both names would collide
         // po dekodowaniu.
         var a = PathRules.Sanitize("Documents/a%3Ab.txt").Stored;
         var b = PathRules.Sanitize("Documents/a:b.txt").Stored;
@@ -79,13 +80,13 @@ public class PathRulesTests
         Assert.Equal(stored.Count, stored.Distinct(StringComparer.Ordinal).Count());
     }
 
-    // --- kolizje wielkości liter (§6) ---
+    // --- case collisions (§6) ---
 
     [Fact]
     public void TheCollisionSuffix_IsStable()
     {
-        // Wartość podana wprost w docs/PATH-RULES.md §6 — dokumentacja i kod
-        // muszą się zgadzać, inaczej implementacja kotlinowa pójdzie za dokumentem.
+        // The value is stated outright in docs/PATH-RULES.md §6 — the document and the
+        // code have to agree, or the Kotlin implementation will follow the document.
         Assert.Equal("~6a8a8e", PathRules.CaseCollisionSuffix("Pictures/photo.jpg"));
     }
 
@@ -97,7 +98,7 @@ public class PathRulesTests
             PathRules.CaseCollisionSuffix("Pictures/Foto.jpg"));
     }
 
-    // --- limit długości składowej (§5 reguła 6) ---
+    // --- component length limit (§5 rule 6) ---
 
     [Fact]
     public void LongComponent_IsTruncatedWithASuffix()
@@ -106,15 +107,15 @@ public class PathRulesTests
 
         var encoded = PathRules.EncodeSegment(segment);
 
-        Assert.True(encoded.Length <= 255, $"długość {encoded.Length} przekracza limit NTFS");
+        Assert.True(encoded.Length <= 255, $"length {encoded.Length} exceeds the NTFS limit");
         Assert.Contains("~", encoded, StringComparison.Ordinal);
     }
 
     [Fact]
     public void LongComponent_NeverSplitsAnEscapeSequence()
     {
-        // Każdy znak koduje się na 3 znaki, więc granica przycięcia wypada
-        // w środku sekwencji %XX. Rozcięcie zabiłoby odwracalność.
+        // Each character encodes to three, so the truncation boundary falls inside a %XX
+        // sequence. Splitting it would destroy reversibility.
         var segment = new string(':', 200);
 
         var encoded = PathRules.EncodeSegment(segment);
@@ -133,7 +134,7 @@ public class PathRulesTests
         Assert.NotEqual(a, b);
     }
 
-    // --- pojedyncze reguły, gdyby wektory kiedyś zawęziły zakres ---
+    // --- individual rules, in case the vectors ever narrow their coverage ---
 
     [Theory]
     [InlineData("CON")]
@@ -170,7 +171,7 @@ public class PathRulesTests
     [Fact]
     public void Validation_MeasuresLengthInUtf8Bytes_NotCharacters()
     {
-        // 200 znaków z polskimi diakrytykami to 400 bajtów w UTF-8.
+        // 200 characters with diacritics come to 400 bytes in UTF-8.
         var path = string.Concat(Enumerable.Repeat("ą", 200));
 
         Assert.Equal(400, Encoding.UTF8.GetByteCount(path));

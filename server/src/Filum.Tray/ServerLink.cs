@@ -70,7 +70,7 @@ public sealed class ServerLink : IDisposable
     }
 
     /// <summary>
-    /// Odczytuje klucz publiczny serwera z jego certyfikatu.
+    /// Reads the server's public key from its certificate.
     ///
     /// The icon runs under the same user account as the server, so the file is readable to
     /// it. That way we do not have to trust whatever is on port 8765 — not even locally,

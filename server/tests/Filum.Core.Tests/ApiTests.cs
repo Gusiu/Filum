@@ -7,8 +7,8 @@ using Filum.Protocol;
 namespace Filum.Core.Tests;
 
 /// <summary>
-/// Testy zasobów HTTP z §5 protokołu. Sprawdzają to, czego testy jednostkowe nie
-/// dosięgają: parsowanie nagłówków, kody odpowiedzi i kształt ciała błędu.
+/// Tests for the HTTP resources in protocol §5. They cover what the unit tests cannot
+/// reach: header parsing, response codes and the shape of the error body.
 /// </summary>
 public class ApiTests : IClassFixture<FilumApp>
 {
@@ -105,7 +105,7 @@ public class ApiTests : IClassFixture<FilumApp>
     [Fact]
     public async Task Put_StoresTheFileAndReportsCompletion()
     {
-        var content = Encoding.UTF8.GetBytes("treść pliku przez HTTP");
+        var content = Encoding.UTF8.GetBytes("file content over HTTP");
 
         var response = await _client.SendAsync(Put("Documents/przez-http.txt", content, content.Length, Mtime, 0));
         var body = await response.Content.ReadFromJsonAsync<FileChunkResponse>();
@@ -164,7 +164,7 @@ public class ApiTests : IClassFixture<FilumApp>
         {
             Content = new ByteArrayContent([1])
         };
-        request.Headers.TryAddWithoutValidation(FilumHeaders.Path, "to nie jest base64url!!!");
+        request.Headers.TryAddWithoutValidation(FilumHeaders.Path, "this is not base64url!!!");
         request.Headers.TryAddWithoutValidation(FilumHeaders.Size, "1");
         request.Headers.TryAddWithoutValidation(FilumHeaders.Mtime, Mtime.ToString());
         request.Headers.TryAddWithoutValidation(FilumHeaders.Offset, "0");
@@ -185,7 +185,7 @@ public class ApiTests : IClassFixture<FilumApp>
     [Fact]
     public async Task FullCycle_TheManifestConfirmsTheFileAfterUpload()
     {
-        var content = Encoding.UTF8.GetBytes("plik z pełnego cyklu");
+        var content = Encoding.UTF8.GetBytes("a file from the full cycle");
         const string path = "DCIM/Camera/cykl.jpg";
 
         var before = await (await _client.PostAsJsonAsync("/api/v1/manifest",

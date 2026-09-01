@@ -5,11 +5,11 @@ using Filum.Protocol;
 namespace Filum.Core.Tests;
 
 /// <summary>
-/// Kontrola integralności (§5.5 protokołu).
+/// Integrity checking (protocol §5.5).
 ///
-/// To jedyne miejsce, w którym serwer liczy skróty istniejących plików. Wykrywanie
-/// zmian pozostaje bez skrótu (I5) — weryfikacja odpowiada na inne pytanie: czy to,
-/// co leży na dysku, jest nadal tym, co przyszło z telefonu.
+/// The one place where the server hashes existing files. Change detection stays
+/// digest-free by default (I5) — verification answers a different question: is what lies
+/// on the disk still what arrived from the phone.
 /// </summary>
 public class VerifyServiceTests
 {
@@ -24,11 +24,11 @@ public class VerifyServiceTests
     public async Task AnIntactFile_IsConfirmed()
     {
         using var h = new Harness();
-        h.Seed("DCIM/a.jpg", Harness.Bytes("zawartość"), Mtime);
+        h.Seed("DCIM/a.jpg", Harness.Bytes("content"), Mtime);
 
         var result = await Service(h).VerifyAsync(
             Harness.Slug,
-            [new VerifyEntry("DCIM/a.jpg", Digest("zawartość"))],
+            [new VerifyEntry("DCIM/a.jpg", Digest("content"))],
             CancellationToken.None);
 
         Assert.Equal(["DCIM/a.jpg"], result.Ok);
@@ -39,15 +39,15 @@ public class VerifyServiceTests
     [Fact]
     public async Task ACorruptedByte_IsDetected()
     {
-        // To jest cały powód istnienia tego trybu: nośnik potrafi po cichu przekłamać
-        // zawartość, a rozmiar i mtime pozostają bez zmian, więc zwykłe wykrywanie
+        // This is the whole reason the mode exists: storage media can silently corrupt
+        // content while size and mtime stay unchanged, so ordinary change detection
         // zmian tego nie zobaczy.
         using var h = new Harness();
-        h.Seed("DCIM/a.jpg", Harness.Bytes("zawartość po awarii"), Mtime);
+        h.Seed("DCIM/a.jpg", Harness.Bytes("content after a fault"), Mtime);
 
         var result = await Service(h).VerifyAsync(
             Harness.Slug,
-            [new VerifyEntry("DCIM/a.jpg", Digest("zawartość oryginalna"))],
+            [new VerifyEntry("DCIM/a.jpg", Digest("original content"))],
             CancellationToken.None);
 
         Assert.Equal(["DCIM/a.jpg"], result.Mismatch);
@@ -57,8 +57,8 @@ public class VerifyServiceTests
     [Fact]
     public async Task MissingFile_IsReportedSeparately()
     {
-        // Brak i przekłamanie znaczą co innego: pierwsze wymaga dosłania pliku,
-        // drugie oznacza problem z nośnikiem.
+        // Missing and corrupted mean different things: the first calls for re-sending the
+        // file, the second points at the storage medium.
         using var h = new Harness();
 
         var result = await Service(h).VerifyAsync(
@@ -88,28 +88,28 @@ public class VerifyServiceTests
     {
         using var h = new Harness();
         h.Seed("dobry.txt", Harness.Bytes("aaa"), Mtime);
-        h.Seed("zepsuty.txt", Harness.Bytes("bbb"), Mtime);
+        h.Seed("broken.txt", Harness.Bytes("bbb"), Mtime);
 
         var result = await Service(h).VerifyAsync(
             Harness.Slug,
             [
                 new VerifyEntry("dobry.txt", Digest("aaa")),
-                new VerifyEntry("zepsuty.txt", Digest("coś innego")),
+                new VerifyEntry("broken.txt", Digest("something else")),
                 new VerifyEntry("nieobecny.txt", Digest("ccc")),
             ],
             CancellationToken.None);
 
         Assert.Equal(["dobry.txt"], result.Ok);
-        Assert.Equal(["zepsuty.txt"], result.Mismatch);
+        Assert.Equal(["broken.txt"], result.Mismatch);
         Assert.Equal(["nieobecny.txt"], result.Missing);
     }
 }
 
 /// <summary>
-/// Raport sierot (§5.6 protokołu, ADR-015).
+/// The orphan report (protocol §5.6, ADR-015).
 ///
-/// Serwer nigdy nic nie kasuje, więc przenoszenie plików w telefonie mnoży kopie.
-/// Raport daje użytkownikowi podstawę do decyzji — i na tym się kończy.
+/// The server never deletes anything, so moving files around on the phone multiplies
+/// copies. The report gives the user a basis for a decision — and that is where it stops.
 /// </summary>
 public class OrphanReporterTests
 {
@@ -141,8 +141,8 @@ public class OrphanReporterTests
     [Fact]
     public void OrphansAreComputedFromTheMergedBatches()
     {
-        // Sesja obejmująca sto tysięcy plików to pięćdziesiąt żądań; raport musi
-        // widzieć sumę wszystkich, a nie tylko ostatniej partii.
+        // A session covering a hundred thousand files is fifty requests; the report has to
+        // see the sum of all of them, not just the last batch.
         using var h = new Harness();
         h.Seed("a.txt", Harness.Bytes("a"), Mtime);
         h.Seed("b.txt", Harness.Bytes("b"), Mtime);
@@ -159,8 +159,8 @@ public class OrphanReporterTests
     [Fact]
     public void OrphansAreReportedInCanonicalForm()
     {
-        // Na dysku plik leży pod nazwą po sanityzacji, ale telefon zna wyłącznie
-        // postać kanoniczną — raport w postaci dyskowej byłby dla niego bezużyteczny.
+        // On disk the file sits under its sanitised name, but the phone knows only the
+        // canonical form — a report in disk form would be useless to it.
         using var h = new Harness();
         h.Seed("Documents/raport:v2.txt", Harness.Bytes("x"), Mtime);
 
@@ -205,20 +205,20 @@ public class OrphanReporterTests
     [Fact]
     public void TheReportDeletesNothing()
     {
-        // Niezmiennik I1 obowiązuje także tutaj. Raport informuje, decyzja należy
-        // do użytkownika i zapada poza aplikacją.
+        // Invariant I1 holds here too. The report informs; the decision belongs to the
+        // user and is made outside the application.
         using var h = new Harness();
-        h.Seed("sierota.txt", Harness.Bytes("zawartość"), Mtime);
+        h.Seed("orphan.txt", Harness.Bytes("content"), Mtime);
 
         Complete(h, "sesja-6");
 
-        Assert.True(h.StoredExists("sierota.txt"));
+        Assert.True(h.StoredExists("orphan.txt"));
     }
 
     [Fact]
     public void SessionIdentifier_CannotEscapeTheDirectory()
     {
-        // Identyfikator pochodzi od klienta i trafia do nazwy pliku.
+        // The identifier comes from the client and ends up in a filename.
         using var h = new Harness();
 
         Complete(h, "../../../zlosliwa");

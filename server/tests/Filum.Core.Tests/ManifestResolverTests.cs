@@ -3,9 +3,9 @@ using Filum.Protocol;
 namespace Filum.Core.Tests;
 
 /// <summary>
-/// Rozstrzyganie manifestu (§5.2). Cała odpowiedź powstaje z porównania z systemem
-/// plików — serwer nie ma indeksu zawartości (ADR-003), więc te testy sprawdzają
-/// przy okazji, czy dysk faktycznie wystarcza za bazę danych.
+/// Resolving a manifest (§5.2). The whole answer is produced by comparing against the
+/// filesystem — the server has no content index (ADR-003), so these tests also check,
+/// incidentally, whether the disk really does stand in for a database.
 /// </summary>
 public class ManifestResolverTests
 {
@@ -17,7 +17,7 @@ public class ManifestResolverTests
     public void AFileMatchingOnSizeAndMtime_CountsAsHeld()
     {
         using var h = new Harness();
-        var content = Harness.Bytes("zawartość");
+        var content = Harness.Bytes("content");
         h.Seed("DCIM/Camera/IMG_0001.JPG", content, Mtime);
 
         var result = h.Manifest.Resolve(Harness.Slug, [Entry("DCIM/Camera/IMG_0001.JPG", content.Length, Mtime)]);
@@ -44,10 +44,10 @@ public class ManifestResolverTests
     public void AFileWithADifferentMtime_LandsInNeededFlaggedForVersioning()
     {
         using var h = new Harness();
-        var content = Harness.Bytes("zawartość");
-        h.Seed("Documents/notatka.txt", content, Mtime);
+        var content = Harness.Bytes("content");
+        h.Seed("Documents/note.txt", content, Mtime);
 
-        var result = h.Manifest.Resolve(Harness.Slug, [Entry("Documents/notatka.txt", content.Length, Mtime + 60)]);
+        var result = h.Manifest.Resolve(Harness.Slug, [Entry("Documents/note.txt", content.Length, Mtime + 60)]);
 
         Assert.Equal(0, result.Have);
         var needed = Assert.Single(result.Needed);
@@ -59,9 +59,9 @@ public class ManifestResolverTests
     public void AFileWithADifferentSize_LandsInNeededFlaggedForVersioning()
     {
         using var h = new Harness();
-        h.Seed("Documents/notatka.txt", Harness.Bytes("krótka"), Mtime);
+        h.Seed("Documents/note.txt", Harness.Bytes("short"), Mtime);
 
-        var result = h.Manifest.Resolve(Harness.Slug, [Entry("Documents/notatka.txt", 9999, Mtime)]);
+        var result = h.Manifest.Resolve(Harness.Slug, [Entry("Documents/note.txt", 9999, Mtime)]);
 
         Assert.True(Assert.Single(result.Needed).Versioned);
     }
@@ -85,7 +85,7 @@ public class ManifestResolverTests
         var content = Harness.Bytes("0123456789ABCDEF");
         await h.WriteAsync("Movies/klip.mp4", content[..6], content.Length, Mtime, 0);
 
-        // ten sam plik, ale telefon zgłasza inny mtime — fragment jest bezużyteczny
+        // the same file, but the phone reports a different mtime — the part is useless
         var result = h.Manifest.Resolve(Harness.Slug, [Entry("Movies/klip.mp4", content.Length, Mtime + 30)]);
 
         Assert.Equal(0, Assert.Single(result.Needed).Offset);
@@ -94,8 +94,8 @@ public class ManifestResolverTests
     [Fact]
     public void AnUnacceptablePath_LandsInRejected_NotInNeeded()
     {
-        // Bez tego klient dowiedziałby się o odrzuceniu dopiero z 422 przy PUT,
-        // czyli po jednym zmarnowanym żądaniu na każdy taki plik.
+        // Without this the client would learn of the rejection only from a 422 on PUT,
+        // i.e. after one wasted request per such file.
         using var h = new Harness();
 
         var result = h.Manifest.Resolve(Harness.Slug,
@@ -113,10 +113,10 @@ public class ManifestResolverTests
     [Fact]
     public void AManuallyDeletedFile_IsReportedAsNeededAgain()
     {
-        // Konsekwencja ADR-003: skoro źródłem prawdy jest dysk, to usunięcie pliku
-        // w Eksploratorze musi zostać wykryte i plik dosłany.
+        // A consequence of ADR-003: since the disk is the source of truth, deleting a
+        // file in Explorer has to be detected and the file re-sent.
         using var h = new Harness();
-        var content = Harness.Bytes("zawartość");
+        var content = Harness.Bytes("content");
         h.Seed("DCIM/Camera/IMG_0001.JPG", content, Mtime);
 
         var entries = new[] { Entry("DCIM/Camera/IMG_0001.JPG", content.Length, Mtime) };
