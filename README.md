@@ -71,7 +71,7 @@ implementing from the document alone is the evidence that the document is comple
 
 ## Status
 
-Stages 1–9 of the [build order table](docs/ARCHITECTURE.md#8-kolejność-budowy).
+Stages 1–9 of the [build order table](docs/ARCHITECTURE.md#8-build-order).
 
 | Item | State |
 |---|---|

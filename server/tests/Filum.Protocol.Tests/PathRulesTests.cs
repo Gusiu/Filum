@@ -86,7 +86,7 @@ public class PathRulesTests
     {
         // Wartość podana wprost w docs/PATH-RULES.md §6 — dokumentacja i kod
         // muszą się zgadzać, inaczej implementacja kotlinowa pójdzie za dokumentem.
-        Assert.Equal("~420670", PathRules.CaseCollisionSuffix("Pictures/foto.jpg"));
+        Assert.Equal("~6a8a8e", PathRules.CaseCollisionSuffix("Pictures/photo.jpg"));
     }
 
     [Fact]

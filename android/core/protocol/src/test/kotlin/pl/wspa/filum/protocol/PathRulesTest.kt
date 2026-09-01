@@ -77,7 +77,7 @@ class PathRulesTest {
     fun `przyrostek kolizji jest stabilny`() {
         // Wartość podana wprost w docs/PATH-RULES.md §6 — dokumentacja, C# i Kotlin
         // muszą dawać ten sam wynik, inaczej serwer i klient rozjadą się na dysku.
-        assertEquals("~420670", PathRules.caseCollisionSuffix("Pictures/foto.jpg"))
+        assertEquals("~6a8a8e", PathRules.caseCollisionSuffix("Pictures/photo.jpg"))
     }
 
     @Test

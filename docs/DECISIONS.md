@@ -1,471 +1,448 @@
-# Filum — rejestr decyzji architektonicznych
+# Filum — architecture decision record
 
-Każdy wpis notuje kontekst, decyzję, uzasadnienie i **odrzucone alternatywy**.
-Ta ostatnia rubryka jest najważniejsza: praca dyplomowa broni się tym, że pokazuje,
-czego świadomie nie wybrano i dlaczego.
+Each entry records the context, the decision, the rationale and the **rejected
+alternatives**. That last heading is the important one: a thesis defends itself by showing
+what was deliberately not chosen, and why.
 
-Stan na 2026-08-28. Wpisy oznaczone jako *przyjęta* obowiązują do czasu jawnej zmiany.
-
----
-
-## ADR-001 — Backup jednokierunkowy zamiast synchronizacji
-
-**Status:** przyjęta
-
-**Kontekst.** Istniejące narzędzia (Syncthing, Resilio, FolderSync, Nextcloud)
-realizują synchronizację dwukierunkową, w której usunięcie pliku propaguje się
-na wszystkie repliki. Użytkownik porządkujący galerię w telefonie traci kopię
-zapasową dokładnie wtedy, gdy najbardziej jej potrzebuje.
-
-**Decyzja.** Strumień wyłącznie telefon → PC. Zbiór plików na serwerze jest
-monotoniczny: może wyłącznie rosnąć. Serwer nie udostępnia operacji usuwania.
-
-**Uzasadnienie.** To nie jest uproszczona synchronizacja, tylko inny model danych.
-Rozróżnienie „backup ≠ synchronizacja" jest tezą całej pracy i z niego wynikają
-niemal wszystkie pozostałe decyzje.
-
-**Odrzucone.** Dwukierunkowość (podstawowy konflikt z celem), lustro z propagacją
-usunięć (to samo), retencja czasowa z automatycznym czyszczeniem (użytkownik
-traciłby dane bez świadomej decyzji).
-
-**Konsekwencje.** Zajętość dysku rośnie bez ograniczeń — łagodzone przez raport
-sierot (ADR-015), który informuje, ale nie kasuje.
+As of 2026-09-01. Entries marked *accepted* hold until explicitly changed.
 
 ---
 
-## ADR-002 — Tożsamość pliku bez skrótu kryptograficznego
+## ADR-001 — One-way backup rather than synchronisation
 
-**Status:** przyjęta jako **domyślna**, uzupełniona przez ADR-016
+**Status:** accepted
 
-**Kontekst.** Biblioteka na telefonie bywa duża — dziesiątki albo setki gigabajtów.
-Klasyczne narzędzia wykrywają zmiany przez porównanie skrótów zawartości.
+**Context.** The existing tools (Syncthing, Resilio, FolderSync, Nextcloud) perform
+two-way synchronisation, in which deleting a file propagates to every replica. Someone
+tidying up the gallery on their phone loses the backup at exactly the moment they need it.
 
-**Decyzja.** Plik identyfikuje trójka `(ścieżka, rozmiar, mtime)`. Skróty służą
-wyłącznie kontroli integralności transferu i trybowi weryfikacji.
+**Decision.** The stream is phone → PC only. The set of files on the server is monotonic:
+it can only grow. The server exposes no delete operation.
 
-**Uzasadnienie.** Liczenie skrótu z całej biblioteki przy każdym cyklu wymaga
-odczytania jej w całości, co na urządzeniu zasilanym z akumulatora kosztuje tym
-więcej, im większa biblioteka. Przepustowość hashowania zostanie zmierzona
-empirycznie, a wynik pozwoli oszacować ten koszt dla dowolnego rozmiaru.
+**Rationale.** This is not a simplified synchronisation but a different data model. The
+distinction "backup ≠ sync" is the thesis of the whole project, and nearly every other
+decision follows from it.
 
-**Odrzucone.** Pełne hashowanie przy każdym cyklu (koszt energetyczny), hashowanie
-przyrostowe wyłącznie plików nowych (nie wykrywa modyfikacji istniejących,
-więc nie rozwiązuje problemu).
+**Rejected.** Bidirectionality (fundamentally at odds with the goal), a mirror that
+propagates deletions (the same), time-based retention with automatic cleanup (the user
+would lose data without a conscious decision).
 
-**Konsekwencje.** Modyfikacja pliku zachowująca rozmiar i mtime pozostanie
-niewykryta. Ryzyko marginalne dla zdjęć i wideo; łagodzone trybem weryfikacji
-uruchamianym świadomie przez użytkownika.
-
-**Uwaga rozróżniająca.** Skrót liczony **w trakcie trwającego transferu** jest
-niemal darmowy, bo bajty i tak przechodzą przez procesor. Odrzucamy hashowanie
-jako metodę *wykrywania zmian*, nie jako metodę *kontroli integralności*.
-Pomylenie tych dwóch zastosowań jest częstym błędem.
-
-**Rewizja.** Decyzja pozostaje trybem domyślnym, ale przestała być jedyną —
-ADR-016 dokłada tryb dokładny, w którym tożsamością pliku jest jego skrót.
-Powód: metadane da się sfałszować, a przy zastosowaniach śledczych to nie jest
-scenariusz hipotetyczny.
+**Consequences.** Disk usage grows without bound — mitigated by the orphan report
+(ADR-015), which informs but does not delete.
 
 ---
 
-## ADR-003 — Serwer bez bazy danych; dysk jest źródłem prawdy
+## ADR-002 — File identity without a cryptographic digest
 
-**Status:** przyjęta
+**Status:** accepted as the **default**, supplemented by ADR-016
 
-**Kontekst.** Serwer musi odpowiadać, których plików z manifestu mu brakuje.
+**Context.** A phone's library can be large — tens or hundreds of gigabytes. Classic tools
+detect changes by comparing content digests.
 
-**Decyzja.** Brak indeksu zawartości. Odpowiedź powstaje przez `stat()` na każdej
-pozycji partii i porównanie `(rozmiar, mtime)` z systemem plików.
+**Decision.** A file is identified by the triple `(path, size, mtime)`. Digests serve only
+transfer integrity and the verification mode.
 
-**Uzasadnienie.** 2000 wywołań `stat()` na NTFS to rząd dziesiątek milisekund —
-nieistotne wobec transferów trwających godzinami. W zamian znika cała klasa
-problemów: rozjazd indeksu z rzeczywistością, migracje schematu, uszkodzenie
-bazy po zaniku zasilania. Backup przeniesiony na inny dysk, skopiowany albo
-odtworzony z kopii po prostu działa. Ręczne usunięcie pliku w Eksploratorze
-zostanie wykryte i plik zostanie dosłany.
+**Rationale.** Hashing the whole library on every cycle requires reading all of it, which
+on a battery-powered device costs more the larger the library is. Hashing throughput will
+be measured empirically, and the result makes that cost estimable for any size.
 
-**Odrzucone.** SQLite jako indeks (rozjazd ze stanem faktycznym, konieczność
-odbudowy), indeks w pamięci z zapisem okresowym (te same problemy plus utrata
-przy nagłym wyłączeniu).
+**Rejected.** Full hashing on every cycle (energy cost), incremental hashing of new files
+only (does not detect modifications to existing ones, so it does not solve the problem).
 
-**Konsekwencje.** Struktury pomocnicze (`index.jsonl`, raporty sierot) są jawnie
-oznaczone jako odtwarzalne i nieautorytatywne.
+**Consequences.** A modification that preserves size and mtime goes undetected. The risk is
+marginal for photos and video; mitigated by a verification mode the user starts
+deliberately.
 
----
+**A distinction worth keeping.** A digest computed **during a transfer already in progress**
+is nearly free, because the bytes pass through the CPU anyway. We reject hashing as a method
+of *change detection*, not as a method of *integrity checking*. Conflating the two is a
+common mistake.
 
-## ADR-004 — Serwer w C#/.NET
-
-**Status:** przyjęta
-
-**Kontekst.** Rozważano Python z FastAPI, Kotlin z Ktorem i C# z ASP.NET Core.
-
-**Decyzja.** .NET 9, ASP.NET Core minimal APIs, publikacja jako pojedynczy plik
-wykonywalny bez zewnętrznego środowiska uruchomieniowego.
-
-**Uzasadnienie.** Wszystko, co po stronie serwera jest trudne, jest specyficzne
-dla Windows: długie ścieżki NTFS, nazwy zastrzeżone, wolne miejsce na wolumenie,
-reguły zapory, usługa systemowa, ikona w zasobniku. W .NET to natywne API,
-w Pythonie obejścia przez `ctypes` lub `pywin32`. Instalacja u użytkownika
-końcowego to jeden plik zamiast bundla z PyInstallera, który dodatkowo bywa
-fałszywie alarmowany przez oprogramowanie antywirusowe.
-
-**Odrzucone.** Python/FastAPI (słaba historia wdrożenia na Windows), Kotlin/Ktor
-(kusi wspólnym modułem protokołu z klientem — patrz konsekwencje).
-
-**Konsekwencje.** Rezygnujemy ze współdzielenia kodu protokołu z klientem
-Androida. Uznajemy to za zaletę: dwie niezależne implementacje pogodzone przez
-pisemną specyfikację i wspólne wektory testowe dowodzą, że specyfikacja jest
-kompletna. Wspólny moduł jedynie ukrywałby jej braki.
+**Revision.** This decision remains the default mode but is no longer the only one — ADR-016
+adds a thorough mode in which a file's identity is its digest. The reason: metadata can be
+forged, and in forensic use that is not a hypothetical scenario.
 
 ---
 
-## ADR-005 — Wzajemne przypięcie kluczy zamiast urzędu certyfikacji
+## ADR-003 — A server with no database; the disk is the source of truth
 
-**Status:** przyjęta
+**Status:** accepted
 
-**Kontekst.** Serwer bywa osiągalny spoza sieci lokalnej (ADR-006), więc token
-w postaci jawnej byłby niewystarczający.
+**Context.** The server has to answer which of the manifest's files it is missing.
 
-**Decyzja.** Obie strony używają certyfikatów samopodpisanych jako pojemnika na
-klucz. Klient przypina klucz serwera, serwer przypina klucze sparowanych klientów
-(mTLS). Klucz prywatny telefonu powstaje w Android Keystore ze wsparciem sprzętowym.
+**Decision.** No content index. The answer is produced by a `stat()` on each entry in the
+batch and a comparison of `(size, mtime)` against the filesystem.
 
-**Uzasadnienie.** Symetryczne, bez logiki urzędu certyfikacji, bez wygasania,
-bez ostrzeżeń przeglądarki dla użytkownika. Nie istnieje token, który mógłby
-wyciec do dziennika. Odebranie dostępu zgubionemu telefonowi to skreślenie
-jednego wpisu.
+**Rationale.** Two thousand `stat()` calls on NTFS take tens of milliseconds — irrelevant
+next to transfers lasting hours. In exchange, a whole class of problems disappears: an index
+drifting out of step with reality, schema migrations, a database corrupted by a power cut.
+A backup moved to another disk, copied, or restored from a copy simply works. A file deleted
+by hand in Explorer is detected and re-sent.
 
-**Odrzucone.** Token `Bearer` po zwykłym HTTP (podsłuch w sieci lokalnej, jawna
-treść backupu), token po TLS z certyfikatem publicznym (wymaga nazwy domenowej
-i urzędu), własny mini-CA z podpisywaniem żądań CSR (więcej ruchomych części
-bez zysku bezpieczeństwa).
+**Rejected.** SQLite as an index (drift from actual state, the need to rebuild), an in-memory
+index with periodic persistence (the same problems plus loss on sudden shutdown).
 
-**Konsekwencje.** Klient nie weryfikuje nazwy hosta. Jest to bezpieczne
-**wyłącznie** dlatego, że przypięcie klucza ją zastępuje — i musi być tak
-udokumentowane, żeby nikt nie usunął jednego zabezpieczenia w przekonaniu,
-że drugie i tak działa.
-
-**StrongBox nie jest wymagany.** Osobny element bezpieczny mają urządzenia
-z wyższej półki; sprzęt tańszy oferuje wyłącznie zaufane środowisko procesora
-(TEE). Aplikacja próbuje StrongBoxa, a przy odmowie cicho schodzi do TEE —
-klucz prywatny nie opuszcza urządzenia w żadnym z tych przypadków, różni się
-odporność na atak fizyczny. Faktycznie użyty poziom aplikacja odczytuje
-z Keystore przy każdym uruchomieniu i zapisuje w dzienniku przy parowaniu,
-zamiast zakładać cokolwiek o sprzęcie.
+**Consequences.** Auxiliary structures (`index.jsonl`, orphan reports, and the integrity
+ledger's index) are explicitly marked as reconstructible and non-authoritative.
 
 ---
 
-## ADR-006 — Tożsamość przez klucz, nie przez adres
+## ADR-004 — Server in C#/.NET
 
-**Status:** przyjęta
+**Status:** accepted
 
-**Kontekst.** Adres serwera zmienia się nieustannie: inna sieć, nowy przydział
-DHCP, aktywny VPN, telefon poza domem.
+**Context.** Python with FastAPI, Kotlin with Ktor and C# with ASP.NET Core were considered.
 
-**Decyzja.** Klient przechowuje **zbiór tras** do serwera o znanym pinie i przy
-każdym połączeniu ściga je równolegle, przyjmując pierwszą poprawną odpowiedź.
-Odpowiedź `ping` zawiera listę adresów, pod którymi serwer sam siebie widzi,
-więc zbiór aktualizuje się sam.
+**Decision.** .NET 9, ASP.NET Core minimal APIs, published as a single executable with no
+external runtime.
 
-**Uzasadnienie.** Adres przestaje być tożsamością i staje się jedną z wielu dróg.
-Użytkownik nigdy niczego nie konfiguruje: w domu wygra trasa lokalna jako
-najszybsza, poza domem sieć nakładkowa, po zmianie routera mDNS znajdzie nowy
-adres. Model sprawdzony w Syncthingu i w samym Tailscale.
+**Rationale.** Everything that is hard on the server side is Windows-specific: long NTFS
+paths, reserved names, free space on a volume, firewall rules, the system service, the tray
+icon. In .NET these are native APIs; in Python they are workarounds through `ctypes` or
+`pywin32`. Installation for an end user is one file rather than a PyInstaller bundle, which
+additionally tends to trip antivirus heuristics.
 
-**Odrzucone.** Zapamiętany pojedynczy adres (psuje się przy pierwszej zmianie
-sieci), stały adres wymuszony na routerze (przerzuca konfigurację na użytkownika),
-sam mDNS (nie działa poza siecią lokalną).
+**Rejected.** Python/FastAPI (a poor deployment story on Windows), Kotlin/Ktor (tempting for
+sharing a protocol module with the client — see consequences).
 
-**Konsekwencje.** Wymaga przypięcia gniazda do konkretnego obiektu `Network` na
-Androidzie, żeby trasy lokalne działały mimo aktywnego VPN. Przy VPN w trybie
-blokującym ruch poza tunelem trasa lokalna przestanie być dostępna — degradacja
-musi być cicha.
+**Consequences.** We give up sharing protocol code with the Android client. We consider this
+an advantage: two independent implementations reconciled by a written specification and
+shared test vectors prove the specification is complete. A shared module would only have
+hidden its gaps.
 
 ---
 
-## ADR-007 — Zachowywanie poprzednich wersji zamiast nadpisywania
+## ADR-005 — Mutual key pinning instead of a certificate authority
 
-**Status:** przyjęta
+**Status:** accepted
 
-**Kontekst.** Pod znaną ścieżką pojawia się zawartość o innym rozmiarze lub mtime.
+**Context.** The server is sometimes reachable from outside the local network (ADR-006), so
+a bearer token in the clear would not be enough.
 
-**Decyzja.** Poprzednia zawartość trafia do `.filum/versions/` ze znacznikiem
-czasu pochodzącym z jej własnego mtime. Katalog `files/` pozostaje czystym
-lustrem obecnego stanu telefonu.
+**Decision.** Both sides use self-signed certificates as a container for a key. The client
+pins the server's key, the server pins the keys of paired clients (mTLS). The phone's private
+key is created in the Android Keystore with hardware backing.
 
-**Uzasadnienie.** Nadpisanie jest formą utraty danych, więc byłoby sprzeczne
-z ADR-001. Trzymanie wersji poza `files/` chroni czytelność drzewa, które ma
-pozostać przeglądalne w Eksploratorze bez żadnych narzędzi (ADR-003).
+**Rationale.** Symmetric, with no certificate-authority logic, no expiry, and no browser
+warnings for the user. There is no token that could leak into a log. Revoking a lost phone's
+access means striking one entry.
 
-**Odrzucone.** Nadpisywanie (sprzeczne z ADR-001), wersjonowanie tylko plików
-niebędących mediami (reguła zależna od typu pliku, trudna do obrony i do
-przetestowania).
+**Rejected.** A `Bearer` token over plain HTTP (eavesdropping on the local network, backup
+contents in the clear), a token over TLS with a public certificate (requires a domain name
+and an authority), a homegrown mini-CA signing CSRs (more moving parts with no security
+gain).
 
-**Konsekwencje.** Brak polityki retencji — katalog wersji rośnie bez ograniczeń.
-Odnotowane jako kwestia otwarta.
+**Consequences.** The client does not verify the hostname. This is safe **only** because key
+pinning replaces it — and must be documented that way, so that nobody removes one safeguard
+in the belief that the other covers it.
 
----
-
-## ADR-008 — Agregacja małych plików
-
-**Status:** przyjęta, do potwierdzenia pomiarem
-
-**Kontekst.** Biblioteka multimedialna liczy zwykle dziesiątki tysięcy plików,
-z czego znaczna większość to drobiazgi poniżej kilkuset kilobajtów.
-
-**Decyzja.** Osobny zasób `POST /bundle` przyjmujący strumień plików z ramkowaniem
-długości. Próg wielkości podaje serwer w odpowiedzi `ping`.
-
-**Uzasadnienie.** Przy jednym żądaniu HTTP na plik narzut protokołu zaczyna
-dominować nad transferem danych.
-
-**Odrzucone.** Wyłącznie `PUT` na plik (narzut), archiwum tar w całości
-(uniemożliwia wznawianie i częściowe powodzenie).
-
-**Konsekwencje.** Paczka nie obsługuje wznawiania — akceptowalne, bo dotyczy
-wyłącznie plików małych. Próg musi zostać wyznaczony pomiarem, nie przyjęty
-z góry; to jeden z eksperymentów do rozdziału wynikowego.
+**StrongBox is not required.** A separate secure element is a higher-end feature; cheaper
+hardware offers only the processor's trusted environment (TEE). The application asks for
+StrongBox and quietly falls back to TEE when refused — the private key leaves the device in
+neither case; what differs is resistance to physical attack. The level actually in use is
+read from the Keystore on every start and recorded in the journal at pairing time, rather
+than assumed from the hardware.
 
 ---
 
-## ADR-009 — Kodowanie procentowe zamiast podmiany znaków
+## ADR-006 — Identity by key, not by address
 
-**Status:** przyjęta
+**Status:** accepted
 
-**Kontekst.** NTFS zabrania znaków dozwolonych na ext4 i nie rozróżnia wielkości liter.
+**Context.** A server's address changes constantly: a different network, a new DHCP lease, an
+active VPN, the phone away from home.
 
-**Decyzja.** Znaki niedozwolone kodujemy procentowo, kolizje wielkości liter
-rozstrzygamy deterministycznym przyrostkiem z funkcji skrótu.
+**Decision.** The client stores a **set of routes** to a server with a known pin, and races
+them in parallel on every connection, taking the first correct answer. The `ping` response
+carries the list of addresses the server sees itself under, so the set updates itself.
 
-**Uzasadnienie.** Odwzorowanie musi być różnowartościowe. Podmiana na `_` sprawia,
-że `a<b.txt` i `a_b.txt` trafiają na tę samą ścieżkę i drugi plik cicho nadpisuje
-pierwszy — bezpośrednie naruszenie ADR-001 i ADR-007.
+**Rationale.** The address stops being an identity and becomes one of several ways through.
+The user configures nothing, ever: at home the local route wins as the fastest, away from
+home the overlay network, and after a router change mDNS finds the new address. The model is
+proven in Syncthing and in Tailscale itself.
 
-**Odrzucone.** Podmiana na `_` (stratna), pełne kodowanie base64 nazw
-(nieczytelne dla użytkownika, sprzeczne z ADR-003).
+**Rejected.** A single remembered address (breaks on the first network change), a fixed
+address forced on the router (pushes configuration onto the user), mDNS alone (does not work
+outside the local network).
 
-**Konsekwencje.** Nazwy ze znakami specjalnymi wyglądają na dysku nietypowo, ale
-pozostają czytelne i w pełni odwracalne.
-
----
-
-## ADR-010 — Panel webowy plus ikona w zasobniku
-
-**Status:** przyjęta
-
-**Kontekst.** Serwer potrzebuje interfejsu do parowania, podglądu i ustawień.
-
-**Decyzja.** Interfejs jako strona serwowana przez sam serwer (Blazor), otwierana
-z menu ikony w zasobniku systemowym.
-
-**Uzasadnienie.** Serwer i tak jest serwerem HTTP, więc panel jest niemal darmowy —
-nie trzeba drugiego zestawu bibliotek ani drugiego sposobu prezentowania stanu.
-Ikona w zasobniku daje aplikacji fizyczną obecność w systemie.
-
-**Korekta wprowadzona przy implementacji.** Pierwotnie zakładaliśmy, że panel będzie
-osiągalny także z telefonu i z innego komputera w sieci, co bywa wygodne przy
-diagnozowaniu transferu. Trzeba było z tego zrezygnować: panel **wydaje tokeny
-parowania** i pokazuje zawartość kopii, więc wystawienie go w sieci pozwalałoby
-obcemu urządzeniu sparować się bez wiedzy właściciela. Panel jest dostępny wyłącznie
-z pętli zwrotnej. Wygoda diagnostyczna nie jest warta furtki do kopii zapasowej.
-
-**Odrzucone.** Pełna aplikacja WPF/WinUI (dublowanie logiki prezentacji stanu),
-sama konsola (nie do przyjęcia dla użytkownika końcowego).
-
-**Konsekwencje.** Usługa systemowa działa w sesji 0 i nie może wyświetlać
-interfejsu, więc docelowo zasobnik musi być osobnym procesem rozmawiającym
-z serwerem przez to samo API.
+**Consequences.** It requires binding the socket to a specific `Network` object on Android so
+that local routes work despite an active VPN. With a VPN that blocks traffic outside the
+tunnel, the local route becomes unavailable — the degradation must be silent.
 
 ---
 
-## ADR-011 — Znaczniki mtime w sekundach, normalizowane w jednym miejscu
+## ADR-007 — Keeping previous versions instead of overwriting
 
-**Status:** przyjęta
+**Status:** accepted
 
-**Kontekst.** `MediaStore.DATE_MODIFIED` zwraca sekundy, `File.lastModified()`
-milisekundy. Skaner korzysta z obu źródeł.
+**Context.** Content with a different size or mtime appears under a known path.
 
-**Decyzja.** Protokół operuje wyłącznie na sekundach od epoki Uniksa w UTC.
-Normalizacja zachodzi w jednym miejscu, na granicy odczytu z systemu plików.
+**Decision.** The previous content goes to `.filum/versions/` with a timestamp taken from its
+own mtime. The `files/` directory stays a clean mirror of the phone's current state.
 
-**Uzasadnienie.** Gdyby ten sam plik trafiał do manifestu raz z jednego, raz
-z drugiego źródła, jego tożsamość zmieniałaby się między cyklami i plik byłby
-wysyłany w kółko. Przy dużej bibliotece byłaby to awaria, nie niedogodność.
+**Rationale.** Overwriting is a form of data loss, so it would contradict ADR-001. Keeping
+versions outside `files/` protects the readability of a tree that is meant to stay browsable
+in Explorer with no tools at all (ADR-003).
 
-**Odrzucone.** Milisekundy (część źródeł ich nie dostarcza, więc i tak potrzebna
-byłaby konwersja w drugą stronę).
+**Rejected.** Overwriting (contradicts ADR-001), versioning only non-media files (a rule
+dependent on file type, hard to defend and hard to test).
 
----
-
-## ADR-012 — Pierwszy transfer przez sieć; tryb adopcji opcjonalny
-
-**Status:** przyjęta
-
-**Kontekst.** Pierwsza synchronizacja obejmuje całą bibliotekę i bywa długa.
-Rozważano wstępny zrzut kablem i dosyłanie wyłącznie różnicy.
-
-**Decyzja.** Ścieżką podstawową jest pełny transfer przez sieć, rozłożony na
-kilka nocy. Tryb adopcji istniejącego zrzutu jest funkcją dodatkową.
-
-**Uzasadnienie.** Kopiowanie przez MTP notorycznie nie zachowuje czasów
-modyfikacji, a FAT ma granulację dwóch sekund. Niezgodny mtime sprawiłby, że
-pierwsze uruchomienie uznałoby komplet plików za brakujące i wysłało wszystko
-od nowa mimo istniejącego zrzutu. Transfer sieciowy wymusza porządną wznawialność, która
-i tak jest potrzebna, i eliminuje całą klasę błędów.
-
-**Odrzucone.** Wyłącznie zrzut kablem z obowiązkową adopcją (ryzyko pojedynczego
-punktu awarii przy pierwszym uruchomieniu).
-
-**Konsekwencje.** Pierwsze uruchomienie trwa kilka nocy. Akceptowalne, bo
-odbywa się raz.
+**Consequences.** No retention policy — the versions directory grows without bound. Recorded
+as an open question.
 
 ---
 
-## ADR-013 — targetSdk 36 i dystrybucja poza sklepem
+## ADR-008 — Aggregating small files
 
-**Status:** przyjęta
+**Status:** accepted, to be confirmed by measurement
 
-**Kontekst.** Dostęp do całej pamięci wymaga `MANAGE_EXTERNAL_STORAGE`, którego
-Google Play nie dopuszcza dla aplikacji tego rodzaju.
+**Context.** A media library usually holds tens of thousands of files, the large majority of
+them small things below a few hundred kilobytes.
 
-**Decyzja.** `targetSdk 36`, instalacja przez sideload, poza sklepem.
+**Decision.** A separate `POST /bundle` resource accepting a stream of files with length
+framing. The size threshold is supplied by the server in the `ping` response.
 
-**Uzasadnienie.** `targetSdk 36` pozwala na razie ominąć wymóg
-`ACCESS_LOCAL_NETWORK` wprowadzony w Androidzie 17. Skoro dystrybucja i tak
-odbywa się poza sklepem, nie obowiązuje wymóg aktualizowania poziomu docelowego.
+**Rationale.** With one HTTP request per file, protocol overhead starts to dominate the data
+transfer.
 
-**Odrzucone.** Storage Access Framework (zbyt wolny przy setkach tysięcy plików),
-ograniczenie się do `MediaStore` (pominęłoby dokumenty i pobrane pliki).
+**Rejected.** `PUT` per file only (overhead), a whole tar archive (prevents resuming and
+partial success).
 
-**Konsekwencje.** Zależność od wersji systemu, która wygaśnie. Świadomie
-odnotowana jako znane ograniczenie, do opisania w pracy. `/Android/data`
-i `/Android/obb` pozostają niedostępne i nie próbujemy tego obchodzić;
-`/Android/media` jest dostępne i objęte backupem.
-
----
-
-## ADR-014 — Sieć nakładkowa jako wymienny profil wdrożeniowy
-
-**Status:** przyjęta
-
-**Kontekst.** Dostęp spoza sieci lokalnej wymaga punktu spotkania: przekierowania
-portu, sieci nakładkowej albo własnego przekaźnika. Czwartej możliwości nie ma.
-
-**Decyzja.** Aplikacja **nie integruje się** z żadnym dostawcą. Sieć nakładkowa
-wnosi wyłącznie jeden dodatkowy adres do zbioru tras z ADR-006.
-
-**Uzasadnienie.** Dzięki temu Meshnet, Tailscale, ręcznie postawiony WireGuard,
-DDNS z przekierowaniem portu i własny przekaźnik są wymienne bez zmiany
-jednej linii kodu. Praca opisuje architekturę dopuszczającą dowolny z nich,
-zamiast opierać się na komercyjnym produkcie.
-
-**Odrzucone.** Integracja z API konkretnego dostawcy (zależność i utrata
-neutralności), wbudowana implementacja WireGuarda (ogromny nakład bez związku
-z tematem pracy).
-
-**Konsekwencje.** Deklarowane „bez chmury" wymaga doprecyzowania w pracy:
-oznacza „dane nigdy nie są składowane u osoby trzeciej", nie „żaden pakiet nigdy
-nie przechodzi przez cudzą maszynę". Dosłowną wersję zapewnia dopiero własny
-przekaźnik albo przekierowanie portu.
+**Consequences.** Bundles do not support resuming — acceptable, since they only cover small
+files. The threshold must be established by measurement, not assumed; it is one of the
+experiments for the results chapter.
 
 ---
 
-## ADR-015 — Raport sierot bez usuwania
+## ADR-009 — Percent-encoding instead of character substitution
 
-**Status:** przyjęta
+**Status:** accepted
 
-**Kontekst.** Skoro serwer nigdy nie kasuje, przenoszenie plików w telefonie
-mnoży kopie, a zajętość dysku rośnie w nieskończoność.
+**Context.** NTFS forbids characters that are legal on ext4, and is case-insensitive.
 
-**Decyzja.** Po zamknięciu sesji z kompletnym manifestem serwer wylicza listę
-ścieżek obecnych u siebie, a nieobecnych na telefonie, i udostępnia ją jako
-raport. Nic nie usuwa.
+**Decision.** Forbidden characters are percent-encoded; case collisions are resolved with a
+deterministic digest-derived suffix.
 
-**Uzasadnienie.** Zachowuje niezmiennik z ADR-001, a jednocześnie daje
-użytkownikowi kontrolę nad przyrostem zajętości. Sieroty są produktem ubocznym
-rekoncyliacji, którą i tak trzeba okresowo wykonać.
+**Rationale.** The mapping must be injective. Substituting `_` makes `a<b.txt` and `a_b.txt`
+land on the same path, and the second file silently overwrites the first — a direct violation
+of ADR-001 and ADR-007.
 
-**Odrzucone.** Automatyczne usuwanie po okresie karencji (sprzeczne z ADR-001),
-całkowite pominięcie problemu (dysk zapełniłby się bez wyjaśnienia).
+**Rejected.** Substituting `_` (lossy), full base64 encoding of names (unreadable for the
+user, contradicting ADR-003).
 
-**Konsekwencje.** Decyzja o usunięciu należy wyłącznie do użytkownika i zapada
-ręcznie, poza aplikacją albo przez jawną akcję w panelu.
+**Consequences.** Names with special characters look unusual on disk, but stay readable and
+fully reversible.
 
 ---
 
-## ADR-016 — Integralność ponad oszczędność
+## ADR-010 — A web panel plus a tray icon
 
-**Status:** przyjęta
+**Status:** accepted
 
-**Kontekst.** Praca powstaje na specjalizacji cyberbezpieczeństwo i informatyka
-śledcza. Wcześniejsze decyzje ważyły koszt energetyczny przeciwko wykrywalności
-zmian i konsekwentnie wybierały oszczędność (ADR-002). Przy takim profilu
-zastosowań ta waga jest ustawiona odwrotnie: kopia zapasowa, o której nie da się
-niczego wykazać, ma ograniczoną wartość dowodową.
+**Context.** The server needs an interface for pairing, inspection and settings.
 
-**Decyzja.** Integralność jest priorytetem, a jej koszt jest akceptowalny.
-Konkretnie:
+**Decision.** The interface is a page served by the server itself (Blazor), opened from the
+tray icon's menu.
 
-1. **Skrót każdego pliku jest obowiązkowy przy przyjęciu.** Serwer może odrzucić
-   transfer bez skrótu. Nie jest to już opcjonalne udogodnienie z §9 protokołu.
-2. **Rejestr integralności.** Serwer prowadzi trwały, dopisywany zapis: dla każdego
-   przyjętego pliku ścieżka, rozmiar, mtime, skrót i chwila przyjęcia. Rejestr jest
-   **łańcuchem skrótów** — każdy wpis obejmuje skrót wpisu poprzedniego, więc
-   wsteczna edycja samego rejestru jest wykrywalna.
-3. **Polityka wykrywania zmian jest wyborem użytkownika.** Tryb szybki zachowuje
-   ADR-002. Tryb dokładny liczy skrót każdego pliku przy każdym skanie i porównuje
-   go z rejestrem, przez co wykrywa **podmianę zachowującą metadane** — plik
-   o niezmienionym rozmiarze i czasie modyfikacji, ale innej zawartości.
-4. **Weryfikacja nie musi być próbką.** Użytkownik wybiera zakres; próbka pozostaje
-   domyślna ze względu na czas, nie ze względu na zasadę.
+**Rationale.** The server is an HTTP server anyway, so the panel is nearly free — no second
+set of libraries and no second way of presenting state. The tray icon gives the application a
+physical presence in the system.
 
-**Uzasadnienie.** Rozróżnienie z ADR-002 pozostaje słuszne — hashowanie przy
-wykrywaniu zmian faktycznie kosztuje pełny odczyt danych. Zmienia się natomiast
-odpowiedź na pytanie, czy warto: przy zastosowaniach dowodowych wykrycie podmiany
-zachowującej metadane jest dokładnie tym, po co ten mechanizm istnieje. Manipulacja,
-która nie rusza rozmiaru ani mtime, jest banalnie prosta do wykonania i niewidoczna
-dla każdego systemu opartego wyłącznie na metadanych.
+**Correction made during implementation.** We originally assumed the panel would also be
+reachable from the phone and from another computer on the network, which is convenient when
+diagnosing a transfer. That had to go: the panel **issues pairing tokens** and shows the
+contents of the backup, so exposing it on the network would let a stranger's device pair
+without the owner knowing. The panel is reachable from loopback only. Diagnostic convenience
+is not worth a side door into the backup.
 
-Łańcuch skrótów w rejestrze kosztuje jedno dodatkowe wywołanie funkcji na plik,
-a zamienia listę skrótów w zapis, którego nie da się po cichu poprawić.
+**Rejected.** A full WPF/WinUI application (duplicating the state-presentation logic), a
+console alone (unacceptable for an end user).
 
-**Odrzucone.** Wymuszenie trybu dokładnego bez możliwości wyboru (przy dużej
-bibliotece na słabszym sprzęcie oznaczałoby cykle trwające dobę i użytkownika,
-który wyłącza aplikację), podpisywanie rejestru kluczem serwera (klucz leży na tej
-samej maszynie, więc podpis nie chroni przed tym, kto ma do niej dostęp — łańcuch
-skrótów daje tę samą wykrywalność bez pozorowania mocniejszej gwarancji).
-
-**Konsekwencje.** Tryb dokładny wymaga pełnego odczytu pamięci telefonu przy każdym
-cyklu. Jest to widoczne w interfejsie i opisane, a nie ukryte za wartością domyślną.
+**Consequences.** The system service runs in session 0 and cannot display an interface, so
+the tray ultimately has to be a separate process talking to the server over the same API.
 
 ---
 
-## ADR-017 — Bez założeń o pojemności urządzenia
+## ADR-011 — mtime in seconds, normalised in one place
 
-**Status:** przyjęta
+**Status:** accepted
 
-**Kontekst.** Dokumentacja zakładała pierwszą synchronizację rzędu 200 GB
-i wyprowadzała z tej liczby część uzasadnień. Założenie okazało się związane
-z konkretnym egzemplarzem sprzętu — na urządzeniu o mniejszej pamięci jest
-fizycznie niemożliwe, a na większym zaniżone.
+**Context.** `MediaStore.DATE_MODIFIED` returns seconds, `File.lastModified()` milliseconds.
+The scanner uses both sources.
 
-**Decyzja.** Nigdzie nie zakładamy wielkości biblioteki ani pojemności urządzenia.
-Progi, które musimy mieć, są **względne** albo wynikają z ograniczeń niezależnych
-od rozmiaru danych.
+**Decision.** The protocol works exclusively in seconds since the Unix epoch, UTC.
+Normalisation happens in one place, at the boundary where the filesystem is read.
 
-| Próg | Wobec czego | Dlaczego nie bezwzględny |
+**Rationale.** If the same file reached the manifest from one source at one time and the other
+at another, its identity would change between cycles and the file would be uploaded over and
+over. On a large library that is a failure, not an inconvenience.
+
+**Rejected.** Milliseconds (some sources do not provide them, so a conversion would be needed
+in the other direction anyway).
+
+---
+
+## ADR-012 — The first transfer over the network; adoption mode optional
+
+**Status:** accepted
+
+**Context.** The first sync covers the whole library and can take a long time. An initial dump
+over a cable, with only the difference sent afterwards, was considered.
+
+**Decision.** The primary path is a full transfer over the network, spread over several
+nights. Adopting an existing dump is an additional feature.
+
+**Rationale.** Copying over MTP notoriously fails to preserve modification times, and FAT has
+a two-second granularity. A mismatched mtime would make the first run consider every file
+missing and re-send everything despite the existing dump. A network transfer forces proper
+resumability, which is needed anyway, and eliminates a whole class of errors.
+
+**Rejected.** A cable dump only, with mandatory adoption (a single point of failure at first
+run).
+
+**Consequences.** The first run takes several nights. Acceptable, because it happens once.
+
+---
+
+## ADR-013 — targetSdk 36 and distribution outside the store
+
+**Status:** accepted
+
+**Context.** Access to the whole of storage requires `MANAGE_EXTERNAL_STORAGE`, which Google
+Play does not permit for an application of this kind.
+
+**Decision.** `targetSdk 36`, installed by sideloading, outside the store.
+
+**Rationale.** `targetSdk 36` sidesteps, for now, the `ACCESS_LOCAL_NETWORK` requirement
+introduced in Android 17. Since distribution happens outside the store anyway, the obligation
+to keep raising the target level does not apply.
+
+**Rejected.** The Storage Access Framework (too slow across hundreds of thousands of files),
+restricting ourselves to `MediaStore` (would miss documents and downloads).
+
+**Consequences.** A dependency on a system version that will expire. Deliberately recorded as
+a known limitation, to be described in the thesis. `/Android/data` and `/Android/obb` remain
+inaccessible and we do not try to work around that; `/Android/media` is accessible and is
+included in the backup.
+
+---
+
+## ADR-014 — The overlay network as an interchangeable deployment profile
+
+**Status:** accepted
+
+**Context.** Access from outside the local network requires a meeting point: port forwarding,
+an overlay network, or a relay of one's own. There is no fourth option.
+
+**Decision.** The application **integrates with no provider**. An overlay network contributes
+exactly one more address to the route set from ADR-006.
+
+**Rationale.** This makes Meshnet, Tailscale, a hand-rolled WireGuard, DDNS with port
+forwarding and a self-hosted relay interchangeable without changing a single line of code. The
+thesis describes an architecture that admits any of them, rather than resting on a commercial
+product.
+
+**Rejected.** Integrating with a specific provider's API (a dependency and a loss of
+neutrality), a built-in WireGuard implementation (an enormous effort unrelated to the subject).
+
+**Consequences.** The claim of "no cloud" needs qualifying in the thesis: it means "the data is
+never stored by a third party", not "no packet ever crosses someone else's machine". The literal
+version is achieved only with a self-hosted relay or port forwarding.
+
+---
+
+## ADR-015 — An orphan report without deletion
+
+**Status:** accepted
+
+**Context.** Since the server never deletes, moving files around on the phone multiplies copies
+and disk usage grows without end.
+
+**Decision.** After a session with a complete manifest closes, the server computes the list of
+paths present on its side and absent on the phone, and exposes it as a report. It deletes
+nothing.
+
+**Rationale.** It preserves the invariant from ADR-001 while giving the user control over the
+growth in usage. Orphans are a by-product of a reconciliation that has to be run periodically
+anyway.
+
+**Rejected.** Automatic deletion after a grace period (contradicts ADR-001), ignoring the
+problem entirely (the disk would fill with no explanation).
+
+**Consequences.** The decision to delete belongs to the user alone and is made by hand, outside
+the application or through an explicit action in the panel.
+
+---
+
+## ADR-016 — Integrity over frugality
+
+**Status:** accepted
+
+**Context.** The thesis is written for a cybersecurity and digital forensics specialisation.
+Earlier decisions weighed energy cost against change detectability and consistently chose
+frugality (ADR-002). For this class of use that weighting is the wrong way round: a backup
+about which nothing can be demonstrated has limited evidentiary value.
+
+**Decision.** Integrity is the priority and its cost is acceptable. Concretely:
+
+1. **A digest of every file is mandatory on acceptance.** The server may refuse a transfer
+   without one. This is no longer the optional convenience of protocol §9.
+2. **An integrity ledger.** The server keeps a durable, append-only record: for every accepted
+   file, its path, size, mtime, digest and the moment of acceptance. The ledger is a **chain of
+   digests** — each entry covers the digest of the previous one, so retroactive edits to the
+   ledger itself are detectable.
+3. **The change-detection policy is the user's choice.** Fast mode preserves ADR-002. Thorough
+   mode hashes every file on every scan and compares it against the ledger, thereby detecting a
+   **metadata-preserving substitution** — a file with unchanged size and modification time but
+   different content.
+4. **Verification need not be a sample.** The user chooses the scope; a sample remains the
+   default for reasons of time, not of principle. Whatever the scope, it must span files of all
+   sizes: excluding large ones leaves the hardest-to-reproduce data permanently unchecked.
+
+**Rationale.** The distinction from ADR-002 still holds — hashing for change detection really
+does cost a full read of the data. What changes is the answer to whether it is worth it: in
+evidentiary use, detecting a metadata-preserving substitution is exactly what the mechanism
+exists for. Tampering that leaves size and mtime alone is trivial to perform and invisible to
+any system built on metadata alone.
+
+The digest chain in the ledger costs one extra function call per file, and turns a list of
+digests into a record that cannot be quietly corrected.
+
+**Rejected.** Forcing thorough mode with no choice (on a large library and weaker hardware this
+would mean day-long cycles and a user who turns the application off), signing the ledger with
+the server key (the key sits on the same machine, so the signature does not protect against
+whoever has access to it — the digest chain gives the same detectability without pretending to
+a stronger guarantee).
+
+**Consequences.** Thorough mode requires a full read of the phone's storage on every cycle. This
+is visible in the interface and documented, rather than hidden behind a default.
+
+---
+
+## ADR-017 — No assumptions about device capacity
+
+**Status:** accepted
+
+**Context.** The documentation assumed a first sync on the order of 200 GB and derived part of
+its reasoning from that number. The assumption turned out to be tied to one particular piece of
+hardware — on a device with less storage it is physically impossible, and on a larger one it is
+an underestimate.
+
+**Decision.** We assume nothing about library size or device capacity anywhere. The thresholds
+we do need are **relative**, or follow from constraints unrelated to data size.
+
+| Threshold | Relative to | Why not absolute |
 |---|---|---|
-| zapas wolnego miejsca | `max(2% pojemności, niewielkie minimum)` | 2% na dysku 128 GB to za mało, na 8 TB za dużo — stąd oba człony |
-| próg paczkowania | narzut żądania HTTP wobec czasu transferu | zależy od sieci, nie od wielkości biblioteki |
-| rozmiar fragmentu | czas trwania pojedynczego żądania | zależy od przepustowości |
-| budżet pracy w tle | limit systemu Android | nie jest naszym wyborem |
+| free-space reserve | `max(2% of capacity, a small minimum)` | 2% of a 128 GB disk is too little, of an 8 TB disk too much — hence both terms |
+| bundling threshold | HTTP request overhead against transfer time | depends on the network, not on library size |
+| chunk size | the duration of a single request | depends on throughput |
+| background-work budget | the Android system limit | not our choice to make |
 
-**Uzasadnienie.** Architektura broni się bez tej liczby. Wznawialność na trzech
-poziomach, skan przyrostowy i budżet mają sens przy bibliotece dowolnego rozmiaru —
-im większa, tym bardziej, ale próg wejścia nie istnieje. Przywiązanie uzasadnień
-do konkretnej liczby czyniło je fałszywymi wszędzie tam, gdzie ta liczba nie
-obowiązuje.
+**Rationale.** The architecture defends itself without that number. Three-level resumability,
+incremental scanning and the budget all make sense for a library of any size — more so the
+larger it is, but there is no threshold below which they stop mattering. Tying the reasoning to
+one figure made it false everywhere that figure does not hold.
 
-**Odrzucone.** Podanie innej liczby zamiast 200 GB (ten sam błąd, inna wartość),
-skalowanie progów do rozmiaru biblioteki (wymagałoby jej znajomości przed pierwszym
-skanem, czyli zanim cokolwiek wiemy).
+**Rejected.** Naming a different number instead of 200 GB (the same mistake with a different
+value), scaling the thresholds to library size (this would require knowing it before the first
+scan, i.e. before we know anything).
