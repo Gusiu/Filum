@@ -172,7 +172,7 @@ public class BundleReaderTests
         BinaryPrimitives.WriteUInt32BigEndian(bundle, 500_000);
 
         var error = await Assert.ThrowsAsync<BundleFormatException>(() => ReadAsync(h, bundle));
-        Assert.Contains("długość", error.Message);
+        Assert.Contains("length", error.Message);
     }
 
     [Fact]
@@ -185,7 +185,7 @@ public class BundleReaderTests
         var error = await Assert.ThrowsAsync<BundleFormatException>(
             () => ReadAsync(h, Bundle(("a.txt", "x", "nie-jest-skrotem"))));
 
-        Assert.Contains("skrótu", error.Message);
+        Assert.Contains("digest", error.Message);
     }
 
     [Fact]

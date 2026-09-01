@@ -4,7 +4,7 @@ using System.Text;
 
 namespace Filum.Protocol;
 
-/// <summary>Powód odrzucenia ścieżki. Odpowiada polu <c>error</c> w odpowiedzi HTTP 422.</summary>
+/// <summary>Why a path was rejected. Corresponds to the <c>error</c> field in an HTTP 422 response.</summary>
 public enum PathRejection
 {
     None,
@@ -16,7 +16,7 @@ public enum PathRejection
     PathTooLong
 }
 
-/// <summary>Wynik sanityzacji: albo ścieżka składowania, albo powód odrzucenia.</summary>
+/// <summary>The result of sanitisation: either a storage path or a reason for rejection.</summary>
 public readonly record struct SanitizeResult(bool Ok, string? Stored, PathRejection Reason)
 {
     public static SanitizeResult Success(string stored) => new(true, stored, PathRejection.None);
@@ -24,23 +24,23 @@ public readonly record struct SanitizeResult(bool Ok, string? Stored, PathReject
 }
 
 /// <summary>
-/// Odwzorowanie ścieżki kanonicznej z telefonu na ścieżkę składowania pod NTFS.
+/// Maps a canonical path from the phone onto a storage path under NTFS.
 ///
-/// Implementacja normatywna dla docs/PATH-RULES.md. Lustrzanym odbiciem jest
-/// klasa <c>PathRules</c> w module :core:protocol po stronie Androida — obie
-/// przechodzą ten sam zestaw docs/testvectors/paths.tsv.
+/// The normative implementation of docs/PATH-RULES.md. Its mirror image is the
+/// <c>PathRules</c> class in the :core:protocol module on the Android side — both
+/// pass the same docs/testvectors/paths.tsv set.
 ///
-/// Klasa jest celowo wolna od operacji plikowych. Złączenie z katalogiem
-/// urządzenia, prefiks \\?\ i kontrola zawierania należą do Filum.Core.
+/// The class is deliberately free of file operations. Joining with the device
+/// directory, the \\?\ prefix and the containment check belong to Filum.Core.
 /// </summary>
 public static class PathRules
 {
     public const int DefaultMaxPathBytes = 4096;
 
-    /// <summary>Limit NTFS na pojedynczą składową ścieżki, w jednostkach UTF-16.</summary>
+    /// <summary>The NTFS limit on a single path component, in UTF-16 units.</summary>
     private const int MaxSegmentLength = 255;
 
-    /// <summary>Docelowa długość po przycięciu; 247 + '~' + 6 znaków skrótu = 254.</summary>
+    /// <summary>Target length after truncation; 247 + '~' + 6 digest characters = 254.</summary>
     private const int TruncatedSegmentLength = 247;
 
     private const string ForbiddenChars = "<>:\"|?*\\";
@@ -59,8 +59,8 @@ public static class PathRules
     }
 
     /// <summary>
-    /// Sprawdza postać kanoniczną. Zwraca <see cref="PathRejection.None"/>, gdy ścieżka
-    /// nadaje się do składowania.
+    /// Checks the canonical form. Returns <see cref="PathRejection.None"/> when the path
+    /// is fit for storage.
     /// </summary>
     public static PathRejection Validate(string canonicalPath, int maxPathBytes = DefaultMaxPathBytes)
     {
@@ -89,8 +89,8 @@ public static class PathRules
     }
 
     /// <summary>
-    /// Zamienia ścieżkę kanoniczną na ścieżkę składowania. Wynik używa separatora '/';
-    /// zamiana na separator systemowy należy do warstwy wyżej.
+    /// Turns a canonical path into a storage path. The result uses '/' as its separator;
+    /// converting to the platform separator belongs to the layer above.
     /// </summary>
     public static SanitizeResult Sanitize(string canonicalPath, int maxPathBytes = DefaultMaxPathBytes)
     {
@@ -106,16 +106,16 @@ public static class PathRules
     }
 
     /// <summary>
-    /// Koduje pojedynczą składową. Kolejność reguł jest normatywna
-    /// (docs/PATH-RULES.md §5) — zmiana kolejności psuje różnowartościowość.
+    /// Encodes a single component. The order of the rules is normative
+    /// (docs/PATH-RULES.md §5) — reordering them breaks injectivity.
     /// </summary>
     public static string EncodeSegment(string segment)
     {
         ArgumentNullException.ThrowIfNull(segment);
         if (segment.Length == 0) return segment;
 
-        // Reguły 1-3. Jedno przejście wystarcza: '%' trafia do wyjścia już jako
-        // %25, więc znaki wprowadzone przez kodowanie nie są kodowane ponownie.
+        // Rules 1-3. A single pass is enough: '%' reaches the output already as %25,
+        // so the characters the encoding introduces are not encoded a second time.
         var builder = new StringBuilder(segment.Length + 8);
         foreach (var c in segment)
         {
@@ -132,10 +132,10 @@ public static class PathRules
 
         var encoded = builder.ToString();
 
-        // Reguła 5: nazwa zastrzeżona DOS. Sprawdzana na oryginale, bo bierzemy
-        // człon przed pierwszą kropką. Pierwszy znak nazwy zastrzeżonej jest
-        // zawsze literą, więc nie został zakodowany w poprzednim kroku i pozycja
-        // 0 w wersji zakodowanej odpowiada pozycji 0 w oryginale.
+        // Rule 5: a DOS reserved name. Checked against the original, because we take
+        // the part before the first dot. The first character of a reserved name is
+        // always a letter, so it was not encoded in the previous step and position 0
+        // of the encoded form corresponds to position 0 of the original.
         var baseName = segment.Split('.')[0];
         if (ReservedNames.Contains(baseName.ToUpperInvariant()))
         {
@@ -144,8 +144,8 @@ public static class PathRules
             encoded = escaped.Append(encoded, 1, encoded.Length - 1).ToString();
         }
 
-        // Reguła 4: końcowa kropka lub spacja. Kodujemy wyłącznie ostatni znak —
-        // wcześniejsze przestają być końcowe, więc Windows ich nie obetnie.
+        // Rule 4: a trailing dot or space. We encode only the last character — the
+        // earlier ones stop being trailing, so Windows will not trim them.
         var last = encoded[^1];
         if (last is '.' or ' ')
         {
@@ -154,7 +154,7 @@ public static class PathRules
             encoded = escaped.ToString();
         }
 
-        // Reguła 6: limit długości składowej.
+        // Rule 6: the component length limit.
         if (encoded.Length > MaxSegmentLength)
             encoded = TruncateAtEscapeBoundary(encoded, TruncatedSegmentLength) + "~" + ShortHash(segment);
 
@@ -162,8 +162,8 @@ public static class PathRules
     }
 
     /// <summary>
-    /// Odwraca kodowanie procentowe. Przyrostka <c>~xxxxxx</c> z reguły 6 i z rozstrzygania
-    /// kolizji wielkości liter nie da się odwrócić bez index.jsonl — ta metoda go nie tyka.
+    /// Reverses the percent-encoding. The <c>~xxxxxx</c> suffix from rule 6 and from
+    /// case-collision resolution cannot be reversed without index.jsonl — left alone here.
     /// </summary>
     public static string Decode(string storedPath)
     {
@@ -191,9 +191,9 @@ public static class PathRules
     }
 
     /// <summary>
-    /// Przyrostek rozstrzygający kolizję wielkości liter (docs/PATH-RULES.md §6).
-    /// Deterministyczny: ta sama ścieżka źródłowa zawsze daje ten sam przyrostek,
-    /// także po odtworzeniu backupu z kopii.
+    /// The suffix that resolves a case collision (docs/PATH-RULES.md §6).
+    /// Deterministic: the same source path always yields the same suffix, including
+    /// after the backup has been restored from a copy.
     /// </summary>
     public static string CaseCollisionSuffix(string canonicalPath) => "~" + ShortHash(canonicalPath);
 
@@ -207,9 +207,9 @@ public static class PathRules
     }
 
     /// <summary>
-    /// Przycina tak, żeby nie rozciąć sekwencji %XX — inaczej kodowanie przestałoby
-    /// być odwracalne. Każdy '%' w zakodowanym tekście rozpoczyna sekwencję, bo
-    /// literalne '%' zostało wcześniej zamienione na %25.
+    /// Truncates without splitting a %XX sequence — otherwise the encoding would stop
+    /// being reversible. Every '%' in the encoded text starts a sequence, because a
+    /// literal '%' was turned into %25 earlier.
     /// </summary>
     private static string TruncateAtEscapeBoundary(string encoded, int limit)
     {

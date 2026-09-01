@@ -33,11 +33,11 @@ public sealed record ChunkOutcome(
     long FreeBytes = 0);
 
 /// <summary>
-/// Cykl życia transferu: fragment w .filum/incoming/, wznawianie po przesunięciu
-/// i domknięcie z wersjonowaniem (§5.3 i §8.2 protokołu).
+/// The transfer lifecycle: a partial file in .filum/incoming/, resuming by offset, and
+/// committing with versioning (protocol §5.3 and §8.2).
 ///
-/// Katalog files/ zawiera wyłącznie kompletne pliki — użytkownik ma w każdej chwili
-/// oglądać spójne drzewo (I3), więc fragmenty nigdy się w nim nie pojawiają.
+/// The files/ directory holds only complete files — the user is to see a consistent tree
+/// at any moment (I3), so partial files never appear in it.
 /// </summary>
 public sealed class TransferStore(
     StoragePaths paths,
@@ -47,8 +47,8 @@ public sealed class TransferStore(
     IntegrityLedger ledger)
 {
     /// <summary>
-    /// Blokady per plik. Dwa równoległe żądania do tej samej ścieżki uszkodziłyby fragment,
-    /// a przy 3-8 jednoczesnych transferach klienta to nie jest przypadek teoretyczny.
+    /// Per-file locks. Two concurrent requests for the same path would corrupt the partial
+    /// file, and with the client running 3-8 transfers at once that is not hypothetical.
     /// </summary>
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
 
@@ -60,9 +60,9 @@ public sealed class TransferStore(
             return new ChunkOutcome(ChunkStatus.PathRejected, Rejection: rejection);
         }
 
-        // Odrzucamy od razu, zanim cokolwiek trafi na dysk. Przyjęcie bajtów, których
-        // i tak nie da się wpisać do rejestru, byłoby marnowaniem transferu po obu
-        // stronach — a przy wznawianiu klient nie ma jak dosłać samego skrótu.
+        // Refused immediately, before anything reaches the disk. Accepting bytes that
+        // could not be recorded in the ledger anyway would waste the transfer on both
+        // sides — and on resume the client has no way to send the digest on its own.
         if (options.RequireDigest && request.Digest is null)
         {
             return new ChunkOutcome(ChunkStatus.DigestRequired);
@@ -111,8 +111,8 @@ public sealed class TransferStore(
             var meta = PartMetadata.Read(metaPath);
             if (meta is null || !meta.Matches(request.Size, request.Mtime))
             {
-                // Fragment powstał dla innej wersji pliku. Sklejenie dałoby plik,
-                // który nigdy nie istniał — każemy zacząć od zera (§5.3).
+                // The partial file was created for a different version of the file.
+                // Splicing would produce a file that never existed — start over (§5.3).
                 return new ChunkOutcome(ChunkStatus.OffsetMismatch, ExpectedOffset: 0);
             }
 
@@ -132,9 +132,9 @@ public sealed class TransferStore(
             await part.FlushAsync(ct).ConfigureAwait(false);
         }
 
-        // Klient przysłał więcej, niż zadeklarował w X-Filum-Size. Ciche przycięcie
-        // dałoby plik uznany za kompletny, choć powstał z niespójnych danych — a to
-        // dokładnie ten rodzaj cichej utraty, którego cały projekt ma unikać.
+        // The client sent more than it declared in X-Filum-Size. Silently truncating
+        // would produce a file considered complete though assembled from inconsistent
+        // data — exactly the kind of silent loss this whole project exists to avoid.
         if (await HasMoreDataAsync(body, ct).ConfigureAwait(false))
         {
             TruncateTo(partPath, request.Offset);
@@ -150,8 +150,8 @@ public sealed class TransferStore(
     }
 
     /// <summary>
-    /// Domknięcie transferu (§8.2). Kolejność kroków jest istotna: przeniesienie do files/
-    /// nie może wyprzedzić odłożenia starej wersji, bo naruszyłoby to niezmiennik I2.
+    /// Committing the transfer (§8.2). The order of the steps matters: the move into
+    /// files/ must not precede filing the old version away, or I2 would be violated.
     /// </summary>
     private async Task<ChunkOutcome> CommitAsync(
         string slug,
@@ -186,8 +186,8 @@ public sealed class TransferStore(
 
         Delete(metaPath);
 
-        // Rejestr dopisujemy dopiero po udanym przeniesieniu. Wpis o pliku, który
-        // ostatecznie nie wylądował na dysku, byłby gorszy niż brak wpisu.
+        // The ledger is appended only after the move succeeds. An entry for a file that
+        // never landed on disk would be worse than no entry at all.
         if (request.Digest is { } accepted)
         {
             ledger.Append(slug, request.CanonicalPath, request.Size, request.Mtime, accepted);
@@ -197,8 +197,8 @@ public sealed class TransferStore(
     }
 
     /// <summary>
-    /// Kopiuje najwyżej <paramref name="limit"/> bajtów. Bez ograniczenia klient mógłby
-    /// wysłać więcej, niż zadeklarował w X-Filum-Size, i nadpisać sąsiedztwo w pliku.
+    /// Copies at most <paramref name="limit"/> bytes. Without the bound a client could
+    /// send more than it declared in X-Filum-Size and overwrite neighbouring data.
     /// </summary>
     private static async Task<long> CopyBoundedAsync(Stream source, Stream destination, long limit, CancellationToken ct)
     {
@@ -226,14 +226,14 @@ public sealed class TransferStore(
         return Convert.ToHexStringLower(hash);
     }
 
-    /// <summary>Czy w strumieniu został jeszcze choć jeden bajt ponad zadeklarowany rozmiar.</summary>
+    /// <summary>Whether even one byte remains in the stream beyond the declared size.</summary>
     private static async Task<bool> HasMoreDataAsync(Stream source, CancellationToken ct)
     {
         var probe = new byte[1];
         return await source.ReadAsync(probe.AsMemory(0, 1), ct).ConfigureAwait(false) > 0;
     }
 
-    /// <summary>Cofa fragment do znanego dobrego przesunięcia, zamiast go kasować w całości.</summary>
+    /// <summary>Rolls the partial file back to a known-good offset rather than deleting it.</summary>
     private static void TruncateTo(string path, long length)
     {
         var extended = LongPath.Extended(path);

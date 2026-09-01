@@ -5,7 +5,7 @@ using Filum.Protocol;
 
 namespace Filum.Core;
 
-/// <summary>Nagłówek pojedynczego pliku w paczce (§5.4 protokołu).</summary>
+/// <summary>The header of a single file inside a bundle (protocol §5.4).</summary>
 public sealed record BundleEntryHeader(
     [property: JsonPropertyName("p")] string Path,
     [property: JsonPropertyName("s")] long Size,
@@ -14,24 +14,24 @@ public sealed record BundleEntryHeader(
 
 public sealed record BundleEntryResult(string Path, bool Ok, string? Error = null, string? Versioned = null);
 
-/// <summary>Paczka odrzucona w całości — dalsze czytanie strumienia nie ma sensu.</summary>
+/// <summary>The whole bundle is rejected — reading the stream further is pointless.</summary>
 public sealed class BundleFormatException(string message) : Exception(message);
 
 /// <summary>
-/// Odczyt paczki małych plików (§5.4 protokołu, ADR-008).
+/// Reading a bundle of small files (protocol §5.4, ADR-008).
 ///
-/// Przy stu tysiącach plików, z których większość ma poniżej dwustu kilobajtów,
-/// narzut pojedynczego żądania HTTP zaczyna dominować nad transferem danych.
-/// Paczka przenosi wiele plików jednym żądaniem.
+/// Across a hundred thousand files, most of them under a couple of hundred kilobytes,
+/// the overhead of an individual HTTP request starts to dominate the data transfer.
+/// A bundle carries many files in one request.
 ///
-/// Ramkowanie jest binarne i strumieniowe: czytamy nagłówek, potem dokładnie tyle
-/// bajtów, ile zapowiada, i tak w kółko. Nigdy nie trzymamy całej paczki w pamięci,
-/// bo osiem megabajtów na żądanie razy kilka równoległych połączeń to już liczba,
-/// której nie chcemy mnożyć bez potrzeby.
+/// The framing is binary and streaming: read a header, then exactly as many bytes as it
+/// announces, and repeat. We never hold a whole bundle in memory — eight megabytes per
+/// request times several concurrent connections is already a number not worth
+/// multiplying without cause.
 /// </summary>
 public sealed class BundleReader(TransferStore transfers, FilumOptions options)
 {
-    /// <summary>Górna granica nagłówka. Ścieżka ma limit 4 KiB, reszta to kilkadziesiąt bajtów.</summary>
+    /// <summary>The header size ceiling. A path is capped at 4 KiB, the rest is a few dozen bytes.</summary>
     private const int MaxHeaderBytes = 8 * 1024;
 
     public async Task<IReadOnlyList<BundleEntryResult>> ReadAsync(
@@ -47,7 +47,7 @@ public sealed class BundleReader(TransferStore transfers, FilumOptions options)
 
             if (results.Count >= options.BundleMaxCount)
                 throw new BundleFormatException(
-                    $"Paczka zawiera więcej niż {options.BundleMaxCount} plików.");
+                    $"The bundle holds more than {options.BundleMaxCount} files.");
 
             if (header.Size < 0 || header.Size > options.BundleMaxBytes)
                 throw new BundleFormatException($"Niepoprawny rozmiar pliku {header.Path}.");
@@ -55,7 +55,7 @@ public sealed class BundleReader(TransferStore transfers, FilumOptions options)
             consumed += header.Size;
             if (consumed > options.BundleMaxBytes)
                 throw new BundleFormatException(
-                    $"Paczka przekracza {options.BundleMaxBytes} bajtów.");
+                    $"The bundle exceeds {options.BundleMaxBytes} bytes.");
 
             results.Add(await StoreAsync(slug, header, body, ct).ConfigureAwait(false));
         }
@@ -66,23 +66,22 @@ public sealed class BundleReader(TransferStore transfers, FilumOptions options)
     /// <summary>
     /// Zapisuje jeden plik z paczki.
     ///
-    /// Przechodzi przez zwykły <see cref="TransferStore"/>, więc obowiązuje ta sama
-    /// ścieżka co przy pojedynczym PUT: sprawdzenie skrótu, odłożenie poprzedniej
-    /// wersji, atomowe przeniesienie. Paczka jest optymalizacją transportu, nie
-    /// drugim sposobem składowania.
+    /// Goes through the ordinary <see cref="TransferStore"/>, so the same path applies as
+    /// for a single PUT: digest check, filing the previous version away, atomic move. A
+    /// bundle is a transport optimisation, not a second way of storing things.
     /// </summary>
     private async Task<BundleEntryResult> StoreAsync(
         string slug, BundleEntryHeader header, Stream body, CancellationToken ct)
     {
-        // Strumień ograniczony do zapowiedzianej długości: TransferStore czyta z niego
-        // jak z ciała żądania i nie ma szansy sięgnąć po bajty następnego pliku.
+        // A stream bounded to the announced length: TransferStore reads from it as it
+        // would from a request body and cannot reach into the next file's bytes.
         var payload = new BoundedStream(body, header.Size);
 
         var request = new ChunkRequest(header.Path, header.Size, header.Mtime, Offset: 0, header.Digest);
         var outcome = await transfers.WriteAsync(slug, request, payload, ct).ConfigureAwait(false);
 
-        // Cokolwiek się stało, resztę tego pliku trzeba pochłonąć — inaczej kolejny
-        // nagłówek zaczęlibyśmy czytać od środka cudzych danych.
+        // Whatever happened, the rest of this file has to be consumed — otherwise we
+        // would start reading the next header from the middle of someone else's data.
         await payload.DrainAsync(ct).ConfigureAwait(false);
 
         return outcome.Status switch
@@ -98,17 +97,17 @@ public sealed class BundleReader(TransferStore transfers, FilumOptions options)
         };
     }
 
-    /// <summary>Zwraca null, gdy strumień się skończył na granicy pliku — to poprawny koniec paczki.</summary>
+    /// <summary>Returns null when the stream ended on a file boundary — a valid end of bundle.</summary>
     private static async Task<BundleEntryHeader?> ReadHeaderAsync(Stream body, CancellationToken ct)
     {
         var lengthBytes = new byte[4];
         var read = await ReadExactlyOrNothingAsync(body, lengthBytes, ct).ConfigureAwait(false);
         if (read == 0) return null;
-        if (read != 4) throw new BundleFormatException("Paczka urwała się w nagłówku długości.");
+        if (read != 4) throw new BundleFormatException("The bundle was cut off inside a length header.");
 
         var length = BinaryPrimitives.ReadUInt32BigEndian(lengthBytes);
         if (length == 0 || length > MaxHeaderBytes)
-            throw new BundleFormatException($"Nagłówek pliku ma niedorzeczną długość {length}.");
+            throw new BundleFormatException($"A file header declares an absurd length of {length}.");
 
         var json = new byte[length];
         await body.ReadExactlyAsync(json, ct).ConfigureAwait(false);
@@ -120,16 +119,16 @@ public sealed class BundleReader(TransferStore transfers, FilumOptions options)
         }
         catch (JsonException e)
         {
-            throw new BundleFormatException($"Nagłówek pliku nie jest poprawnym JSON-em: {e.Message}");
+            throw new BundleFormatException($"A file header is not valid JSON: {e.Message}");
         }
 
         if (header is null || string.IsNullOrEmpty(header.Path))
-            throw new BundleFormatException("Nagłówek pliku nie zawiera ścieżki.");
+            throw new BundleFormatException("A file header carries no path.");
 
-        // Skrót jest w paczce wymagany (§5.4): pliki są małe, więc jego policzenie
-        // nic nie kosztuje, a bez niego nie mielibyśmy jak wykryć przesunięcia ramek.
+        // The digest is required in a bundle (§5.4): the files are small, so computing it
+        // costs nothing, and without it we would have no way to detect a frame slipping.
         if (header.Digest.Length != 64 || !header.Digest.All(Uri.IsHexDigit))
-            throw new BundleFormatException($"Brak poprawnego skrótu dla {header.Path}.");
+            throw new BundleFormatException($"No valid digest for {header.Path}.");
 
         return header;
     }
@@ -148,10 +147,10 @@ public sealed class BundleReader(TransferStore transfers, FilumOptions options)
 }
 
 /// <summary>
-/// Widok na fragment strumienia o znanej długości.
+/// A view onto a fixed-length slice of a stream.
 ///
-/// Potrzebny, bo ciało żądania jest jednym ciągiem bajtów, a każdy plik w paczce musi
-/// dostać własny strumień kończący się dokładnie tam, gdzie kończy się jego zawartość.
+/// Needed because the request body is one run of bytes, while every file in a bundle has
+/// to get its own stream ending exactly where its content ends.
 /// </summary>
 internal sealed class BoundedStream(Stream inner, long length) : Stream
 {
@@ -175,7 +174,7 @@ internal sealed class BoundedStream(Stream inner, long length) : Stream
     public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken ct) =>
         ReadAsync(buffer.AsMemory(offset, count), ct).AsTask();
 
-    /// <summary>Pochłania niewykorzystaną resztę, żeby następny nagłówek zaczął się we właściwym miejscu.</summary>
+    /// <summary>Consumes whatever is left, so the next header starts in the right place.</summary>
     public async Task DrainAsync(CancellationToken ct)
     {
         var buffer = new byte[64 * 1024];

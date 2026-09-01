@@ -112,7 +112,7 @@ public class IntegrityLedgerTests
         var result = h.Ledger.Verify(Harness.Slug);
 
         Assert.False(result.Intact);
-        Assert.Contains("brakuje", result.Problem, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("missing", result.Problem, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -185,6 +185,23 @@ public class IntegrityLedgerTests
             using var parsed = JsonDocument.Parse(line);
             Assert.True(parsed.RootElement.TryGetProperty("d", out _));
         }
+    }
+
+    [Fact]
+    public void SkrotPoPrzyjeciu_JestWidocznyMimoWczesniejszegoZapytania()
+    {
+        // Rejestr trzyma indeks ścieżka -> skrót, budowany leniwie przy pierwszym pytaniu.
+        // Zapytanie o plik, którego jeszcze nie ma, buduje ten indeks pusty — i jeżeli
+        // zapis go nie odświeża, kolejne pytanie odpowiada nieaktualnie. W trybie
+        // dokładnym oznaczałoby to zgłoszenie rozbieżności dla pliku, który właśnie
+        // poprawnie przyjęliśmy.
+        using var h = new Harness();
+
+        Assert.Null(h.Ledger.DigestOf(Harness.Slug, "notatka.txt"));
+
+        Append(h, "notatka.txt", "zawartość");
+
+        Assert.Equal(Digest("zawartość"), h.Ledger.DigestOf(Harness.Slug, "notatka.txt"));
     }
 
     [Fact]

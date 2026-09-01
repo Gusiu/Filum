@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace Filum.Protocol;
 
-/// <summary>Nagłówki i stałe protokołu. Jedno miejsce, żeby literały nie rozjechały się po kodzie.</summary>
+/// <summary>Protocol headers and constants. One place, so the literals cannot drift apart across the code.</summary>
 public static class FilumHeaders
 {
     public const string Path = "X-Filum-Path";
@@ -43,7 +43,7 @@ public sealed record PingResponse(
 
 // --- POST /api/v1/pair (§3.3) ---
 
-/// <summary>Zgłoszenie parowania. Certyfikat klienta w postaci DER, zakodowany base64.</summary>
+/// <summary>A pairing request. The client certificate in DER form, base64-encoded.</summary>
 public sealed record PairRequest(string Cert, string Label);
 
 public sealed record PairResponse(string DeviceKey, string ServerInstanceId, int Protocol);
@@ -51,9 +51,9 @@ public sealed record PairResponse(string DeviceKey, string ServerInstanceId, int
 // --- GET /api/v1/admin/status ---
 
 /// <summary>
-/// Urządzenie widziane przez panel. Model jest płaski i samodzielny, bo tę samą
-/// odpowiedź czyta ikona w zasobniku — osobny proces, który nie ma dostępu do
-/// wewnętrznych typów serwera.
+/// A device as the panel sees it. The model is flat and self-contained, because the
+/// tray icon reads the same response — a separate process with no access to the
+/// server's internal types.
 /// </summary>
 public sealed record AdminDevice(
     string Pin,
@@ -64,17 +64,18 @@ public sealed record AdminDevice(
     long FileCount,
     long BytesStored,
     DateTimeOffset? LastActivity,
-    /// <summary>Liczba plików obecnych w kopii, a nieobecnych już na telefonie (§5.6).</summary>
+    /// <summary>How many files are in the copy but no longer on the phone (§5.6).</summary>
     int OrphanCount = 0,
     long OrphanBytes = 0,
-    /// <summary>Stan rejestru integralności urządzenia (§10). Null, gdy rejestr nie jest prowadzony.</summary>
+    /// <summary>The device's integrity ledger state (§9.2). Null when no ledger is kept.</summary>
     AdminLedger? Ledger = null);
 
 /// <summary>
-/// Podsumowanie rejestru integralności jednego urządzenia.
+/// A summary of one device's integrity ledger.
 ///
-/// Sama liczba wpisów niczego nie mówi bez odpowiedzi na pytanie, czy łańcuch trzyma —
-/// dlatego oba pola są tu razem i panel nie pokazuje jednego bez drugiego.
+/// The entry count alone says nothing without an answer to whether the chain holds —
+/// which is why both fields live here together and the panel never shows one without
+/// the other.
 /// </summary>
 public sealed record AdminLedger(
     long Entries,
@@ -95,16 +96,16 @@ public sealed record AdminStatus(
 // --- POST /api/v1/manifest (§5.2) ---
 
 /// <summary>
-/// Pozycja manifestu. Nazwy pól są jednoliterowe, bo przy 100 tys. plików
-/// narzut nazw w JSON przestaje być pomijalny.
+/// A manifest entry. The field names are single letters, because across a hundred
+/// thousand files the cost of the names in JSON stops being negligible.
 /// </summary>
 public sealed record ManifestEntry(
     [property: JsonPropertyName("p")] string Path,
     [property: JsonPropertyName("s")] long Size,
     [property: JsonPropertyName("m")] long Mtime,
     /// <summary>
-    /// Skrót zawartości, gdy klient pracuje w trybie dokładnym (§5.2, ADR-016).
-    /// Nieobecny w trybie szybkim — tam tożsamość opiera się na metadanych.
+    /// The content digest, when the client is running in thorough mode (§5.2, ADR-016).
+    /// Absent in fast mode, where identity rests on metadata.
     /// </summary>
     [property: JsonPropertyName("d")] string? Digest = null);
 
@@ -121,8 +122,8 @@ public sealed record NeededFile(
     [property: JsonPropertyName("versioned")] bool? Versioned = null);
 
 /// <summary>
-/// Ścieżka odrzucona na etapie manifestu. Pozwala klientowi oznaczyć plik jako
-/// trwale nieudany bez marnowania osobnego żądania PUT tylko po to, żeby dostać 422.
+/// A path rejected at the manifest stage. It lets the client mark a file as permanently
+/// failed without wasting a separate PUT request just to receive a 422.
 /// </summary>
 public sealed record RejectedFile(
     [property: JsonPropertyName("p")] string Path,
@@ -133,13 +134,14 @@ public sealed record ManifestResponse(
     IReadOnlyList<NeededFile> Needed,
     IReadOnlyList<RejectedFile> Rejected,
     /// <summary>
-    /// Ścieżki, dla których klient podał skrót inny niż zapisany w rejestrze przy
-    /// przyjęciu, mimo zgodnego rozmiaru i czasu modyfikacji. Zmiana zachowująca
-    /// metadane nie zdarza się przypadkiem i klient odnotowuje ją w dzienniku.
+    /// Paths for which the client reported a digest different from the one recorded in
+    /// the ledger at acceptance time, despite matching size and modification time. A
+    /// metadata-preserving change does not happen by accident, and the client records it
+    /// in the journal.
     ///
-    /// Pole jest **pomijane**, gdy nic nie jest rozbieżne — tak stanowi §5.2. Sam typ
-    /// dopuszczający null tego nie załatwia: System.Text.Json domyślnie wypisuje
-    /// `"divergent": null`, co jest czymś innym niż nieobecność pola.
+    /// The field is **omitted** when nothing diverges — §5.2 says so. A nullable type does
+    /// not achieve that on its own: System.Text.Json writes `"divergent": null` by
+    /// default, which is a different thing from the field being absent.
     /// </summary>
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [property: JsonPropertyName("divergent")] IReadOnlyList<string>? Divergent = null);
@@ -163,7 +165,7 @@ public sealed record BundleFileResult(
 public sealed record BundleResponse(
     [property: JsonPropertyName("results")] IReadOnlyList<BundleFileResult> Results);
 
-/// <summary>Typ zawartości paczki. Ramkowanie binarne, nie multipart (§5.4).</summary>
+/// <summary>The bundle content type. Binary framing, not multipart (§5.4).</summary>
 public static class BundleContentType
 {
     public const string Value = "application/vnd.filum.bundle";
@@ -186,9 +188,9 @@ public sealed record VerifyResponse(
 // --- GET /api/v1/orphans (§5.6) ---
 
 /// <summary>
-/// Pliki obecne na serwerze, a nieobecne już na telefonie.
+/// Files present on the server and no longer on the phone.
 ///
-/// Raport jest wyłącznie informacyjny — nic nie jest na jego podstawie usuwane
+/// The report is informational only — nothing is deleted on its basis
 /// (ADR-015, niezmiennik I1).
 /// </summary>
 public sealed record OrphanReport(
@@ -198,14 +200,14 @@ public sealed record OrphanReport(
     [property: JsonPropertyName("bytes")] long Bytes,
     [property: JsonPropertyName("paths")] IReadOnlyList<string> Paths);
 
-// --- błędy (§6) ---
+// --- errors (§6) ---
 
 public sealed record ErrorResponse(
     string Error,
     string Message,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? ExpectedOffset = null);
 
-/// <summary>Kody błędów z §6 protokołu. Wartości trafiają do pola <c>error</c>.</summary>
+/// <summary>The error codes from protocol §6. The values go into the <c>error</c> field.</summary>
 public static class ErrorCodes
 {
     public const string BadRequest = "bad_request";
@@ -216,7 +218,7 @@ public static class ErrorCodes
     public const string InsufficientStorage = "insufficient_storage";
     public const string PayloadTooLarge = "payload_too_large";
 
-    /// <summary>Mapuje powód odrzucenia ścieżki na wartość pola <c>error</c>.</summary>
+    /// <summary>Maps a path rejection reason onto an <c>error</c> field value.</summary>
     public static string FromRejection(PathRejection rejection) => rejection switch
     {
         PathRejection.Absolute => "absolute",

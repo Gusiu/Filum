@@ -5,9 +5,10 @@ using Filum.Protocol;
 namespace Filum.Core;
 
 /// <summary>
-/// Zapis towarzyszący plikowi .part. Trzyma wyłącznie tożsamość transferu; liczba
-/// odebranych bajtów celowo NIE jest tu zapisywana — bierzemy ją z długości pliku .part,
-/// żeby dwa źródła prawdy nie mogły się rozjechać po nagłym wyłączeniu (ADR-003).
+/// The record accompanying a .part file. It holds the transfer's identity and nothing
+/// else; the number of bytes received is deliberately NOT stored here — we take it from
+/// the .part file's length, so that two sources of truth cannot disagree after an abrupt
+/// shutdown (ADR-003).
 /// </summary>
 public sealed record PartMetadata(
     [property: JsonPropertyName("p")] string Path,
@@ -26,7 +27,7 @@ public sealed record PartMetadata(
         }
         catch (JsonException)
         {
-            // Uszkodzony zapis traktujemy jak jego brak — transfer zacznie się od zera.
+            // A corrupt record is treated as no record — the transfer starts from zero.
             return null;
         }
     }
@@ -47,14 +48,14 @@ public sealed record ManifestResolution(
     IReadOnlyList<string> Divergent);
 
 /// <summary>
-/// Odpowiada na pytanie „czego wam brakuje" przez porównanie z systemem plików.
-/// Serwer nie utrzymuje indeksu zawartości (ADR-003) — źródłem prawdy jest dysk,
-/// więc backup przeniesiony na inny nośnik albo ręcznie zmieniony w Eksploratorze
-/// po prostu działa.
+/// Answers the question of what the server is missing by comparing against the
+/// filesystem. The server keeps no content index (ADR-003) — the disk is the source of
+/// truth, so a backup moved to different media, or edited by hand in Explorer, simply
+/// works.
 ///
-/// W trybie dokładnym klient dokłada do pozycji skrót, a wtedy dochodzi drugie
-/// pytanie: czy to na pewno ta sama zawartość, co poprzednio. Rejestr integralności
-/// pozwala odpowiedzieć bez czytania kopii z dysku (ADR-016).
+/// In thorough mode the client attaches a digest to each entry, and a second question
+/// arises: is this really the same content as before. The integrity ledger answers it
+/// without reading the copy from disk (ADR-016).
 /// </summary>
 public sealed class ManifestResolver(StoragePaths paths, FilumOptions options, IntegrityLedger ledger)
 {
@@ -80,8 +81,8 @@ public sealed class ManifestResolver(StoragePaths paths, FilumOptions options, I
             {
                 if (present.Size == entry.Size && present.Mtime == entry.Mtime)
                 {
-                    // Metadane się zgadzają, więc według ADR-002 plik jest ten sam.
-                    // Skrót — jeśli klient go podał — pozwala to zdanie sprawdzić.
+                    // The metadata matches, so by ADR-002 this is the same file.
+                    // The digest, if the client supplied one, lets us check that claim.
                     if (Diverged(slug, entry))
                     {
                         divergent.Add(entry.Path);
@@ -94,8 +95,8 @@ public sealed class ManifestResolver(StoragePaths paths, FilumOptions options, I
                 }
                 else
                 {
-                    // Ścieżka zajęta przez inną zawartość. Transfer zaczyna się od zera,
-                    // a przy domknięciu stara kopia trafi do .filum/versions/ (§8.3).
+                    // The path is occupied by different content. The transfer starts from
+                    // zero, and on commit the old copy is filed into .filum/versions/ (§8.3).
                     needed.Add(new NeededFile(entry.Path, 0, Versioned: true));
                 }
                 continue;
@@ -108,12 +109,12 @@ public sealed class ManifestResolver(StoragePaths paths, FilumOptions options, I
     }
 
     /// <summary>
-    /// Czy zawartość zmieniła się mimo niezmienionych metadanych.
+    /// Whether the content changed despite unchanged metadata.
     ///
-    /// Brak wpisu w rejestrze **nie** jest przesłanką rozbieżności — plik mógł trafić
-    /// do kopii przed włączeniem rejestru albo zostać do niej wstawiony ręcznie.
-    /// Uznanie takiego pliku za podmieniony oznaczałoby fałszywy alarm przy każdej
-    /// pierwszej synchronizacji w trybie dokładnym.
+    /// The absence of a ledger entry is **not** evidence of divergence — the file may have
+    /// entered the copy before the ledger was running, or been placed there by hand.
+    /// Treating such a file as substituted would mean a false alarm on every first sync in
+    /// thorough mode, which is exactly when the report needs to mean something.
     /// </summary>
     private bool Diverged(string slug, ManifestEntry entry)
     {
@@ -124,9 +125,9 @@ public sealed class ManifestResolver(StoragePaths paths, FilumOptions options, I
     }
 
     /// <summary>
-    /// Przesunięcie wznowienia. Niedokończony fragment liczy się tylko wtedy, gdy powstał
-    /// dla tej samej pary (rozmiar, mtime) — inaczej skleilibyśmy dwie różne wersje pliku,
-    /// np. gdy nagranie wideo było w trakcie zapisu przy poprzedniej próbie.
+    /// The resume offset. An unfinished partial file counts only when it was created for
+    /// the same (size, mtime) pair — otherwise we would splice two different versions of a
+    /// file together, for instance when a video was still being written on the last attempt.
     /// </summary>
     private long ResumeOffset(string slug, ManifestEntry entry)
     {
@@ -136,7 +137,7 @@ public sealed class ManifestResolver(StoragePaths paths, FilumOptions options, I
         var part = new FileInfo(LongPath.Extended(paths.PartPath(slug, entry.Path)));
         if (!part.Exists) return 0;
 
-        // Fragment dłuższy niż deklarowany plik jest niespójny; każemy zacząć od nowa.
+        // A partial file longer than the declared size is inconsistent; start over.
         return part.Length > entry.Size ? 0 : part.Length;
     }
 }

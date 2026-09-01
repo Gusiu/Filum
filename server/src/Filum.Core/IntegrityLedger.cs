@@ -6,10 +6,10 @@ using System.Text.Json.Serialization;
 namespace Filum.Core;
 
 /// <summary>
-/// Wpis rejestru integralności — jeden przyjęty plik.
+/// One entry in the integrity ledger — one accepted file.
 ///
-/// Pola są krótkie, bo rejestr rośnie o wiersz na plik i przy dużej bibliotece
-/// jego rozmiar zaczyna mieć znaczenie.
+/// The field names are short, because the ledger grows by a line per file and on a large
+/// library its own size starts to matter.
 /// </summary>
 public sealed record LedgerEntry(
     [property: JsonPropertyName("n")] long Sequence,
@@ -18,7 +18,7 @@ public sealed record LedgerEntry(
     [property: JsonPropertyName("s")] long Size,
     [property: JsonPropertyName("m")] long Mtime,
     [property: JsonPropertyName("d")] string Digest,
-    /// <summary>Skrót poprzedniego wiersza. Spina rejestr w łańcuch (§9.2 protokołu).</summary>
+    /// <summary>The previous line's digest. This is what chains the ledger (protocol §9.2).</summary>
     [property: JsonPropertyName("prev")] string Previous);
 
 public sealed record LedgerVerification(
@@ -28,58 +28,57 @@ public sealed record LedgerVerification(
     string? Problem);
 
 /// <summary>
-/// Rejestr integralności: dopisywany zapis wszystkiego, co serwer przyjął (ADR-016).
+/// The integrity ledger: an append-only record of everything the server accepted (ADR-016).
 ///
-/// Odpowiada na pytanie, którego nie da się zadać samej kopii plików: **co i kiedy
-/// tu trafiło, i czy od tamtej pory ktoś to ruszył**. Przy zastosowaniach dowodowych
-/// to jest właściwe pytanie — samo wykrycie, że plik się zmienił, nie wystarcza,
-/// jeśli nie ma czym wykazać, jak wyglądał wcześniej.
+/// It answers a question the file copy alone cannot be asked: **what arrived here and
+/// when, and has anyone touched it since**. For evidentiary use that is the right
+/// question — detecting that a file changed is not enough on its own if there is nothing
+/// to show how it looked before.
 ///
-/// Każdy wiersz zawiera skrót wiersza poprzedniego. Dzięki temu usunięcie albo
-/// podmiana dowolnego wpisu rozspójnia wszystko, co po nim następuje — a rejestr,
-/// którego nie da się po cichu poprawić, jest czymś jakościowo innym niż lista skrótów.
+/// Every line carries the digest of the line before it. Removing or altering any entry
+/// therefore breaks everything that follows — and a record that cannot be quietly
+/// corrected is a qualitatively different thing from a list of digests.
 ///
-/// **Czego to nie daje.** Łańcuch wykrywa edycję wsteczną, ale nie chroni przed
-/// odtworzeniem całego rejestru od zera przez kogoś, kto ma dostęp do dysku
-/// i do plików. Podpisanie kluczem serwera niczego by nie zmieniło, bo ten klucz
-/// leży na tej samej maszynie. Uczciwa gwarancja brzmi: wykrywalność manipulacji
-/// częściowej, nie niemożliwość manipulacji.
+/// **What this does not give.** The chain detects retroactive edits, but does not protect
+/// against someone with access to the disk and the files rebuilding the whole ledger from
+/// scratch. Signing it with the server key would change nothing, because that key sits on
+/// the same machine. The honest guarantee reads: detectability of partial tampering, not
+/// impossibility of tampering.
 /// </summary>
 public sealed class IntegrityLedger(StoragePaths paths)
 {
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
 
     /// <summary>
-    /// UTF-8 **bez znacznika kolejności bajtów**.
+    /// UTF-8 **without a byte-order mark**.
     ///
-    /// `Encoding.UTF8` dopisuje BOM przy tworzeniu pliku, przez co pierwszy wiersz
-    /// przestaje być poprawnym JSON-em dla wszystkiego, co nie zna tej konwencji.
-    /// Cała wartość tego rejestru polega na tym, że da się go sprawdzić **bez** tej
-    /// aplikacji — trzema wierszami w dowolnym języku. Znacznik, który to psuje,
-    /// jest wadą, a nie szczegółem zapisu.
+    /// `Encoding.UTF8` writes a BOM when creating a file, which stops the first line from
+    /// being valid JSON for anything that does not expect that convention. This ledger's
+    /// entire value rests on being checkable **without** this application, in three lines
+    /// of any language. A mark that breaks that is a defect, not a storage detail.
     /// </summary>
     private static readonly Encoding Utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
-    /// <summary>Wartość pola `prev` w pierwszym wierszu. Kotwica łańcucha.</summary>
+    /// <summary>The value of `prev` in the first line. The chain's anchor.</summary>
     public const string Genesis = "genesis";
 
     private readonly object _gate = new();
 
     /// <summary>
-    /// Ścieżka do ostatnio przyjętego skrótu, budowane leniwie przy pierwszym pytaniu.
+    /// Path to most recently accepted digest, built lazily on the first question asked.
     ///
-    /// Bez tego każde sprawdzenie przechodziłoby rejestr od początku, a partia manifestu
-    /// liczy do dwóch tysięcy pozycji — przy rejestrze o stu tysiącach wpisów oznaczałoby
-    /// to setki milionów odczytów wierszy na jedno żądanie.
+    /// Without it every check would walk the ledger from the start, and a manifest batch
+    /// holds up to two thousand entries — against a ledger of a hundred thousand entries
+    /// that would mean hundreds of millions of line reads per request.
     /// </summary>
     private readonly Dictionary<string, Dictionary<string, string>> _index = new(StringComparer.Ordinal);
 
     /// <summary>
-    /// Dopisuje wpis o przyjętym pliku.
+    /// Appends an entry for an accepted file.
     ///
-    /// Zapis jest pod blokadą, bo łańcuch wymaga odczytania ostatniego wiersza przed
-    /// dopisaniem następnego. Przy równoległych transferach bez tego dwa wpisy
-    /// wskazywałyby na tego samego poprzednika i łańcuch rozjechałby się natychmiast.
+    /// The write is under a lock, because the chain requires reading the last line before
+    /// appending the next. With concurrent transfers and no lock, two entries would point
+    /// at the same predecessor and the chain would break immediately.
     /// </summary>
     public LedgerEntry Append(string slug, string canonicalPath, long size, long mtime, string digest)
     {
@@ -100,11 +99,17 @@ public sealed class IntegrityLedger(StoragePaths paths)
                 Previous: previous);
 
             File.AppendAllText(LongPath.Extended(file), Serialize(entry) + "\n", Utf8);
+
+            // Keep the index in step with what was just written. Only when it already
+            // exists: building it here would force a read of the whole ledger at a
+            // moment when nobody had asked for it.
+            if (_index.TryGetValue(slug, out var index)) index[canonicalPath] = digest;
+
             return entry;
         }
     }
 
-    /// <summary>Ostatni znany skrót pliku pod tą ścieżką; null, gdy nigdy nie był przyjęty.</summary>
+    /// <summary>The last known digest for this path; null if it was never accepted.</summary>
     public string? DigestOf(string slug, string canonicalPath)
     {
         lock (_gate)
@@ -113,7 +118,7 @@ public sealed class IntegrityLedger(StoragePaths paths)
         }
     }
 
-    /// <summary>Zrzuca zbudowany indeks; kolejne pytanie odczyta rejestr od nowa.</summary>
+    /// <summary>Drops the built index; the next question re-reads the ledger.</summary>
     public void Invalidate(string slug)
     {
         lock (_gate) _index.Remove(slug);
@@ -131,11 +136,11 @@ public sealed class IntegrityLedger(StoragePaths paths)
     }
 
     /// <summary>
-    /// Sprawdza spójność łańcucha.
+    /// Checks that the chain holds.
     ///
-    /// Przechodzi rejestr od początku i przelicza skróty. Wskazuje **pierwszy** wiersz,
-    /// od którego coś się nie zgadza — dalsze byłyby i tak niespójne, więc podawanie
-    /// ich wszystkich niczego by nie wniosło.
+    /// Walks the ledger from the start, recomputing digests. It reports the **first** line
+    /// from which something no longer adds up — everything after it would be inconsistent
+    /// anyway, so listing all of them would add nothing.
     /// </summary>
     public LedgerVerification Verify(string slug)
     {
@@ -152,19 +157,19 @@ public sealed class IntegrityLedger(StoragePaths paths)
             }
             catch (JsonException)
             {
-                return new LedgerVerification(false, count, expectedSequence, "Wiersz nie da się odczytać.");
+                return new LedgerVerification(false, count, expectedSequence, "A line cannot be read.");
             }
 
             if (entry is null)
-                return new LedgerVerification(false, count, expectedSequence, "Pusty wiersz rejestru.");
+                return new LedgerVerification(false, count, expectedSequence, "An empty ledger line.");
 
             if (entry.Sequence != expectedSequence)
                 return new LedgerVerification(false, count, entry.Sequence,
-                    $"Numer wpisu {entry.Sequence} zamiast oczekiwanego {expectedSequence} — brakuje wiersza albo został dopisany.");
+                    $"Entry number {entry.Sequence} where {expectedSequence} was expected — a line is missing or was inserted.");
 
             if (entry.Previous != expectedPrevious)
                 return new LedgerVerification(false, count, entry.Sequence,
-                    "Wpis nie wskazuje na poprzedni wiersz — rejestr był edytowany.");
+                    "An entry does not point at the previous line — the ledger was edited.");
 
             expectedPrevious = HashOf(line);
             expectedSequence++;
@@ -185,8 +190,8 @@ public sealed class IntegrityLedger(StoragePaths paths)
             }
             catch (JsonException)
             {
-                // Uszkodzony wiersz pomijamy przy odczycie; od wykrywania takich
-                // sytuacji jest Verify, a nie każdy odczyt z osobna.
+                // A corrupt line is skipped on read; detecting that is Verify's job, not
+                // something every individual read should be doing.
             }
 
             if (entry is not null) yield return entry;
@@ -206,7 +211,7 @@ public sealed class IntegrityLedger(StoragePaths paths)
         }
     }
 
-    /// <summary>Numer i skrót ostatniego wiersza — punkt zaczepienia dla następnego.</summary>
+    /// <summary>The last line's number and digest — the anchor for the next one.</summary>
     private (long Sequence, string Hash) TailOf(string file)
     {
         var extended = LongPath.Extended(file);
@@ -225,11 +230,12 @@ public sealed class IntegrityLedger(StoragePaths paths)
     }
 
     /// <summary>
-    /// Skrót wiersza liczony z jego **dokładnej postaci tekstowej**.
+    /// A line's digest, computed over its **exact textual form**.
     ///
-    /// Nie z pól obiektu: gdyby serializacja kiedykolwiek zmieniła kolejność pól albo
-    /// formatowanie liczb, cały dotychczasowy łańcuch stałby się niespójny bez żadnej
-    /// manipulacji. Wiersz jest tym, co zapisano, i to on jest hashowany.
+    /// Not over the object's fields: were serialisation ever to change field order or
+    /// number formatting, the entire existing chain would become inconsistent with nobody
+    /// having tampered with anything. The line is what was written, and the line is what
+    /// gets hashed.
     /// </summary>
     private static string HashOf(string line) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(line)));
