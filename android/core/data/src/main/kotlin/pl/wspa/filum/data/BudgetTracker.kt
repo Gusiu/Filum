@@ -4,22 +4,22 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Budżet usługi pierwszoplanowej typu `dataSync` (§3.5 architektury).
+ * The budget for a `dataSync` foreground service (architecture §3.5).
  *
- * Android 15 daje takiej usłudze **sześć godzin na dobę** w oknie kroczącym. Po ich
- * wyczerpaniu system wywołuje `onTimeout()` i ubija pracę w nieokreślonym momencie —
- * czekanie na to jest błędem, bo transfer zostaje przerwany w losowym miejscu.
+ * Android 15 grants such a service **six hours a day** over a rolling window. Once they
+ * run out the system calls `onTimeout()` and kills the work at a moment of its choosing —
+ * waiting for that is a mistake, because the transfer is cut off at a random point.
  *
- * Dlatego pilnujemy budżetu sami i kończymy z **twardym marginesem**: po pięciu
- * godzinach, nie po pięciu godzinach i pięćdziesięciu pięciu minutach. Praca jest
- * wznawialna na trzech poziomach, więc zakończenie w połowie kampanii nic nie kosztuje.
+ * So we track the budget ourselves and stop with a **hard margin**: after five hours, not
+ * after five hours and fifty-five minutes. The work resumes at three levels, so stopping
+ * halfway through a campaign costs nothing.
  */
 class BudgetTracker(
     private val dao: BudgetDao,
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
 
-    /** Ile budżetu zostało do bezpiecznego limitu. Nigdy poniżej zera. */
+    /** How much budget is left before the safe limit. Never below zero. */
     suspend fun remainingSeconds(): Long {
         val used = dao.secondsUsedSince(oldestRelevantBucket())
         return max(0, SAFE_LIMIT_SECONDS - used)
@@ -27,14 +27,14 @@ class BudgetTracker(
 
     suspend fun usedSeconds(): Long = dao.secondsUsedSince(oldestRelevantBucket())
 
-    /** Czy warto w ogóle zaczynać cykl. Krótsze okno niż minuta to strata energii. */
+    /** Whether starting a cycle is worth it at all. A window under a minute wastes energy. */
     suspend fun hasRoomToStart(): Boolean = remainingSeconds() >= MINIMUM_USEFUL_SECONDS
 
     /**
-     * Zapisuje zużyty czas, rozdzielając go między kubełki godzinowe.
+     * Records time spent, spreading it across hourly buckets.
      *
-     * Rozdzielenie jest istotne: praca trwająca od 23:40 do 01:20 nie może wpaść
-     * w jeden kubełek, bo okno kroczące przestałoby się poprawnie przesuwać.
+     * The spreading matters: work running from 23:40 to 01:20 must not land in a single
+     * bucket, or the rolling window would stop advancing correctly.
      */
     suspend fun record(startMillis: Long, endMillis: Long) {
         if (endMillis <= startMillis) return
@@ -52,7 +52,7 @@ class BudgetTracker(
         }
     }
 
-    /** Usuwa kubełki spoza okna. Bez tego tabela rosłaby w nieskończoność. */
+    /** Removes buckets outside the window. Without this the table would grow forever. */
     suspend fun prune() {
         dao.prune(oldestRelevantBucket())
     }
@@ -62,16 +62,16 @@ class BudgetTracker(
     companion object {
         const val BUCKET_MILLIS = 3_600_000L
 
-        /** Okno kroczące systemu: 24 godziny. */
+        /** The system's rolling window: 24 hours. */
         const val WINDOW_BUCKETS = 24L
 
-        /** Limit systemowy. Podany dla porównania — sami się do niego nie zbliżamy. */
+        /** The system limit. Stated for comparison — we never come close to it ourselves. */
         const val SYSTEM_LIMIT_SECONDS = 6L * 60 * 60
 
-        /** Nasz limit z marginesem godziny na zamknięcie pracy w kontrolowany sposób. */
+        /** Our limit, with an hour's margin for shutting the work down in a controlled way. */
         const val SAFE_LIMIT_SECONDS = 5L * 60 * 60
 
-        /** Poniżej minuty nie warto podnosić usługi pierwszoplanowej. */
+        /** Below a minute, raising a foreground service is not worth it. */
         const val MINIMUM_USEFUL_SECONDS = 60L
 
         fun bucketOf(epochMillis: Long): Long = Math.floorDiv(epochMillis, BUCKET_MILLIS)

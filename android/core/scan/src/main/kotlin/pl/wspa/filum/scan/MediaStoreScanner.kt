@@ -8,16 +8,16 @@ import android.util.Log
 import java.io.File
 
 /**
- * Szybka ścieżka skanowania (§3.3 architektury).
+ * The fast scanning path (architecture §3.3).
  *
- * MediaStore prowadzi monotoniczny licznik zmian na wolumen. Zapamiętujemy jego stan
- * po skanie i przy następnym pytamy **jednym zapytaniem**, co zmieniło się od tamtej
- pory. Dla zdjęć i wideo, czyli zwykle większości biblioteki, daje to różnicę
- * w milisekundach zamiast w minutach pełnego obchodu drzewa.
+ * MediaStore keeps a monotonic change counter per volume. We remember its value after a
+ * scan and, on the next one, ask in **a single query** what has changed since. For photos
+ * and video, usually the bulk of the library, this is the difference between milliseconds
+ * and the minutes a full tree walk takes.
  *
- * Ograniczenia, przez które pełny obchód nadal jest potrzebny:
- * - licznik obejmuje wyłącznie pliki zaindeksowane przez MediaStore,
- * - resetuje się przy przebudowie indeksu, np. po przywróceniu ustawień fabrycznych.
+ * The limitations that keep the full walk necessary:
+ * - the counter covers only files indexed by MediaStore,
+ * - it resets when the index is rebuilt, e.g. after a factory reset.
  */
 class MediaStoreScanner(
     private val context: Context,
@@ -27,20 +27,20 @@ class MediaStoreScanner(
 
     private val resolver: ContentResolver get() = context.contentResolver
 
-    /** Bieżący stan licznika. Zapisujemy go dopiero po **udanym** skanie. */
+    /** The counter's current value. We store it only after a **successful** scan. */
     fun currentGeneration(volume: String = VOLUME): Long =
         MediaStore.getGeneration(context, volume)
 
     /**
      * Pliki zmienione od podanej generacji.
      *
-     * Zwraca `null`, gdy licznik cofnął się względem zapamiętanego — oznacza to
-     * przebudowę indeksu i wymusza pełny obchód drzewa, bo różnica byłaby niepełna.
+     * Returns `null` when the counter has gone backwards relative to the remembered value —
+     * that means the index was rebuilt and forces a full walk, since the delta would be partial.
      */
     fun changedSince(generation: Long, volume: String = VOLUME): List<ScannedFile>? {
         val current = currentGeneration(volume)
         if (current < generation) {
-            Log.i(TAG, "Licznik MediaStore cofnął się ($current < $generation) — potrzebny pełny skan")
+            Log.i(TAG, "The MediaStore counter went backwards ($current < $generation) — a full scan is needed")
             return null
         }
 
@@ -59,9 +59,9 @@ class MediaStoreScanner(
         arguments: Array<String>?,
     ): List<ScannedFile> {
         val projection = arrayOf(
-            // DATA jest formalnie przestarzałe, ale mamy MANAGE_EXTERNAL_STORAGE
-            // i otwieramy pliki wprost — deskryptor z MediaStore nie dałby nam
-            // ścieżki kanonicznej, której wymaga manifest.
+            // DATA is formally deprecated, but we hold MANAGE_EXTERNAL_STORAGE and open
+            // files directly — a MediaStore descriptor would not give us the canonical
+            // path the manifest requires.
             MediaStore.MediaColumns.DATA,
             MediaStore.MediaColumns.SIZE,
             MediaStore.MediaColumns.DATE_MODIFIED,
@@ -89,13 +89,13 @@ class MediaStoreScanner(
                 val size = cursor.getLong(sizeColumn)
                 if (size <= 0) continue
 
-                // DATE_MODIFIED jest w sekundach — przechodzi przez tę samą bramę
-                // co odczyt z systemu plików, żeby jednostki nigdy się nie rozjechały.
+                // DATE_MODIFIED is in seconds — it goes through the same gate as the
+                // filesystem read, so the units can never drift apart.
                 val mtime = Mtime.fromSeconds(cursor.getLong(mtimeColumn))
                 if (nowSeconds() - mtime < ExclusionRules.QUIESCENCE_SECONDS) continue
 
-                // Indeks bywa nieaktualny: plik usunięty poza MediaStore zostaje
-                // w bazie do najbliższego przeskanowania.
+                // The index can be stale: a file deleted outside MediaStore stays in the
+                // database until the next rescan.
                 if (!File(absolute).isFile) continue
 
                 results += ScannedFile(canonical, absolute, size, mtime)
@@ -111,12 +111,12 @@ class MediaStoreScanner(
     }
 }
 
-/** Wydzielone, żeby dało się podmienić w testach i żeby ścieżka główna miała jedno źródło. */
+/** Extracted so it can be substituted in tests and the main path has a single source. */
 object Environment {
     fun externalStorageRootPath(): String =
         android.os.Environment.getExternalStorageDirectory().absolutePath
 
-    /** Czy aplikacja ma pełny dostęp do pamięci (MANAGE_EXTERNAL_STORAGE, ADR-013). */
+    /** Whether the application has full storage access (MANAGE_EXTERNAL_STORAGE, ADR-013). */
     fun hasFullStorageAccess(): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.R ||
             android.os.Environment.isExternalStorageManager()

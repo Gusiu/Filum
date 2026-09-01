@@ -102,7 +102,7 @@ fun FoldersScreen(
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Text(
-                    "Android/media pozostaje w kopii: tam trzyma swoje pliki między innymi " +
+                    "Android/media pozostaje w kopii: tam trzyma swoje files między innymi " +
                         "WhatsApp.",
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace,

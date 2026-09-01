@@ -22,7 +22,7 @@ class CycleOutcomesTest {
     private fun done(outcome: SyncOutcome) = CycleResult.Done(outcome, endpoint)
 
     @Test
-    fun `ukonczony cykl konczy prace`() {
+    fun `a completed cycle finishes the work`() {
         assertEquals(
             WorkerDecision.SUCCESS,
             CycleOutcomes.decide(done(SyncOutcome.Completed(filesSent = 12, bytesSent = 4096))),
@@ -30,7 +30,7 @@ class CycleOutcomesTest {
     }
 
     @Test
-    fun `wyczerpany budzet nie jest bledem`() {
+    fun `an exhausted budget is not an error`() {
         // Limit jest dobowy. Ponawianie za piętnaście minut nic nie zmieni,
         // a kolejka i tak czeka na następne okno.
         assertEquals(
@@ -40,7 +40,7 @@ class CycleOutcomesTest {
     }
 
     @Test
-    fun `zerwane polaczenie zasluguje na ponowienie`() {
+    fun `a dropped connection deserves a retry`() {
         assertEquals(
             WorkerDecision.RETRY,
             CycleOutcomes.decide(done(SyncOutcome.Interrupted(InterruptReason.CONNECTION, 3, 120))),
@@ -48,7 +48,7 @@ class CycleOutcomesTest {
     }
 
     @Test
-    fun `nieudane uzgodnienie manifestu jest ponawiane`() {
+    fun `a failed manifest exchange is retried`() {
         assertEquals(
             WorkerDecision.RETRY,
             CycleOutcomes.decide(done(SyncOutcome.Failed("serwer odrzucił manifest"))),
@@ -56,7 +56,7 @@ class CycleOutcomesTest {
     }
 
     @Test
-    fun `brak trasy jest ponawiany`() {
+    fun `no route is retried`() {
         // Serwer bywa po prostu wyłączony. Wycofanie wykładnicze WorkManagera
         // sprawia, że kolejne próby nie są kosztowne.
         assertEquals(
@@ -66,7 +66,7 @@ class CycleOutcomesTest {
     }
 
     @Test
-    fun `brak sparowania konczy prace niepowodzeniem`() {
+    fun `not being paired ends the work in failure`() {
         // To jedyny przypadek, w którym ponawianie jest bezcelowe: potrzebna jest
         // decyzja użytkownika, a nie kolejna próba.
         assertEquals(WorkerDecision.FAILURE, CycleOutcomes.decide(CycleResult.NotPaired()))

@@ -14,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap
 data class DiscoveredServer(
     val host: String,
     val port: Int,
-    /** Odcisk klucza z rekordu TXT; pozwala odrzucić cudzą instancję bez łączenia się z nią. */
+    /** The key fingerprint from the TXT record; it rejects someone else's instance without connecting. */
     val pin: String?,
     val name: String?,
 ) {
@@ -22,12 +22,12 @@ data class DiscoveredServer(
 }
 
 /**
- * Wykrywanie serwera w sieci lokalnej przez mDNS (§4.1 protokołu).
+ * Discovering the server on the local network over mDNS (protocol §4.1).
  *
- * Zbiór tras odświeża się sam z odpowiedzi na ping (§4.4), ale ma jedną lukę:
- * działa tylko wtedy, gdy **choć jedna** zapisana trasa zadziała. Telefon, który
- * nie był w domu przez tydzień zmiany routera i nie ma sieci nakładkowej, nie ma
- * się od czego odbić. To jest dokładnie ta sytuacja, którą domyka mDNS.
+ * The route set refreshes itself from the ping response (§4.4), but it has one gap: it
+ * works only when **at least one** stored route works. A phone that was away from home
+ * during the week the router changed, and has no overlay network, has nothing to bootstrap
+ * from. That is exactly the situation mDNS closes.
  */
 class MdnsDiscovery(context: Context) {
 
@@ -36,17 +36,17 @@ class MdnsDiscovery(context: Context) {
     private val wifi: WifiManager? = appContext.getSystemService(WifiManager::class.java)
 
     /**
-     * Szuka serwerów przez zadany czas i zwraca wszystkie znalezione.
+     * Looks for servers for a given time and returns everything it found.
      *
-     * Czekamy pełne okno zamiast kończyć na pierwszym trafieniu: w sieci może stać
-     * kilka instancji, a interesuje nas ta o właściwym kluczu, niekoniecznie
+     * We wait out the full window rather than stopping at the first hit: several instances may
+     * be on the network and the one we want has the right key, not necessarily
      * najszybsza.
      */
     suspend fun discover(timeoutMillis: Long = DEFAULT_TIMEOUT_MILLIS): List<DiscoveredServer> {
         val manager = nsd ?: return emptyList()
 
-        // Bez blokady multicastu wiele urządzeń w ogóle nie dostaje odpowiedzi mDNS —
-        // Wi-Fi odfiltrowuje ramki rozgłoszeniowe, żeby oszczędzać energię.
+        // Without a multicast lock many devices receive no mDNS answers at all —
+        // Wi-Fi filters out broadcast frames to save power.
         val lock = acquireMulticastLock()
         val found = ConcurrentHashMap<String, DiscoveredServer>()
 
@@ -57,7 +57,7 @@ class MdnsDiscovery(context: Context) {
             override fun onDiscoveryStopped(type: String?) = Unit
 
             override fun onStartDiscoveryFailed(type: String?, error: Int) {
-                Log.w(TAG, "Nie udało się rozpocząć wykrywania mDNS: błąd $error")
+                Log.w(TAG, "Could not start mDNS discovery: error $error")
             }
 
             override fun onStopDiscoveryFailed(type: String?, error: Int) = Unit
@@ -68,9 +68,9 @@ class MdnsDiscovery(context: Context) {
             delay(timeoutMillis)
             found.values.toList()
         } catch (e: Exception) {
-            // Wykrywanie jest wygodą, nie warunkiem działania. Zapora, brak obsługi
-            // multicastu w sieci albo odmowa systemu nie mogą przerwać cyklu.
-            Log.w(TAG, "Wykrywanie mDNS zawiodło", e)
+            // Discovery is a convenience, not a precondition. A firewall, a network with no
+            // multicast support, or a refusal from the system must not abort the cycle.
+            Log.w(TAG, "mDNS discovery failed", e)
             emptyList()
         } finally {
             runCatching { manager.stopServiceDiscovery(listener) }
@@ -90,9 +90,9 @@ class MdnsDiscovery(context: Context) {
         found: ConcurrentHashMap<String, DiscoveredServer>,
     ) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            // Od Androida 14 resolveService jest wycofane i potrafi odmówić, gdy
-            // kilka rozwiązań idzie równolegle. Nowe API wywołuje zwrotnie przy
-            // każdej zmianie, więc trzeba je wyrejestrować po pierwszym wyniku.
+            // Since Android 14 resolveService is deprecated and can refuse when several
+            // resolutions run in parallel. The new API calls back on every change, so it
+            // has to be unregistered after the first result.
             val callback = object : NsdManager.ServiceInfoCallback {
                 override fun onServiceUpdated(info: NsdServiceInfo) {
                     record(info, found)
@@ -103,7 +103,7 @@ class MdnsDiscovery(context: Context) {
                 override fun onServiceInfoCallbackUnregistered() = Unit
 
                 override fun onServiceInfoCallbackRegistrationFailed(error: Int) {
-                    Log.w(TAG, "Nie udało się odczytać szczegółów usługi: błąd $error")
+                    Log.w(TAG, "Could not read the service details: error $error")
                 }
             }
             runCatching { manager.registerServiceInfoCallback(service, Runnable::run, callback) }
@@ -113,7 +113,7 @@ class MdnsDiscovery(context: Context) {
                 override fun onServiceResolved(info: NsdServiceInfo) = record(info, found)
 
                 override fun onResolveFailed(info: NsdServiceInfo?, error: Int) {
-                    Log.w(TAG, "Nie udało się odczytać szczegółów usługi: błąd $error")
+                    Log.w(TAG, "Could not read the service details: error $error")
                 }
             })
         }
@@ -135,9 +135,9 @@ class MdnsDiscovery(context: Context) {
     }
 
     /**
-     * Bierzemy wyłącznie adresy IPv4. Serwer i tak nasłuchuje na obu rodzinach,
-     * a adres IPv6 o zasięgu łącza wymaga identyfikatora interfejsu, którego
-     * po drodze przez zbiór tras byśmy zgubili.
+     * We take IPv4 addresses only. The server listens on both families anyway, and a
+     * link-local IPv6 address needs an interface identifier that we would lose on the way
+     * through the route set.
      */
     private fun addressOf(info: NsdServiceInfo): String? {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -162,13 +162,13 @@ class MdnsDiscovery(context: Context) {
         private const val TAG = "FilumMdns"
         private const val MULTICAST_LOCK_TAG = "filum:mdns"
 
-        /** Typ usługi z §4.1 protokołu. NsdManager oczekuje go z kropką na końcu. */
+        /** The service type from protocol §4.1. NsdManager expects it with a trailing dot. */
         const val SERVICE_TYPE = "_filum._tcp."
 
         /**
-         * Okno wykrywania. Dłuższe niż limit wyścigu tras, bo mDNS wymaga wymiany
-         * kilku komunikatów — ale sięgamy po nie dopiero wtedy, gdy zapisane trasy
-         * zawiodły, więc ten koszt nie obciąża zwykłego cyklu.
+         * The discovery window. Longer than the route race timeout, because mDNS needs several
+         * messages exchanged — but we only reach for it once the stored routes
+         * have failed, so that cost never falls on an ordinary cycle.
          */
         const val DEFAULT_TIMEOUT_MILLIS = 3_000L
     }

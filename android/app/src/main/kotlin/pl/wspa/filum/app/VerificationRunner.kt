@@ -25,7 +25,7 @@ sealed interface VerificationResult {
 /**
  * Kontrola integralności kopii (§5.5 protokołu, ADR-002).
  *
- To nie jest to samo, co wykrywanie zmian z §9.3. Tamto pyta, czy plik na telefonie
+ To nie jest to samo, co wykrywanie zmian z §9.3. Tamto pyta, czy file na telefonie
  * jest nadal tym samym plikiem; ta operacja pyta, czy to, co leży na dysku komputera,
  * jest nadal tym, co tam wysłaliśmy. Nośnik potrafi po cichu przekłamać bajt, a kopia
  * zapasowa, która o tym nie wie, jest kopią złudzenia.
@@ -92,10 +92,10 @@ class VerificationRunner(private val container: AppContainer) {
      * Losowa próbka warstwowa z bieżącego skanu.
      *
      * Losowa, nie „pierwsze N": uszkodzenie nośnika nie zaczyna się od początku
-     * alfabetu, a stała próbka sprawdzałaby w kółko te same pliki.
+     * alfabetu, a stała próbka sprawdzałaby w kółko te same files.
      *
      * Warstwowa, bo zwykłe losowanie z ograniczeniem rozmiaru miało wadę, której
-     * nie widać po wyniku: pliki powyżej progu nie trafiały do próbki **nigdy**.
+     * nie widać po wyniku: files powyżej progu nie trafiały do próbki **nigdy**.
      * Przy typowej bibliotece telefonu to znaczyło, że nagrania wideo — czyli
      * dane najbardziej kosztowne do odtworzenia — jako jedyne pozostawały trwale
      * poza jakąkolwiek kontrolą. Osobna pula dla plików dużych kosztuje kilka
@@ -139,7 +139,7 @@ class VerificationRunner(private val container: AppContainer) {
         const val DEFAULT_SAMPLE = 100
 
         /**
-         * Od tego rozmiaru plik liczy się do puli „dużych".
+         * Od tego rozmiaru file liczy się do puli „dużych".
          *
          * Próg nie wyklucza z próbki, tylko rozdziela ją na dwie warstwy. Skrót liczy
          * telefon **i** serwer, więc gdyby losowanie było jednorodne, jedna seria

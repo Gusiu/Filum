@@ -46,7 +46,7 @@ class SyncEngineTest {
         transport = FakeTransport()
     }
 
-    private fun plik(dir: Path, name: String, content: String): ScannedFile {
+    private fun file(dir: Path, name: String, content: String): ScannedFile {
         val file = File(dir.toFile(), name)
         file.parentFile?.mkdirs()
         file.writeText(content)
@@ -59,7 +59,7 @@ class SyncEngineTest {
      *
      * Ta klasa sprawdza ścieżkę pojedynczego PUT: wznawianie, konflikty przesunięcia,
      * podział na fragmenty i skrót kontrolny. Przy domyślnym progu wszystkie testowe
-     * pliki byłyby na to za małe i poszłyby paczką, więc próg zerujemy jawnie.
+     * files byłyby na to za małe i poszłyby paczką, więc próg zerujemy jawnie.
      * Ścieżkę paczki pokrywa BundlingTest.
      */
     private suspend fun run(
@@ -72,10 +72,10 @@ class SyncEngineTest {
     // --- ścieżka podstawowa ---
 
     @Test
-    fun `pliki potrzebne serwerowi trafiaja na serwer w calosci`(@TempDir dir: Path) = runTest {
+    fun `the files the server needs arrive there intact`(@TempDir dir: Path) = runTest {
         setUp()
-        val a = plik(dir, "DCIM/a.jpg", "zawartosc-a")
-        val b = plik(dir, "Documents/b.txt", "zawartosc-b-dluzsza")
+        val a = file(dir, "DCIM/a.jpg", "zawartosc-a")
+        val b = file(dir, "Documents/b.txt", "zawartosc-b-dluzsza")
 
         val outcome = run(listOf(a, b))
 
@@ -87,10 +87,10 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `plik ktory serwer juz ma nie jest wysylany`(@TempDir dir: Path) = runTest {
+    fun `a file the server already has is not sent`(@TempDir dir: Path) = runTest {
         setUp()
-        val a = plik(dir, "DCIM/a.jpg", "aaa")
-        val b = plik(dir, "DCIM/b.jpg", "bbb")
+        val a = file(dir, "DCIM/a.jpg", "aaa")
+        val b = file(dir, "DCIM/b.jpg", "bbb")
 
         // Serwer zgłasza tylko b jako potrzebne. Pliku a nie ma ani w "needed",
         // ani w "rejected", więc serwer go ma — i nie wolno go wysyłać ponownie.
@@ -105,9 +105,9 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `manifest idzie partiami z poprawnym znacznikiem ostatniej`(@TempDir dir: Path) = runTest {
+    fun `the manifest goes in batches with the final flag set correctly`(@TempDir dir: Path) = runTest {
         setUp()
-        val files = (1..5).map { plik(dir, "plik$it.txt", "x") }
+        val files = (1..5).map { file(dir, "file$it.txt", "x") }
 
         run(files, config = SyncConfig(manifestBatch = 2))
 
@@ -120,9 +120,9 @@ class SyncEngineTest {
     // --- wznawianie ---
 
     @Test
-    fun `wznowienie zaczyna od przesuniecia podanego przez serwer`(@TempDir dir: Path) = runTest {
+    fun `resuming starts from the offset the server gave`(@TempDir dir: Path) = runTest {
         setUp()
-        val a = plik(dir, "klip.mp4", "0123456789ABCDEF")
+        val a = file(dir, "klip.mp4", "0123456789ABCDEF")
 
         // Serwer ma już pierwsze 6 bajtów z przerwanego wcześniej transferu.
         transport.received["klip.mp4"] = StringBuilder("012345")
@@ -131,14 +131,14 @@ class SyncEngineTest {
         run(listOf(a))
 
         assertEquals("0123456789ABCDEF", transport.content("klip.mp4"))
-        // Kluczowe: wysłaliśmy wyłącznie brakujące 10 bajtów, nie cały plik od nowa.
+        // Kluczowe: wysłaliśmy wyłącznie brakujące 10 bajtów, nie cały file od nowa.
         assertEquals(listOf(Triple("klip.mp4", 6L, 10L)), transport.putCalls)
     }
 
     @Test
-    fun `konflikt przesuniecia jest naprawiany wartoscia od serwera`(@TempDir dir: Path) = runTest {
+    fun `an offset conflict is repaired with the value from the server`(@TempDir dir: Path) = runTest {
         setUp()
-        val a = plik(dir, "klip.mp4", "0123456789")
+        val a = file(dir, "klip.mp4", "0123456789")
 
         // Nasza kolejka twierdzi, że serwer ma 8 bajtów, a on ma 4.
         transport.received["klip.mp4"] = StringBuilder("0123")
@@ -152,9 +152,9 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `krazacy konflikt przesuniecia nie zapetla sie`(@TempDir dir: Path) = runTest {
+    fun `a circling offset conflict does not loop forever`(@TempDir dir: Path) = runTest {
         setUp()
-        val a = plik(dir, "klip.mp4", "0123456789")
+        val a = file(dir, "klip.mp4", "0123456789")
 
         // Serwer za każdym razem podaje inną wartość — coś się po drugiej stronie
         // zmienia w trakcie. Bez limitu ta pętla nigdy by się nie skończyła.
@@ -174,9 +174,9 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `duzy plik idzie fragmentami`(@TempDir dir: Path) = runTest {
+    fun `a large file goes in chunks`(@TempDir dir: Path) = runTest {
         setUp()
-        val a = plik(dir, "duzy.bin", "x".repeat(100))
+        val a = file(dir, "duzy.bin", "x".repeat(100))
 
         run(listOf(a), config = SyncConfig(chunkBytes = 30))
 
@@ -189,9 +189,9 @@ class SyncEngineTest {
     // --- skrót kontrolny (§9) ---
 
     @Test
-    fun `maly plik dostaje skrot na ostatnim fragmencie`(@TempDir dir: Path) = runTest {
+    fun `a small file gets its digest on the last chunk`(@TempDir dir: Path) = runTest {
         setUp()
-        val a = plik(dir, "maly.txt", "abc")
+        val a = file(dir, "maly.txt", "abc")
 
         run(listOf(a))
 
@@ -200,13 +200,13 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `wznawiany plik tez dostaje skrot`(@TempDir dir: Path) = runTest {
+    fun `a resumed file gets a digest too`(@TempDir dir: Path) = runTest {
         // Wcześniej skrót przy wznawianiu pomijaliśmy, żeby nie czytać pliku od początku.
         // To była oszczędność na niewłaściwej rzeczy: wznawianie ratuje transmisję, a nie
-        // odczyt z pamięci telefonu — i zostawiało wznawiane pliki poza rejestrem, czyli
+        // odczyt z pamięci telefonu — i zostawiało wznawiane files poza rejestrem, czyli
         // dokładnie te największe, przy których najbardziej zależy nam na potwierdzeniu.
         setUp()
-        val a = plik(dir, "klip.mp4", "0123456789")
+        val a = file(dir, "klip.mp4", "0123456789")
         transport.received["klip.mp4"] = StringBuilder("01234")
         transport.manifestResponder = { ApiResult.Ok(ManifestResponse(0, listOf(NeededFile("klip.mp4", 5)))) }
 
@@ -216,26 +216,26 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `skrot idzie z kazdym fragmentem`(@TempDir dir: Path) = runTest {
+    fun `the digest goes with every chunk`(@TempDir dir: Path) = runTest {
         // Serwer sprawdza skrót dopiero przy domknięciu, ale wymaga go od każdego
         // żądania (ADR-016). Wysyłanie tylko na ostatnim fragmencie oznaczałoby
         // odrzucenie wszystkich wcześniejszych.
         setUp()
-        val a = plik(dir, "duzy.bin", "x".repeat(100))
+        val a = file(dir, "duzy.bin", "x".repeat(100))
 
         run(listOf(a), config = SyncConfig(chunkBytes = 30))
 
         val fragmenty = transport.putCalls.count { it.first == "duzy.bin" }
-        assertTrue(fragmenty > 1, "plik miał pójść w kilku fragmentach, poszedł w $fragmenty")
+        assertTrue(fragmenty > 1, "file miał pójść w kilku fragmentach, poszedł w $fragmenty")
         assertEquals(fragmenty, transport.digestsPerCall.count { it != null })
     }
 
     // --- tryb dokładny (ADR-016) ---
 
     @Test
-    fun `tryb szybki nie liczy skrotow do manifestu`(@TempDir dir: Path) = runTest {
+    fun `fast mode computes no digests for the manifest`(@TempDir dir: Path) = runTest {
         setUp()
-        val a = plik(dir, "a.txt", "zawartość")
+        val a = file(dir, "a.txt", "zawartość")
 
         run(listOf(a), config = SyncConfig(integrityPolicy = IntegrityPolicy.FAST))
 
@@ -243,11 +243,11 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `tryb dokladny dokłada skrot do manifestu`(@TempDir dir: Path) = runTest {
+    fun `thorough mode adds a digest to the manifest`(@TempDir dir: Path) = runTest {
         // To jest jedyna różnica widoczna dla serwera — i to ona pozwala mu zestawić
         // deklarację klienta z rejestrem, zanim cokolwiek zostanie przesłane.
         setUp()
-        val a = plik(dir, "a.txt", "zawartość")
+        val a = file(dir, "a.txt", "zawartość")
 
         run(listOf(a), config = SyncConfig(integrityPolicy = IntegrityPolicy.THOROUGH))
 
@@ -255,11 +255,11 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `rozbieznosc zgloszona przez serwer trafia do dziennika`(@TempDir dir: Path) = runTest {
+    fun `a divergence reported by the server reaches the journal`(@TempDir dir: Path) = runTest {
         // Plik i tak wróci przez "needed", więc bez wpisu w dzienniku podmiana
         // zachowująca metadane byłaby nieodróżnialna od zwykłej edycji.
         setUp()
-        val a = plik(dir, "umowa.pdf", "treść")
+        val a = file(dir, "umowa.pdf", "treść")
         transport.manifestResponder = {
             ApiResult.Ok(
                 ManifestResponse(
@@ -278,10 +278,10 @@ class SyncEngineTest {
     // --- błędy ---
 
     @Test
-    fun `sciezka odrzucona w manifescie nie jest w ogole wysylana`(@TempDir dir: Path) = runTest {
+    fun `a path rejected in the manifest is never sent at all`(@TempDir dir: Path) = runTest {
         setUp()
-        val zly = plik(dir, "zly.txt", "x")
-        val dobry = plik(dir, "dobry.txt", "y")
+        val zly = file(dir, "zly.txt", "x")
+        val dobry = file(dir, "dobry.txt", "y")
         transport.manifestResponder = FakeTransport.manifestRejects("zly.txt")
 
         run(listOf(zly, dobry))
@@ -292,9 +292,9 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `blad trwaly nie wraca do kolejki`(@TempDir dir: Path) = runTest {
+    fun `a permanent error does not return to the queue`(@TempDir dir: Path) = runTest {
         setUp()
-        val a = plik(dir, "a.txt", "x")
+        val a = file(dir, "a.txt", "x")
         transport.putInterceptor = { _, _, _ -> FakeTransport.rejected() }
 
         run(listOf(a))
@@ -304,9 +304,9 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `blad przejsciowy zostawia plik w kolejce`(@TempDir dir: Path) = runTest {
+    fun `a transient error leaves the file in the queue`(@TempDir dir: Path) = runTest {
         setUp()
-        val a = plik(dir, "a.txt", "x")
+        val a = file(dir, "a.txt", "x")
         transport.putInterceptor = { _, _, _ -> FakeTransport.outOfSpace() }
 
         run(listOf(a))
@@ -316,10 +316,10 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `zerwane polaczenie konczy cykl, a nie plik`(@TempDir dir: Path) = runTest {
+    fun `a dropped connection ends the cycle, not the file`(@TempDir dir: Path) = runTest {
         setUp()
-        val a = plik(dir, "a.txt", "x")
-        val b = plik(dir, "b.txt", "y")
+        val a = file(dir, "a.txt", "x")
+        val b = file(dir, "b.txt", "y")
         transport.putInterceptor = { _, path, _ ->
             if (path == "a.txt") FakeTransport.unreachable() else null
         }
@@ -332,9 +332,9 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `nieosiagalny serwer przy manifescie konczy cykl niepowodzeniem`(@TempDir dir: Path) = runTest {
+    fun `an unreachable server at manifest time ends the cycle in failure`(@TempDir dir: Path) = runTest {
         setUp()
-        val a = plik(dir, "a.txt", "x")
+        val a = file(dir, "a.txt", "x")
         transport.manifestResponder = { ApiResult.Unreachable(java.io.IOException("brak trasy")) }
 
         val outcome = run(listOf(a))
@@ -344,23 +344,23 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `plik usuniety po skanie jest odkladany bez bledu`(@TempDir dir: Path) = runTest {
+    fun `a file deleted after the scan is deferred without an error`(@TempDir dir: Path) = runTest {
         setUp()
-        val a = plik(dir, "znika.txt", "x")
+        val a = file(dir, "znika.txt", "x")
         File(a.absolutePath).delete()
 
         val outcome = run(listOf(a))
 
         assertInstanceOf(SyncOutcome.Completed::class.java, outcome)
         assertEquals(FakeQueue.State.PERMANENT, queue.state("znika.txt"))
-        assertEquals("plik już nie istnieje", queue.error("znika.txt"))
+        assertEquals("file już nie istnieje", queue.error("znika.txt"))
     }
 
     @Test
-    fun `plik zmieniony po skanie nie jest sklejany z dwoch wersji`(@TempDir dir: Path) = runTest {
-        // Wysłanie go teraz dałoby na serwerze plik, który nigdy nie istniał.
+    fun `a file changed after the scan is not spliced from two versions`(@TempDir dir: Path) = runTest {
+        // Wysłanie go now dałoby na serwerze file, który nigdy nie istniał.
         setUp()
-        val a = plik(dir, "rosnie.txt", "krotki")
+        val a = file(dir, "rosnie.txt", "krotki")
         File(a.absolutePath).writeText("znacznie dluzsza zawartosc")
         File(a.absolutePath).setLastModified(mtime * 1000)
 
@@ -372,9 +372,9 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `plik po wielu nieudanych podejsciach przestaje wracac`(@TempDir dir: Path) = runTest {
+    fun `a file stops returning after too many failed attempts`(@TempDir dir: Path) = runTest {
         setUp()
-        val a = plik(dir, "uparty.txt", "x")
+        val a = file(dir, "uparty.txt", "x")
         queue.enqueue(listOf(a))
         queue.rows["uparty.txt"]!!.attempts = 5
 
@@ -387,9 +387,9 @@ class SyncEngineTest {
     // --- budżet ---
 
     @Test
-    fun `wyczerpany budzet konczy cykl czysto przed wysylka`(@TempDir dir: Path) = runTest {
+    fun `an exhausted budget ends the cycle cleanly before uploading`(@TempDir dir: Path) = runTest {
         setUp()
-        val a = plik(dir, "a.txt", "x")
+        val a = file(dir, "a.txt", "x")
 
         val outcome = run(listOf(a), deadline = natychmiast)
 
@@ -398,9 +398,9 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `budzet wyczerpany w polowie kolejki zachowuje postep`(@TempDir dir: Path) = runTest {
+    fun `a budget exhausted mid-queue preserves progress`(@TempDir dir: Path) = runTest {
         setUp()
-        val files = (1..5).map { plik(dir, "plik$it.txt", "zawartosc$it") }
+        val files = (1..5).map { file(dir, "file$it.txt", "zawartosc$it") }
 
         var wyslane = 0
         val deadline = Deadline { wyslane >= 2 }
@@ -416,7 +416,7 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `pusty skan konczy sie powodzeniem, a nie bledem`() = runTest {
+    fun `an empty scan ends in success, not in an error`() = runTest {
         setUp()
 
         val outcome = run(emptyList())

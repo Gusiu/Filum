@@ -8,7 +8,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import pl.wspa.filum.protocol.PingResponse
 import pl.wspa.filum.protocol.Protocol
 
-/** Trasa, która nie odpowiedziała, wraz z powodem — trafia do dziennika w aplikacji. */
+/** A route that did not answer, with the reason — it goes into the application's journal. */
 data class EndpointFailure(val endpoint: ServerEndpoint, val reason: String)
 
 sealed interface RaceOutcome {
@@ -25,16 +25,16 @@ sealed interface RaceOutcome {
 }
 
 /**
- * Wyścig tras (§4.2 protokołu, ADR-006).
+ * The route race (protocol §4.2, ADR-006).
  *
- * Zamiast pytać kolejno „czy serwer jest pod tym adresem", pytamy **wszystkich naraz**
- * i bierzemy pierwszą poprawną odpowiedź. Dzięki temu w domu wygrywa sieć lokalna jako
- * najszybsza, poza domem nakładkowa, a po zmianie routera martwy adres kosztuje tylko
- * tyle, ile trwa limit czasu — i to równolegle z resztą, więc nic nie opóźnia.
+ * Instead of asking one address after another whether the server is there, we ask **all of
+ * them at once** and take the first valid answer. At home the local network wins as the
+ * fastest, away from home the overlay does, and after a router change a dead address costs
+ * only the timeout — in parallel with the rest, so it delays nothing.
  *
- * Racer nie zna OkHttpa: dostaje gotową funkcję sondującą. To nie jest abstrakcja dla
- * samej abstrakcji — trasy lokalne i nakładkowe wymagają **różnych** klientów HTTP
- * (przypięcie gniazda do konkretnej sieci, §4.3), a wybór klienta należy do warstwy wyżej.
+ * The racer knows nothing of OkHttp: it is handed a probe function. This is not abstraction
+ * for its own sake — local and overlay routes need **different** HTTP clients (binding the
+ * socket to a specific network, §4.3), and choosing the client belongs to the layer above.
  */
 class EndpointRacer(
     private val probe: suspend (ServerEndpoint) -> ApiResult<PingResponse>,
@@ -75,7 +75,7 @@ class EndpointRacer(
                     }
                 }
 
-                // Zwycięzca jest, więc reszta sondowań jest już nieinteresująca.
+                // We have a winner, so the remaining probes are of no further interest.
                 pending.forEach { (_, deferred) -> deferred.cancel() }
                 winner
             }
@@ -90,7 +90,7 @@ class EndpointRacer(
     ): List<EndpointFailure> {
         val answered = failures.map { it.endpoint }.toSet()
         return candidates.filterNot { it in answered }
-            .map { EndpointFailure(it, "Brak odpowiedzi w ciągu $timeoutMillis ms.") }
+            .map { EndpointFailure(it, "No answer within $timeoutMillis ms.") }
     }
 
     private fun evaluate(endpoint: ServerEndpoint, result: ApiResult<PingResponse>): Evaluation =
@@ -100,11 +100,11 @@ class EndpointRacer(
                 if (ping.protocol == Protocol.VERSION) {
                     Evaluation.Usable(ping)
                 } else {
-                    // Trasa działa, ale po drugiej stronie jest Filum w wersji, której
-                    // nie rozumiemy. Innym adresem możemy trafić na właściwą instancję,
-                    // więc traktujemy to jak porażkę trasy, a nie całego wyścigu.
+                    // The route works, but at the other end is a Filum version we do not
+                    // understand. Another address may still reach the right instance, so we
+                    // treat this as the route failing, not the whole race.
                     Evaluation.Rejected(
-                        "Serwer mówi protokołem ${ping.protocol}, obsługujemy ${Protocol.VERSION}."
+                        "The server speaks protocol ${ping.protocol}, we support ${Protocol.VERSION}."
                     )
                 }
             }
@@ -120,7 +120,7 @@ class EndpointRacer(
     }
 
     companion object {
-        /** §4.2: dwie sekundy wystarczą w sieci lokalnej i nie każą czekać poza domem. */
+        /** §4.2: two seconds suffice on a local network and do not make you wait from outside. */
         const val DEFAULT_TIMEOUT_MILLIS = 2_000L
     }
 }

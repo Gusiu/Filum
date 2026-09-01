@@ -24,7 +24,7 @@ import java.nio.file.Path
  *
  * Sedno tej optymalizacji to podział: co idzie paczką, co pojedynczo i co się dzieje,
  * gdy paczka częściowo zawiedzie. Pomyłka w którymkolwiek z tych miejsc albo gubi
- * pliki, albo wysyła je w kółko.
+ * files, albo wysyła je w kółko.
  */
 class BundlingTest {
 
@@ -41,7 +41,7 @@ class BundlingTest {
         transport = FakeTransport()
     }
 
-    private fun plik(dir: Path, name: String, bytes: Int): ScannedFile {
+    private fun file(dir: Path, name: String, bytes: Int): ScannedFile {
         val file = File(dir.toFile(), name)
         file.parentFile?.mkdirs()
         file.writeText("x".repeat(bytes))
@@ -56,10 +56,10 @@ class BundlingTest {
     // --- podział na paczki i pojedyncze żądania ---
 
     @Test
-    fun `male pliki ida paczka, duze pojedynczo`(@TempDir dir: Path) = runTest {
+    fun `small files go in a bundle, large ones on their own`(@TempDir dir: Path) = runTest {
         setUp()
-        val male = (1..5).map { plik(dir, "maly$it.txt", 100) }
-        val duzy = plik(dir, "duzy.bin", 5_000)
+        val male = (1..5).map { file(dir, "maly$it.txt", 100) }
+        val duzy = file(dir, "duzy.bin", 5_000)
 
         val outcome = run(male + duzy, SyncConfig(smallFileThreshold = 1_000))
 
@@ -70,50 +70,50 @@ class BundlingTest {
     }
 
     @Test
-    fun `paczka pilnuje limitu rozmiaru`(@TempDir dir: Path) = runTest {
+    fun `a bundle respects the size limit`(@TempDir dir: Path) = runTest {
         setUp()
-        val pliki = (1..6).map { plik(dir, "p$it.txt", 400) }
+        val files = (1..6).map { file(dir, "p$it.txt", 400) }
 
-        run(pliki, SyncConfig(smallFileThreshold = 1_000, bundleMaxBytes = 1_000))
+        run(files, SyncConfig(smallFileThreshold = 1_000, bundleMaxBytes = 1_000))
 
-        // 400 B na plik przy limicie 1000 B daje najwyżej dwa pliki na paczkę.
+        // 400 B na file przy limicie 1000 B daje najwyżej dwa files na paczkę.
         assertEquals(3, transport.bundles.size)
         assertTrue(transport.bundles.all { it.size <= 2 }, "${transport.bundles}")
     }
 
     @Test
-    fun `paczka pilnuje limitu liczby plikow`(@TempDir dir: Path) = runTest {
+    fun `a bundle respects the file count limit`(@TempDir dir: Path) = runTest {
         setUp()
-        val pliki = (1..7).map { plik(dir, "p$it.txt", 10) }
+        val files = (1..7).map { file(dir, "p$it.txt", 10) }
 
-        run(pliki, SyncConfig(smallFileThreshold = 1_000, bundleMaxCount = 3))
+        run(files, SyncConfig(smallFileThreshold = 1_000, bundleMaxCount = 3))
 
         assertEquals(3, transport.bundles.size)
         assertEquals(listOf(3, 3, 1), transport.bundles.map { it.size })
     }
 
     @Test
-    fun `wznawiany plik nigdy nie trafia do paczki`(@TempDir dir: Path) = runTest {
-        // Paczka wysyła plik w całości od zera. Wrzucenie do niej pliku, którego część
+    fun `a resumed file never goes into a bundle`(@TempDir dir: Path) = runTest {
+        // Paczka wysyła file w całości od zera. Wrzucenie do niej pliku, którego część
         // serwer już ma, nadpisałoby postęp i zmarnowało dotychczasowy transfer.
         setUp()
-        val plik = plik(dir, "przerwany.bin", 500)
+        val file = file(dir, "przerwany.bin", 500)
         transport.received["przerwany.bin"] = StringBuilder("x".repeat(200))
         transport.manifestResponder = {
             ApiResult.Ok(ManifestResponse(0, listOf(NeededFile("przerwany.bin", 200))))
         }
 
-        run(listOf(plik), SyncConfig(smallFileThreshold = 1_000))
+        run(listOf(file), SyncConfig(smallFileThreshold = 1_000))
 
-        assertTrue(transport.bundles.isEmpty(), "plik ze wznowieniem musi pójść przez PUT")
+        assertTrue(transport.bundles.isEmpty(), "file ze wznowieniem musi pójść przez PUT")
         assertEquals(listOf(Triple("przerwany.bin", 200L, 300L)), transport.putCalls)
     }
 
     @Test
-    fun `zawartosc plikow w paczce dociera nienaruszona`(@TempDir dir: Path) = runTest {
+    fun `the content of files in a bundle arrives intact`(@TempDir dir: Path) = runTest {
         setUp()
-        val a = plik(dir, "a.txt", 10)
-        val b = plik(dir, "b.txt", 3_000)
+        val a = file(dir, "a.txt", 10)
+        val b = file(dir, "b.txt", 3_000)
 
         run(listOf(a, b), SyncConfig(smallFileThreshold = 10_000))
 
@@ -124,10 +124,10 @@ class BundlingTest {
     // --- częściowe niepowodzenie paczki ---
 
     @Test
-    fun `odrzucona sciezka w paczce jest bledem trwalym`(@TempDir dir: Path) = runTest {
+    fun `a rejected path inside a bundle is a permanent error`(@TempDir dir: Path) = runTest {
         setUp()
-        val a = plik(dir, "zly.txt", 10)
-        val b = plik(dir, "dobry.txt", 10)
+        val a = file(dir, "zly.txt", 10)
+        val b = file(dir, "dobry.txt", 10)
 
         transport.bundleResponder = {
             ApiResult.Ok(BundleResponse(listOf(
@@ -144,9 +144,9 @@ class BundlingTest {
     }
 
     @Test
-    fun `inny blad pojedynczego pliku zostawia go w kolejce`(@TempDir dir: Path) = runTest {
+    fun `another error on a single file leaves it in the queue`(@TempDir dir: Path) = runTest {
         setUp()
-        val a = plik(dir, "a.txt", 10)
+        val a = file(dir, "a.txt", 10)
 
         transport.bundleResponder = {
             ApiResult.Ok(BundleResponse(listOf(
@@ -160,12 +160,12 @@ class BundlingTest {
     }
 
     @Test
-    fun `plik pominiety w odpowiedzi wraca do kolejki`(@TempDir dir: Path) = runTest {
+    fun `a file omitted from the response returns to the queue`(@TempDir dir: Path) = runTest {
         // Serwer nie wspomniał o pliku, który wysłaliśmy. Uznanie tego za powodzenie
-        // byłoby cichą utratą — plik zniknąłby z kolejki, nie trafiwszy na dysk.
+        // byłoby cichą utratą — file zniknąłby z kolejki, nie trafiwszy na dysk.
         setUp()
-        val a = plik(dir, "a.txt", 10)
-        val b = plik(dir, "b.txt", 10)
+        val a = file(dir, "a.txt", 10)
+        val b = file(dir, "b.txt", 10)
 
         transport.bundleResponder = {
             ApiResult.Ok(BundleResponse(listOf(BundleFileResult("a.txt", ok = true))))
@@ -179,14 +179,14 @@ class BundlingTest {
     }
 
     @Test
-    fun `zerwane polaczenie zwraca do kolejki cala paczke`(@TempDir dir: Path) = runTest {
+    fun `a dropped connection returns the whole bundle to the queue`(@TempDir dir: Path) = runTest {
         // Nie wiemy, ile plików serwer zdążył zapisać. Ponowna wysyłka niczego nie psuje,
         // bo manifest i tak odsieje te, które już doszły.
         setUp()
-        val pliki = (1..4).map { plik(dir, "p$it.txt", 10) }
+        val files = (1..4).map { file(dir, "p$it.txt", 10) }
         transport.bundleResponder = { ApiResult.Unreachable(IOException("zerwane")) }
 
-        val outcome = run(pliki, SyncConfig(smallFileThreshold = 1_000))
+        val outcome = run(files, SyncConfig(smallFileThreshold = 1_000))
 
         assertInstanceOf(SyncOutcome.Interrupted::class.java, outcome)
         assertEquals(InterruptReason.CONNECTION, (outcome as SyncOutcome.Interrupted).reason)
@@ -194,24 +194,24 @@ class BundlingTest {
     }
 
     @Test
-    fun `odrzucona paczka nie gubi plikow`(@TempDir dir: Path) = runTest {
+    fun `a rejected bundle loses no files`(@TempDir dir: Path) = runTest {
         setUp()
-        val pliki = (1..3).map { plik(dir, "p$it.txt", 10) }
+        val files = (1..3).map { file(dir, "p$it.txt", 10) }
         transport.bundleResponder = {
             ApiResult.failure(HttpStatus.BAD_REQUEST, ErrorResponse("bad_request", "uszkodzone ramkowanie"))
         }
 
-        run(pliki, SyncConfig(smallFileThreshold = 1_000))
+        run(files, SyncConfig(smallFileThreshold = 1_000))
 
         assertEquals(3, queue.rows.values.count { it.state == FakeQueue.State.TRANSIENT })
         assertTrue(journal.has("bad_request"))
     }
 
     @Test
-    fun `plik usuniety przed spakowaniem nie przerywa paczki`(@TempDir dir: Path) = runTest {
+    fun `a file deleted before bundling does not abort the bundle`(@TempDir dir: Path) = runTest {
         setUp()
-        val znika = plik(dir, "znika.txt", 10)
-        val zostaje = plik(dir, "zostaje.txt", 10)
+        val znika = file(dir, "znika.txt", 10)
+        val zostaje = file(dir, "zostaje.txt", 10)
         File(znika.absolutePath).delete()
 
         run(listOf(znika, zostaje), SyncConfig(smallFileThreshold = 1_000))

@@ -2,7 +2,7 @@ package pl.wspa.filum.protocol
 
 import java.security.MessageDigest
 
-/** Powód odrzucenia ścieżki. Odpowiada polu `error` w odpowiedzi HTTP 422. */
+/** Why a path was rejected. Corresponds to the `error` field in an HTTP 422 response. */
 enum class PathRejection {
     NONE,
     ABSOLUTE,
@@ -13,7 +13,7 @@ enum class PathRejection {
     PATH_TOO_LONG,
 }
 
-/** Wynik sanityzacji: albo ścieżka składowania, albo powód odrzucenia. */
+/** The result of sanitisation: either a storage path or a reason for rejection. */
 sealed interface SanitizeResult {
     data class Success(val stored: String) : SanitizeResult
 
@@ -21,23 +21,23 @@ sealed interface SanitizeResult {
 }
 
 /**
- * Odwzorowanie ścieżki kanonicznej z telefonu na ścieżkę składowania pod NTFS.
+ * Maps a canonical path from the phone onto a storage path under NTFS.
  *
  * Implementacja normatywna dla docs/PATH-RULES.md. Lustrzanym odbiciem jest klasa
- * `Filum.Protocol.PathRules` po stronie serwera — obie przechodzą ten sam zestaw
+ * `Filum.Protocol.PathRules` on the server side — both pass the same
  * docs/testvectors/paths.tsv.
  *
- * Moduł jest czystym Kotlinem na JVM, bez zależności od Androida: reguły dają się
- * przetestować bez emulatora, a błąd tutaj kosztuje ciche skasowanie pliku.
+ * The module is plain Kotlin on the JVM with no Android dependency: the rules can be
+ * tested without an emulator, and a mistake here costs a file silently destroyed.
  */
 object PathRules {
 
     const val DEFAULT_MAX_PATH_BYTES: Int = 4096
 
-    /** Limit NTFS na pojedynczą składową ścieżki, w jednostkach UTF-16. */
+    /** The NTFS limit on a single path component, in UTF-16 units. */
     private const val MAX_SEGMENT_LENGTH = 255
 
-    /** Docelowa długość po przycięciu; 247 + '~' + 6 znaków skrótu = 254. */
+    /** Target length after truncation; 247 + '~' + 6 digest characters = 254. */
     private const val TRUNCATED_SEGMENT_LENGTH = 247
 
     private const val FORBIDDEN_CHARS = "<>:\"|?*\\"
@@ -51,8 +51,8 @@ object PathRules {
     }
 
     /**
-     * Sprawdza postać kanoniczną. Zwraca [PathRejection.NONE], gdy ścieżka nadaje się
-     * do składowania.
+     * Checks the canonical form. Returns [PathRejection.NONE] when the path is fit for
+     * storage.
      */
     fun validate(canonicalPath: String, maxPathBytes: Int = DEFAULT_MAX_PATH_BYTES): PathRejection {
         if (canonicalPath.contains('\u0000')) return PathRejection.NUL
@@ -75,8 +75,8 @@ object PathRules {
     }
 
     /**
-     * Zamienia ścieżkę kanoniczną na ścieżkę składowania. Wynik używa separatora '/';
-     * zamiana na separator systemowy należy do serwera.
+     * Turns a canonical path into a storage path. The result uses '/' as its separator;
+     * converting to the platform separator is the server's job.
      */
     fun sanitize(canonicalPath: String, maxPathBytes: Int = DEFAULT_MAX_PATH_BYTES): SanitizeResult {
         val rejection = validate(canonicalPath, maxPathBytes)
@@ -87,14 +87,14 @@ object PathRules {
     }
 
     /**
-     * Koduje pojedynczą składową. Kolejność reguł jest normatywna
-     * (docs/PATH-RULES.md §5) — zmiana kolejności psuje różnowartościowość.
+     * Encodes a single component. The order of the rules is normative
+     * (docs/PATH-RULES.md §5) — reordering them breaks injectivity.
      */
     fun encodeSegment(segment: String): String {
         if (segment.isEmpty()) return segment
 
-        // Reguły 1-3. Jedno przejście wystarcza: '%' trafia do wyjścia już jako %25,
-        // więc znaki wprowadzone przez kodowanie nie są kodowane ponownie.
+        // Rules 1-3. A single pass is enough: '%' reaches the output already as %25, so
+        // the characters the encoding introduces are not encoded a second time.
         val builder = StringBuilder(segment.length + 8)
         for (c in segment) {
             if (c == '%' || FORBIDDEN_CHARS.contains(c) || c in '\u0001'..'\u001F') {
@@ -105,9 +105,9 @@ object PathRules {
         }
         var encoded = builder.toString()
 
-        // Reguła 5: nazwa zastrzeżona DOS. Sprawdzana na oryginale, bo bierzemy człon
-        // przed pierwszą kropką. Pierwszy znak nazwy zastrzeżonej jest zawsze literą,
-        // więc nie został zakodowany wyżej i pozycja 0 obu wersji jest tożsama.
+        // Rule 5: a DOS reserved name. Checked against the original, because we take the
+        // part before the first dot. The first character of a reserved name is always a
+        // letter, so it was not encoded above and position 0 is the same in both forms.
         val baseName = segment.substringBefore('.')
         if (baseName.uppercase() in RESERVED_NAMES) {
             encoded = StringBuilder()
@@ -116,8 +116,8 @@ object PathRules {
                 .toString()
         }
 
-        // Reguła 4: końcowa kropka lub spacja. Kodujemy wyłącznie ostatni znak —
-        // wcześniejsze przestają być końcowe, więc Windows ich nie obetnie.
+        // Rule 4: a trailing dot or space. We encode only the last character — the
+        // earlier ones stop being trailing, so Windows will not trim them.
         val last = encoded.last()
         if (last == '.' || last == ' ') {
             encoded = StringBuilder(encoded.substring(0, encoded.length - 1))
@@ -125,7 +125,7 @@ object PathRules {
                 .toString()
         }
 
-        // Reguła 6: limit długości składowej.
+        // Rule 6: the component length limit.
         if (encoded.length > MAX_SEGMENT_LENGTH) {
             encoded = truncateAtEscapeBoundary(encoded, TRUNCATED_SEGMENT_LENGTH) +
                 "~" + shortHash(segment)
@@ -135,8 +135,8 @@ object PathRules {
     }
 
     /**
-     * Odwraca kodowanie procentowe. Przyrostka `~xxxxxx` z reguły 6 i z rozstrzygania
-     * kolizji wielkości liter nie da się odwrócić bez index.jsonl — ta metoda go nie tyka.
+     * Reverses the percent-encoding. The `~xxxxxx` suffix from rule 6 and from case-collision
+     * resolution cannot be reversed without index.jsonl — this method leaves it alone.
      */
     fun decode(storedPath: String): String {
         val builder = StringBuilder(storedPath.length)
@@ -158,9 +158,9 @@ object PathRules {
     }
 
     /**
-     * Przyrostek rozstrzygający kolizję wielkości liter (docs/PATH-RULES.md §6).
-     * Deterministyczny: ta sama ścieżka źródłowa zawsze daje ten sam przyrostek,
-     * także po odtworzeniu backupu z kopii.
+     * The suffix that resolves a case collision (docs/PATH-RULES.md §6). Deterministic: the
+     * same source path always yields the same suffix, including after the backup has been
+     * restored from a copy.
      */
     fun caseCollisionSuffix(canonicalPath: String): String = "~" + shortHash(canonicalPath)
 
@@ -176,9 +176,9 @@ object PathRules {
             .joinToString("") { byte -> (byte.toInt() and 0xFF).toString(16).padStart(2, '0') }
 
     /**
-     * Przycina tak, żeby nie rozciąć sekwencji %XX — inaczej kodowanie przestałoby być
-     * odwracalne. Każdy '%' w zakodowanym tekście rozpoczyna sekwencję, bo literalne '%'
-     * zostało wcześniej zamienione na %25.
+     * Truncates without splitting a %XX sequence — otherwise the encoding would stop being
+     * reversible. Every '%' in the encoded text starts a sequence, because a literal '%'
+     * was turned into %25 earlier.
      */
     private fun truncateAtEscapeBoundary(encoded: String, limit: Int): String {
         if (encoded.length <= limit) return encoded

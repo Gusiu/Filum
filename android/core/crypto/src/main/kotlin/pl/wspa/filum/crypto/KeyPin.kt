@@ -6,11 +6,11 @@ import java.util.Base64
 
 /**
  * Odcisk klucza publicznego: `base64url(SHA-256(SubjectPublicKeyInfo))`, 43 znaki
- * (§3.1 protokołu, ADR-005).
+ * (protocol §3.1, ADR-005).
  *
- * Liczymy z SubjectPublicKeyInfo, a nie z całego certyfikatu. Dzięki temu przypięcie
- * przetrwa wymianę certyfikatu przy zachowaniu tej samej pary kluczy — a wygaśnięcie
- * certyfikatu przestaje być zdarzeniem, które zrywa działającą instalację.
+ * Computed over SubjectPublicKeyInfo rather than the whole certificate. That way a pin
+ * survives replacing the certificate while keeping the key pair — and a certificate
+ * expiring stops being an event that breaks a working installation.
  */
 object KeyPin {
 
@@ -18,14 +18,14 @@ object KeyPin {
 
     fun of(certificate: X509Certificate): String = ofSpki(certificate.publicKey.encoded)
 
-    /** [spki] to zakodowane DER SubjectPublicKeyInfo — dokładnie to, co zwraca `PublicKey.getEncoded()`. */
+    /** [spki] is the DER-encoded SubjectPublicKeyInfo — exactly what `PublicKey.getEncoded()` returns. */
     fun ofSpki(spki: ByteArray): String =
         Base64.getUrlEncoder().withoutPadding()
             .encodeToString(MessageDigest.getInstance("SHA-256").digest(spki))
 
     /**
-     * Porównanie odporne na czas. Różnica jest tu symboliczna, bo odcisk klucza nie jest
-     * sekretem, ale nie ma powodu, żeby pisać porównanie sekretów inaczej niż porządnie.
+     * A constant-time comparison. The difference is symbolic here, since a key fingerprint
+     * is not a secret, but there is no reason to write a secret comparison any other way.
      */
     fun matches(expected: String, actual: String): Boolean {
         if (expected.length != actual.length) return false

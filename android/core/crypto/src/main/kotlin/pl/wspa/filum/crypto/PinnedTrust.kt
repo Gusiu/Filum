@@ -6,59 +6,59 @@ import javax.net.ssl.HostnameVerifier
 import javax.net.ssl.SSLSession
 import javax.net.ssl.X509TrustManager
 
-/** Serwer przedstawił się kluczem, którego nie znamy. */
+/** The server presented a key we do not know. */
 class PinMismatchException(expected: String, actual: String) : CertificateException(
-    "Odcisk klucza serwera nie zgadza się z zapamiętanym przy parowaniu. " +
+    "The server key fingerprint does not match the one remembered at pairing time. " +
         "Oczekiwano $expected, otrzymano $actual."
 )
 
 /**
- * Zaufanie wyłącznie do jednego, zapamiętanego klucza publicznego (§3.1 protokołu).
+ * Trust in exactly one remembered public key (protocol §3.1).
  *
- * Nie ma tu żadnego urzędu certyfikacji ani łańcucha zaufania — certyfikat serwera jest
- * samopodpisany z definicji i służy tylko za pojemnik na klucz. Jedynym kryterium jest
- * zgodność odcisku z tym, który przyszedł w kodzie QR.
+ * There is no certificate authority here and no trust chain — the server certificate is
+ * self-signed by definition and serves purely as a container for the key. The only
+ * criterion is that the fingerprint matches the one that arrived in the QR code.
  *
- * Model jest mocniejszy niż zwykły TLS z publicznym urzędem: nie wystarczy przejąć
- * kontrolę nad dowolnym zaufanym CA, trzeba mieć konkretny klucz prywatny tego serwera.
+ * The model is stronger than ordinary TLS with a public authority: seizing control of any
+ * trusted CA is not enough, you need this particular server's private key.
  */
 class PinnedTrustManager(private val expectedPin: String) : X509TrustManager {
 
     init {
-        require(KeyPin.isWellFormed(expectedPin)) { "Odcisk klucza ma niepoprawną postać: $expectedPin" }
+        require(KeyPin.isWellFormed(expectedPin)) { "The key fingerprint is malformed: $expectedPin" }
     }
 
     override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {
         val leaf = chain?.firstOrNull()
-            ?: throw CertificateException("Serwer nie przedstawił żadnego certyfikatu.")
+            ?: throw CertificateException("The server presented no certificate at all.")
 
         val actual = KeyPin.of(leaf)
         if (!KeyPin.matches(expectedPin, actual)) throw PinMismatchException(expectedPin, actual)
     }
 
     /**
-     * Klient nigdy nie weryfikuje cudzych certyfikatów klienta — to rola serwera.
-     * Wywołanie tej metody oznaczałoby użycie obiektu w kontekście, do którego nie należy.
+     * The client never verifies anyone else's client certificates — that is the server's
+     * role. Calling this method would mean using the object where it does not belong.
      */
     override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {
-        throw CertificateException("PinnedTrustManager nie służy do weryfikacji klientów.")
+        throw CertificateException("PinnedTrustManager is not for verifying clients.")
     }
 
-    /** Pusta lista jest poprawna: nie akceptujemy żadnego urzędu, tylko konkretny klucz. */
+    /** An empty list is correct: we accept no authority, only one specific key. */
     override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
 }
 
 /**
- * Weryfikator nazwy hosta, który przepuszcza każdą nazwę.
+ * A hostname verifier that lets every name through.
  *
- * **Jest to bezpieczne wyłącznie w połączeniu z [PinnedTrustManager]** i wyłącznie dlatego,
- * że przypięcie klucza całkowicie zastępuje weryfikację nazwy. Serwer jest osiągalny pod
- * wieloma adresami naraz (LAN, sieć nakładkowa, mDNS — §4 protokołu), a wszystkie
- * wskazują na ten sam klucz; wymaganie pól SAN dla każdego z nich byłoby niewykonalne,
- * bo adresy zmieniają się w czasie.
+ * **This is safe only together with [PinnedTrustManager]**, and only because key pinning
+ * fully replaces name verification. The server is reachable at several addresses at once
+ * (LAN, overlay network, mDNS — protocol §4), all of them pointing at the same key;
+ * requiring SAN entries for each would be unworkable, because the addresses change over
+ * time.
  *
- * Usunięcie [PinnedTrustManager] przy pozostawieniu tego weryfikatora otwiera połączenie
- * na dowolny serwer. Te dwie klasy wolno używać tylko razem.
+ * Removing [PinnedTrustManager] while leaving this verifier in place opens the connection
+ * to any server at all. These two classes may only be used together.
  */
 object PinnedHostnameVerifier : HostnameVerifier {
     override fun verify(hostname: String?, session: SSLSession?): Boolean = true

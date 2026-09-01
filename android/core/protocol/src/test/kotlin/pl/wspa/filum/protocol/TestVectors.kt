@@ -2,7 +2,7 @@ package pl.wspa.filum.protocol
 
 import java.io.File
 
-/** Jeden wiersz z docs/testvectors/paths.tsv, po odwróceniu sekwencji ucieczki. */
+/** One line from docs/testvectors/paths.tsv, with its escapes decoded. */
 data class PathVector(val input: String, val expected: String, val note: String) {
 
     val isRejection: Boolean get() = expected.startsWith("REJECT:")
@@ -15,17 +15,17 @@ data class PathVector(val input: String, val expected: String, val note: String)
             "empty_segment" -> PathRejection.EMPTY_SEGMENT
             "nul" -> PathRejection.NUL
             "path_too_long" -> PathRejection.PATH_TOO_LONG
-            else -> error("nieznany powód odrzucenia: $reason")
+            else -> error("unknown rejection reason: $reason")
         }
 
-    // Widoczne w nazwie przypadku testowego; znaki niedrukowalne trzeba pokazać.
+    // Shown in the test case name; non-printing characters have to be made visible.
     override fun toString(): String = "${visualize(input)} -> ${visualize(expected)}"
 
     private fun visualize(value: String): String = buildString {
         for (c in value) {
             when {
                 c.code < 0x20 -> append("\\x%02X".format(c.code))
-                c == ' ' -> append('␣') // ␣ — spacja musi być widoczna
+                c == ' ' -> append('␣') // a space has to be visible
                 else -> append(c)
             }
         }
@@ -49,13 +49,13 @@ object TestVectors {
                 PathVector(unescape(columns[0]), unescape(columns[1]), columns[2])
             }
 
-        check(vectors.isNotEmpty()) { "$RELATIVE_PATH nie zawiera żadnych wektorów" }
+        check(vectors.isNotEmpty()) { "$RELATIVE_PATH contains no vectors" }
         return vectors
     }
 
     /**
-     * Odwraca sekwencje ucieczki z nagłówka pliku: \xHH oznacza bajt, \\ literalny
-     * backslash. Bez tego znaki niedrukowalne i końcowe spacje nie przetrwałyby
+     * Decodes the escapes described in the file header: \xHH is a byte, \\ a literal
+     * backslash. Without them, non-printing characters and trailing spaces would not survive
      * w pliku tekstowym.
      */
     fun unescape(value: String): String {
@@ -81,8 +81,8 @@ object TestVectors {
     }
 
     /**
-     * Szuka pliku wektorów, idąc w górę od katalogu roboczego. Dzięki temu ta sama
-     * logika działa niezależnie od tego, z którego katalogu uruchomiono Gradle'a.
+     * Looks for the vector file by walking up from the working directory, so the same
+     * logic works no matter which directory Gradle was started from.
      */
     private fun locate(): File {
         val start = File(System.getProperty("user.dir")).absoluteFile
@@ -92,6 +92,6 @@ object TestVectors {
             if (candidate.isFile) return candidate
             directory = directory.parentFile
         }
-        error("Nie znaleziono $RELATIVE_PATH w żadnym katalogu nadrzędnym względem $start")
+        error("$RELATIVE_PATH was not found in any directory above $start")
     }
 }

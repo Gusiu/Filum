@@ -9,25 +9,25 @@ import pl.wspa.filum.protocol.BundleContentType
 import java.io.File
 import java.io.IOException
 
-/** Jeden plik przeznaczony do wysłania w paczce. */
+/** One file destined for a bundle. */
 data class BundleEntry(
     val canonicalPath: String,
     val file: File,
     val size: Long,
     val mtime: Long,
-    /** Skrót jest w paczce wymagany (§5.4); dla małego pliku kosztuje tyle co nic. */
+    /** The digest is required inside a bundle (§5.4); for a small file it costs nothing. */
     val digest: String,
 )
 
 /**
- * Ciało paczki małych plików (§5.4 protokołu, ADR-008).
+ * The body of a bundle of small files (protocol §5.4, ADR-008).
  *
- * Ramkowanie: czterobajtowa długość nagłówka w porządku sieciowym, nagłówek JSON,
- * dokładnie tyle bajtów zawartości, ile zapowiada, i tak w kółko.
+ * Framing: a four-byte header length in network order, the JSON header, then exactly as
+ * many content bytes as it announces, and repeat.
  *
- * Wszystko jest strumieniowane wprost z dysku. Paczka ma do ośmiu megabajtów, więc
- * zebranie jej w pamięci nie byłoby katastrofą — ale przy kilku równoległych
- * połączeniach ta liczba zaczyna się mnożyć bez żadnego powodu.
+ * Everything is streamed straight from disk. A bundle is at most eight megabytes, so
+ * collecting one in memory would be no catastrophe — but across several concurrent
+ * connections that number starts multiplying for no reason at all.
  */
 class BundleBody(private val entries: List<BundleEntry>) : RequestBody() {
 
@@ -41,8 +41,8 @@ class BundleBody(private val entries: List<BundleEntry>) : RequestBody() {
         for (entry in entries) {
             val header = headerOf(entry)
 
-            // Kolejność ma znaczenie i jest częścią protokołu: serwer czyta długość,
-            // potem nagłówek, potem dokładnie tyle bajtów, ile nagłówek zapowiada.
+            // The order matters and is part of the protocol: the server reads the length,
+            // then the header, then exactly as many bytes as the header announced.
             sink.writeInt(header.size)
             sink.write(header)
             writePayload(sink, entry)
@@ -55,10 +55,10 @@ class BundleBody(private val entries: List<BundleEntry>) : RequestBody() {
             while (remaining > 0) {
                 val written = source.read(sink.buffer, minOf(remaining, SEGMENT))
                 if (written == -1L) {
-                    // Plik skrócił się między skanem a wysyłką. Nie da się tego uratować
-                    // w środku paczki — ramka już zapowiedziała swoją długość, więc
-                    // przerwanie transferu jest jedynym uczciwym wyjściem.
-                    throw IOException("Plik skrócił się w trakcie pakowania: ${entry.canonicalPath}")
+                    // The file shrank between the scan and the upload. There is no saving this
+                    // mid-bundle — the frame has already announced its length, so aborting the
+                    // transfer is the only honest way out.
+                    throw IOException("The file shrank while being bundled: ${entry.canonicalPath}")
                 }
                 remaining -= written
                 sink.flush()
@@ -67,11 +67,11 @@ class BundleBody(private val entries: List<BundleEntry>) : RequestBody() {
     }
 
     /**
-     * Nagłówek budujemy ręcznie, a nie serializatorem.
+     * The header is built by hand rather than with a serialiser.
      *
-     * Ścieżka jest jedynym polem wymagającym ucieczki, a jej treść pochodzi
-     * z systemu plików telefonu — czyli może zawierać cokolwiek. Reszta to liczby
-     * i szesnastkowy skrót.
+     * The path is the only field needing escaping, and its content comes from the phone's
+     * filesystem — which is to say it can contain anything. The rest is numbers and a
+     * hexadecimal digest.
      */
     private fun headerOf(entry: BundleEntry): ByteArray {
         val json = buildString {

@@ -69,13 +69,13 @@ fun HomeScreen(
 
         if (!state.hasStorageAccess) {
             // Bez pełnego dostępu skan zobaczy wyłącznie katalogi mediów, więc
-            // dokumenty i pobrane pliki nigdy nie trafiłyby do kopii (ADR-013).
+            // dokumenty i pobrane files nigdy nie trafiłyby do kopii (ADR-013).
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Brak dostępu do plików", style = MaterialTheme.typography.titleSmall)
                     Text(
                         "Filum potrzebuje dostępu do całej pamięci, żeby objąć kopią także " +
-                            "dokumenty i pobrane pliki, a nie tylko zdjęcia.",
+                            "dokumenty i pobrane files, a nie tylko zdjęcia.",
                         style = MaterialTheme.typography.bodySmall,
                     )
                     Button(onClick = onRequestStorageAccess) { Text("Nadaj dostęp") }
@@ -94,7 +94,7 @@ fun HomeScreen(
                 CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                 Text("  Pracuję…")
             } else {
-                Text("Synchronizuj teraz")
+                Text("Synchronizuj now")
             }
         }
 
@@ -201,7 +201,7 @@ private fun IntegrityPolicySelector(current: IntegrityPolicy, onChange: (Integri
                         "podmiana, która zachowała te dwie wartości, zostanie przeoczona."
 
                 IntegrityPolicy.THOROUGH ->
-                    "Każdy plik jest liczony skrótem przy każdym skanie i porównywany " +
+                    "Każdy file jest liczony skrótem przy każdym skanie i porównywany " +
                         "z zapisem serwera. Wykrywa podmianę zachowującą metadane. " +
                         "Kosztuje odczyt całej biblioteki w każdym cyklu, więc trwa dłużej " +
                         "i zużywa więcej baterii."

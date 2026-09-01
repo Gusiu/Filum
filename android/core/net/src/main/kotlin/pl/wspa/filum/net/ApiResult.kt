@@ -6,15 +6,15 @@ import pl.wspa.filum.protocol.HttpStatus
 import java.io.IOException
 
 /**
- * Wynik wywołania zasobu. Świadomie nie używamy wyjątków do sygnalizowania odpowiedzi
- * błędnych: `409 offset_mismatch` jest **normalnym** elementem wznawiania transferu,
- * a nie awarią, i musi być obsłużony, a nie złapany gdzieś wyżej razem z resztą.
+ * The result of calling a resource. We deliberately do not use exceptions to signal error
+ * responses: `409 offset_mismatch` is a **normal** part of resuming a transfer rather than
+ * a failure, and it has to be handled, not caught somewhere above along with everything else.
  */
 sealed interface ApiResult<out T> {
 
     data class Ok<T>(val value: T) : ApiResult<T>
 
-    /** Serwer odpowiedział, ale kodem błędu. */
+    /** The server answered, but with an error code. */
     data class Failure(
         val status: Int,
         val error: ErrorResponse?,
@@ -23,13 +23,13 @@ sealed interface ApiResult<out T> {
 
         val code: String get() = error?.error ?: "http_$status"
 
-        val message: String get() = error?.message?.takeIf { it.isNotBlank() } ?: "Serwer odpowiedział $status."
+        val message: String get() = error?.message?.takeIf { it.isNotBlank() } ?: "The server answered $status."
 
-        /** Przesunięcie, od którego serwer oczekuje wznowienia (§5.3). */
+        /** The offset the server expects the resume to start from (§5.3). */
         val expectedOffset: Long? get() = error?.expectedOffset
     }
 
-    /** Nie udało się w ogóle porozmawiać — zerwane połączenie, limit czasu, błąd TLS. */
+    /** No conversation happened at all — a dropped connection, a timeout, a TLS error. */
     data class Unreachable(val cause: IOException) : ApiResult<Nothing> {
         val message: String get() = cause.message ?: cause::class.java.simpleName
     }
@@ -42,7 +42,7 @@ sealed interface ApiResult<out T> {
     }
 }
 
-/** Wartość albo null — do miejsc, w których obsługa błędu nastąpiła już wcześniej. */
+/** A value or null — for places where the error has already been handled. */
 fun <T> ApiResult<T>.getOrNull(): T? = (this as? ApiResult.Ok)?.value
 
 inline fun <T> ApiResult<T>.onOk(action: (T) -> Unit): ApiResult<T> {

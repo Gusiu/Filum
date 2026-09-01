@@ -63,7 +63,7 @@ class EndToEndTest {
     }
 
     @Test
-    fun `pelny cykl przeciwko serwerowi w C#`(@TempDir dir: Path) = runBlocking {
+    fun `a full cycle against the C# server`(@TempDir dir: Path) = runBlocking {
         val root = dir.toFile()
 
         // --- parowanie: bez certyfikatu klienta, zaufanie z odcisku klucza (§3.3) ---
@@ -79,7 +79,7 @@ class EndToEndTest {
 
         val client = api(withIdentity = true)
 
-        // --- ping: od teraz każdy zasób wymaga mTLS ---
+        // --- ping: od now każdy zasób wymaga mTLS ---
 
         val ping = client.ping(endpoint)
         val pingOk = assertInstanceOf(ApiResult.Ok::class.java, ping)
@@ -95,7 +95,7 @@ class EndToEndTest {
         val scanned = FilesystemScanner(
             root, ExclusionRules(includeDefaults = false), nowSeconds = { Long.MAX_VALUE / 2 },
         ).walk().toList().toMutableList()
-        assertEquals(3, scanned.size, "skaner powinien znaleźć wszystkie trzy pliki z dysku")
+        assertEquals(3, scanned.size, "skaner powinien znaleźć wszystkie trzy files z dysku")
 
         // Nazwa z dwukropkiem jest na Androidzie zupełnie zwyczajna, a pod NTFS zabroniona —
         // to główny powód istnienia reguł z PATH-RULES. Test biegnie jednak na Windows,
@@ -158,9 +158,9 @@ class EndToEndTest {
         val manifest = assertInstanceOf(ApiResult.Ok::class.java, second)
         val response = manifest.value as pl.wspa.filum.protocol.ManifestResponse
 
-        // To jest sedno: serwer rozpoznaje pliki po trójce (ścieżka, rozmiar, mtime)
+        // To jest sedno: serwer rozpoznaje files po trójce (ścieżka, rozmiar, mtime)
         // wyliczonej przez klienta. Rozjazd w jednostkach czasu albo w normalizacji
-        // nazw ujawniłby się właśnie tutaj - jako ponowna prośba o te same pliki.
+        // nazw ujawniłby się właśnie tutaj - jako ponowna prośba o te same files.
         assertEquals(4, response.have, "serwer powinien mieć komplet po pierwszym cyklu")
         assertTrue(response.needed.isEmpty(), "nic nie powinno być potrzebne: ${response.needed}")
         assertTrue(response.rejected.isEmpty(), "żadna ścieżka nie powinna zostać odrzucona")

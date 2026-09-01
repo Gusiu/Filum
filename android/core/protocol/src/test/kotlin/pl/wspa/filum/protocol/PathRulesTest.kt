@@ -9,14 +9,14 @@ import org.junit.jupiter.params.provider.MethodSource
 import org.junit.jupiter.params.provider.ValueSource
 
 /**
- * Testy reguł z docs/PATH-RULES.md. Zestaw wektorów jest wspólny z implementacją
- * w C# — rozjazd między stronami ujawni się tutaj, a nie na urządzeniu.
+ * Tests for the rules in docs/PATH-RULES.md. The vector set is shared with the C#
+ * implementation — a divergence between the two shows up here, not on a device.
  */
 class PathRulesTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("wektory")
-    fun `sanitize zgadza sie z wektorem`(vector: PathVector) {
+    fun `sanitize matches the vector`(vector: PathVector) {
         when (val result = PathRules.sanitize(vector.input)) {
             is SanitizeResult.Rejected -> {
                 assertTrue(vector.isRejection, "nieoczekiwane odrzucenie: ${result.reason}")
@@ -30,32 +30,32 @@ class PathRulesTest {
     }
 
     @Test
-    fun `decode odwraca sanitize dla wszystkich wektorow`() {
+    fun `decode reverses sanitize for every vector`() {
         for (vector in TestVectors.load().filterNot { it.isRejection }) {
             val stored = (PathRules.sanitize(vector.input) as SanitizeResult.Success).stored
-            assertEquals(vector.input, PathRules.decode(stored), "nie odwrócono: ${vector.input}")
+            assertEquals(vector.input, PathRules.decode(stored), "not reversed: ${vector.input}")
         }
     }
 
     @Test
-    fun `plik wektorow jest kompletny`() {
-        // Zabezpieczenie przed cichym okrojeniem pliku, np. przez edytor obcinający
-        // końcowe białe znaki albo błędnie scalony merge.
+    fun `the vector file is complete`() {
+        // A guard against the file being silently trimmed, e.g. by an editor stripping
+        // trailing whitespace, or by a badly resolved merge.
         assertTrue(TestVectors.load().size >= 30)
     }
 
-    // --- różnowartościowość: powód, dla którego kodujemy procentowo (ADR-009) ---
+    // --- injectivity: the reason we percent-encode at all (ADR-009) ---
 
     @Test
-    fun `kodowanie jest roznowartosciowe dla znakow zabronionych`() {
-        // Podmiana znaków zabronionych na '_' sprowadziłaby obie ścieżki do jednej
-        // i drugi plik cicho nadpisałby pierwszy. To jest test tej właśnie regresji.
+    fun `the encoding is injective for forbidden characters`() {
+        // Replacing forbidden characters with '_' would collapse both paths into one and
+        // the second file would silently overwrite the first. This tests exactly that.
         assertNotEquals(stored("Documents/a<b.txt"), stored("Documents/a_b.txt"))
     }
 
     @Test
-    fun `kodowanie jest roznowartosciowe dla tekstu wygladajacego na zakodowany`() {
-        // Gdyby '%' nie było kodowane jako pierwsze, obie nazwy zderzyłyby się po dekodowaniu.
+    fun `the encoding is injective for text that looks encoded`() {
+        // If '%' were not encoded first, both names would collide after decoding.
         val a = stored("Documents/a%3Ab.txt")
         val b = stored("Documents/a:b.txt")
 
@@ -65,43 +65,43 @@ class PathRulesTest {
     }
 
     @Test
-    fun `kodowanie jest roznowartosciowe na pelnym zestawie wektorow`() {
+    fun `the encoding is injective across the whole vector set`() {
         val results = TestVectors.load().filterNot { it.isRejection }.map { stored(it.input) }
 
         assertEquals(results.size, results.toSet().size)
     }
 
-    // --- kolizje wielkości liter (§6) ---
+    // --- case collisions (§6) ---
 
     @Test
-    fun `przyrostek kolizji jest stabilny`() {
-        // Wartość podana wprost w docs/PATH-RULES.md §6 — dokumentacja, C# i Kotlin
-        // muszą dawać ten sam wynik, inaczej serwer i klient rozjadą się na dysku.
+    fun `the collision suffix is stable`() {
+        // The value is stated outright in docs/PATH-RULES.md §6 — the document, C# and
+        // Kotlin have to agree, or the server and the client diverge on disk.
         assertEquals("~6a8a8e", PathRules.caseCollisionSuffix("Pictures/photo.jpg"))
     }
 
     @Test
-    fun `przyrostek kolizji rozni sie dla roznej wielkosci liter`() {
+    fun `the collision suffix differs by letter case`() {
         assertNotEquals(
             PathRules.caseCollisionSuffix("Pictures/foto.jpg"),
             PathRules.caseCollisionSuffix("Pictures/Foto.jpg"),
         )
     }
 
-    // --- limit długości składowej (§5 reguła 6) ---
+    // --- component length limit (§5 rule 6) ---
 
     @Test
-    fun `dluga skladowa jest przycinana z przyrostkiem`() {
+    fun `a long component is truncated with a suffix`() {
         val encoded = PathRules.encodeSegment("a".repeat(300))
 
-        assertTrue(encoded.length <= 255, "długość ${encoded.length} przekracza limit NTFS")
+        assertTrue(encoded.length <= 255, "length ${encoded.length} exceeds the NTFS limit")
         assertTrue(encoded.contains('~'))
     }
 
     @Test
-    fun `dluga skladowa nie rozcina sekwencji ucieczki`() {
-        // Każdy znak koduje się na 3 znaki, więc granica przycięcia wypada w środku
-        // sekwencji %XX. Rozcięcie zabiłoby odwracalność.
+    fun `a long component never splits an escape sequence`() {
+        // Each character encodes to three, so the truncation boundary falls inside a %XX
+        // sequence. Splitting it would destroy reversibility.
         val encoded = PathRules.encodeSegment(":".repeat(200))
         val body = encoded.substring(0, encoded.lastIndexOf('~'))
 
@@ -110,39 +110,39 @@ class PathRulesTest {
     }
 
     @Test
-    fun `dluga skladowa rozni sie dla roznych zrodel`() {
+    fun `a long component differs for different sources`() {
         assertNotEquals(
             PathRules.encodeSegment("a".repeat(300) + "x"),
             PathRules.encodeSegment("a".repeat(300) + "y"),
         )
     }
 
-    // --- pojedyncze reguły, gdyby wektory kiedyś zawęziły zakres ---
+    // --- individual rules, in case the vectors ever narrow their coverage ---
 
     @ParameterizedTest
     @ValueSource(strings = ["CON", "con", "CoN.txt", "LPT1.dat", "nul"])
-    fun `nazwy zastrzezone maja zakodowany pierwszy znak`(segment: String) {
+    fun `reserved names have their first character encoded`(segment: String) {
         assertTrue(PathRules.encodeSegment(segment).startsWith("%"))
     }
 
     @ParameterizedTest
     @ValueSource(strings = ["CONSOLE.txt", "COM10.log", "AUXILIARY", "comment.txt"])
-    fun `nazwy podobne do zastrzezonych zostaja bez zmian`(segment: String) {
+    fun `names resembling reserved ones are left alone`(segment: String) {
         assertEquals(segment, PathRules.encodeSegment(segment))
     }
 
     @Test
-    fun `koncowe kropki i spacje koduja tylko ostatni znak`() {
-        assertEquals("plik%2E", PathRules.encodeSegment("plik."))
-        assertEquals("plik%20", PathRules.encodeSegment("plik "))
-        assertEquals("plik.%2E", PathRules.encodeSegment("plik.."))
-        assertEquals("plik %20", PathRules.encodeSegment("plik  "))
+    fun `trailing dots and spaces encode only the last character`() {
+        assertEquals("file%2E", PathRules.encodeSegment("file."))
+        assertEquals("file%20", PathRules.encodeSegment("file "))
+        assertEquals("file.%2E", PathRules.encodeSegment("file.."))
+        assertEquals("file %20", PathRules.encodeSegment("file  "))
         assertEquals("a.b.c", PathRules.encodeSegment("a.b.c"))
     }
 
     @Test
-    fun `walidacja liczy dlugosc w bajtach utf8 nie w znakach`() {
-        // 200 znaków z polskimi diakrytykami to 400 bajtów w UTF-8.
+    fun `validation measures length in utf8 bytes, not characters`() {
+        // 200 characters with diacritics come to 400 bytes in UTF-8.
         val path = "ą".repeat(200)
 
         assertEquals(400, path.toByteArray(Charsets.UTF_8).size)

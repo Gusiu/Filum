@@ -175,7 +175,7 @@ class SyncEngine(
                 return SyncOutcome.Completed(filesSent, bytesSent)
             }
 
-            // Małe pliki idą paczkami, duże pojedynczo. Przy stu tysiącach plików,
+            // Małe files idą paczkami, duże pojedynczo. Przy stu tysiącach plików,
             // z których większość jest drobna, narzut żądania HTTP zaczyna dominować
             // nad transferem danych (ADR-008).
             val (small, large) = batch.partition { it.size <= config.smallFileThreshold && it.bytesSent == 0L }
@@ -221,7 +221,7 @@ class SyncEngine(
     private enum class SendResult { SENT, SKIPPED, FAILED, INTERRUPTED }
 
     /**
-     * Dzieli pliki na paczki mieszczące się w limitach z odpowiedzi na ping.
+     * Dzieli files na paczki mieszczące się w limitach z odpowiedzi na ping.
      *
      * Plik większy od limitu paczki nie może w niej pojechać — trafia do niej sam,
      * a i tak zostanie odrzucony przez próg rozmiaru wyżej; tutaj pilnujemy tylko,
@@ -258,11 +258,11 @@ class SyncEngine(
             val file = File(queued.absolutePath)
 
             if (!file.isFile) {
-                queue.markPermanentFailure(queued.canonicalPath, "plik już nie istnieje")
+                queue.markPermanentFailure(queued.canonicalPath, "file już nie istnieje")
                 continue
             }
             if (file.length() != queued.size || Math.floorDiv(file.lastModified(), 1000L) != queued.mtime) {
-                queue.markTransientFailure(queued.canonicalPath, "plik zmienił się po skanie")
+                queue.markTransientFailure(queued.canonicalPath, "file zmienił się po skanie")
                 continue
             }
 
@@ -285,7 +285,7 @@ class SyncEngine(
             }
 
             is ApiResult.Unreachable -> {
-                // Paczka nie doszła w całości. Wszystkie jej pliki wracają do kolejki —
+                // Paczka nie doszła w całości. Wszystkie jej files wracają do kolejki —
                 // nie mamy pojęcia, ile z nich serwer zdążył zapisać, a ponowna
                 // wysyłka niczego nie psuje, bo manifest i tak je odsieje.
                 entries.forEach { queue.markTransientFailure(it.canonicalPath, result.message) }
@@ -339,17 +339,17 @@ class SyncEngine(
         val file = File(entry.absolutePath)
 
         if (!file.isFile) {
-            // Użytkownik usunął plik między skanem a wysyłką. To nie jest błąd —
+            // Użytkownik usunął file między skanem a wysyłką. To nie jest błąd —
             // kopia z poprzednich cykli i tak zostaje na serwerze (niezmiennik I1).
-            queue.markPermanentFailure(entry.canonicalPath, "plik już nie istnieje")
+            queue.markPermanentFailure(entry.canonicalPath, "file już nie istnieje")
             return SendResult.SKIPPED
         }
 
         val currentMtime = Math.floorDiv(file.lastModified(), 1000L)
         if (file.length() != entry.size || currentMtime != entry.mtime) {
-            // Plik zmienił się po skanie. Wysyłanie go teraz skleiłoby dwie wersje;
+            // Plik zmienił się po skanie. Wysyłanie go now skleiłoby dwie wersje;
             // wróci do kolejki przy następnym skanie, już z aktualną tożsamością.
-            queue.markTransientFailure(entry.canonicalPath, "plik zmienił się po skanie")
+            queue.markTransientFailure(entry.canonicalPath, "file zmienił się po skanie")
             journal.record(
                 JournalLevel.INFO, "file_changed",
                 "${entry.canonicalPath} zmienił się po skanie; wróci w następnym cyklu.",

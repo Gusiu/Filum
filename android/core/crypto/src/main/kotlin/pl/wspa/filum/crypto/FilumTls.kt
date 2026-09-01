@@ -7,9 +7,9 @@ import javax.net.ssl.SSLSocketFactory
 import javax.net.ssl.X509TrustManager
 
 /**
- * Zestaw obiektów TLS dla klienta HTTP. Trzymane razem, bo OkHttp wymaga podania
- * fabryki gniazd i menedżera zaufania jednocześnie — rozdzielenie ich prowadzi do
- * konfiguracji, w której przypięcie klucza cicho przestaje działać.
+ * The TLS objects for the HTTP client. Kept together because OkHttp requires the socket
+ * factory and the trust manager to be supplied at the same time — separating them leads to
+ * a configuration in which key pinning silently stops working.
  */
 data class TlsBundle(
     val socketFactory: SSLSocketFactory,
@@ -19,19 +19,19 @@ data class TlsBundle(
 object FilumTls {
 
     /**
-     * Buduje TLS przypięty do konkretnego klucza serwera.
+     * Builds TLS pinned to one specific server key.
      *
-     * @param serverPin odcisk klucza serwera z kodu parowania (§3.1)
-     * @param identity tożsamość telefonu; `null` wyłącznie na czas parowania, bo
-     *   `POST /pair` jest jedynym zasobem dostępnym bez certyfikatu klienta (§3.3)
+     * @param serverPin the server key fingerprint from the pairing code (§3.1)
+     * @param identity the phone's identity; `null` only during pairing, because `POST /pair`
+     *   is the one resource reachable without a client certificate (§3.3)
      */
     fun bundle(serverPin: String, identity: DeviceIdentity?): TlsBundle =
         bundle(serverPin, identity?.keyManagers())
 
     /**
-     * Wariant przyjmujący menedżery klucza wprost. Pozwala przetestować przypięcie
-     * i mTLS na zwykłej maszynie wirtualnej, bez Android Keystore i bez emulatora —
-     * a to jest ta część, której błąd oznacza wysyłanie kopii pod cudzy adres.
+     * A variant taking key managers directly. It allows pinning and mTLS to be tested on an
+     * ordinary JVM, with no Android Keystore and no emulator — and this is the part where a
+     * mistake means uploading the backup to somebody else's address.
      */
     fun bundle(serverPin: String, keyManagers: Array<KeyManager>?): TlsBundle {
         val trustManager = PinnedTrustManager(serverPin)

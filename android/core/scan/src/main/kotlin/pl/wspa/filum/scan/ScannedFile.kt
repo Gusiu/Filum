@@ -3,11 +3,11 @@ package pl.wspa.filum.scan
 import java.text.Normalizer
 
 /**
- * Plik zauważony przez skaner, w postaci gotowej do manifestu.
+ * A file noticed by the scanner, in the form the manifest needs.
  *
- * [canonicalPath] jest **względny wobec katalogu głównego pamięci**, rozdzielany
- * ukośnikiem i znormalizowany do Unicode NFC (§3 dokumentu PATH-RULES). Sanityzacja
- * pod NTFS to sprawa serwera i nigdy nie pojawia się po tej stronie.
+ * [canonicalPath] is **relative to the storage root**, separated by slashes and normalised
+ * to Unicode NFC (§3 of PATH-RULES). NTFS sanitisation is the server's business and never
+ * appears on this side.
  */
 data class ScannedFile(
     val canonicalPath: String,
@@ -18,20 +18,20 @@ data class ScannedFile(
 )
 
 /**
- * Jedyne miejsce, w którym zamieniamy czas modyfikacji na postać protokołu (ADR-011).
+ * The one place where we convert a modification time into the protocol's form (ADR-011).
  *
  * `MediaStore.DATE_MODIFIED` podaje **sekundy**, a `File.lastModified()` **milisekundy**.
- * Gdyby ten sam plik trafiał do manifestu raz z jednego, raz z drugiego źródła, jego
- tożsamość zmieniałaby się między cyklami i byłby wysyłany w kółko. Na bibliotece
- * dowolnej wielkości to nie jest niedogodność, tylko awaria — zmienia się tylko to,
- * jak szybko użytkownik ją zauważy.
+ * If the same file reached the manifest from one source at one time and the other at
+ * another, its identity would change between cycles and it would be uploaded over and over.
+ * On a library of any size that is a failure rather than an inconvenience — all that
+ * changes is how quickly the user notices.
  */
 object Mtime {
 
-    /** Z `File.lastModified()` i innych źródeł milisekundowych. */
+    /** From `File.lastModified()` and other millisecond sources. */
     fun fromMillis(millis: Long): Long = Math.floorDiv(millis, 1000L)
 
-    /** Z `MediaStore.DATE_MODIFIED`; przechodzi bez zmian, ale przez tę samą bramę. */
+    /** From `MediaStore.DATE_MODIFIED`; unchanged, but through the same gate. */
     fun fromSeconds(seconds: Long): Long = seconds
 
     fun toMillis(seconds: Long): Long = seconds * 1000L
@@ -40,11 +40,11 @@ object Mtime {
 object CanonicalPath {
 
     /**
-     * Ścieżka względna wobec katalogu głównego pamięci, z ukośnikami i w postaci NFC.
+     * A path relative to the storage root, slash-separated and in NFC form.
      *
-     * Normalizacja NFC jest istotna dla polskich znaków: ta sama nazwa zapisana raz
-     * w NFD, raz w NFC to dla porównania bajtowego dwie różne ścieżki, więc plik
-     * wracałby do kolejki przy każdym skanie.
+     * NFC normalisation matters for accented names: the same name written once in NFD and
+     * once in NFC is two different paths to a byte comparison, so the file would return to
+     * the queue on every scan.
      */
     fun of(rootAbsolutePath: String, fileAbsolutePath: String): String? {
         val root = rootAbsolutePath.trimEnd('/', '\\')

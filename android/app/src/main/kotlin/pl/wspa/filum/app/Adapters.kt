@@ -34,7 +34,7 @@ import java.io.File
  * Kolejka oparta o Room.
  *
  * Ścieżka kanoniczna jest kluczem głównym, więc ponowne dodanie tego samego pliku
- * w nowej wersji nadpisuje wpis: to ten sam plik po zmianie, a nie drugi plik.
+ * w nowej wersji nadpisuje wpis: to ten sam file po zmianie, a nie drugi file.
  */
 class RoomSyncQueue(
     private val dao: FileEntryDao,

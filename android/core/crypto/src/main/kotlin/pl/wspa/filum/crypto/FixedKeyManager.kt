@@ -8,17 +8,17 @@ import javax.net.ssl.SSLEngine
 import javax.net.ssl.X509ExtendedKeyManager
 
 /**
- * Menedżer klucza, który zawsze przedstawia ten jeden certyfikat.
+ * A key manager that always presents this one certificate.
  *
- * Świadomie **nie** używamy [javax.net.ssl.KeyManagerFactory]: standardowa implementacja
- * wybiera certyfikat na podstawie listy urzędów certyfikacji, których serwer oczekuje
- * w komunikacie CertificateRequest. Serwer Filum żadnej listy nie wysyła, bo nie ma
- * urzędu — uwierzytelnia po odcisku klucza (ADR-005). Domyślny menedżer nie znalazłby
- * więc dopasowania i uścisk dłoni poszedłby **bez certyfikatu klienta**, co serwer
- * odrzuciłby kodem 401 przy każdym żądaniu.
+ * We deliberately do **not** use [javax.net.ssl.KeyManagerFactory]: the standard
+ * implementation picks a certificate from the list of authorities the server names in its
+ * CertificateRequest. The Filum server sends no such list, because it has no authority —
+ * it authenticates by key fingerprint (ADR-005). The default manager would therefore find
+ * no match and the handshake would proceed **without a client certificate**, which the
+ * server would refuse with 401 on every request.
  *
- * Jest to zarazem jedyny sensowny wybór: telefon ma dokładnie jedną tożsamość, więc
- * nie ma czego wybierać.
+ * It is also the only sensible choice: the phone has exactly one identity, so there is
+ * nothing to choose between.
  */
 class FixedKeyManager(
     private val alias: String,
@@ -43,7 +43,7 @@ class FixedKeyManager(
 
     override fun getPrivateKey(alias: String?): PrivateKey = privateKey
 
-    // Telefon nigdy nie występuje w roli serwera TLS.
+    // The phone never acts as a TLS server.
     override fun getServerAliases(keyType: String?, issuers: Array<out Principal>?): Array<String>? = null
 
     override fun chooseServerAlias(

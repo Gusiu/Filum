@@ -37,10 +37,10 @@ abstract class FilumDatabase : RoomDatabase() {
 
         fun open(context: Context): FilumDatabase =
             Room.databaseBuilder(context.applicationContext, FilumDatabase::class.java, NAME)
-                // Baza trzyma wyłącznie kolejkę i historię, nigdy dane użytkownika.
-                // W razie niezgodności schematu odtworzenie jej od zera kosztuje jeden
-                // pełny skan, a nie utratę czegokolwiek — to lepsze niż aplikacja,
-                // która po aktualizacji nie wstaje.
+                // The database holds only the queue and the history, never user data.
+                // On a schema mismatch, rebuilding it from scratch costs one full scan
+                // rather than the loss of anything — which beats an application that
+                // fails to start after an update.
                 .fallbackToDestructiveMigration(dropAllTables = true)
                 .build()
     }

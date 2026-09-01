@@ -99,25 +99,25 @@ data class SyncConfig(
     /**
      * Największy fragment jednego żądania PUT.
      *
-     * Dzielimy duże pliki, żeby pojedyncze żądanie nie trwało godzinami na wolnym
+     * Dzielimy duże files, żeby pojedyncze żądanie nie trwało godzinami na wolnym
      * łączu i żeby dało się sprawdzić budżet w środku wielogigabajtowego nagrania.
      */
     val chunkBytes: Long = 32L * 1024 * 1024,
 
     /**
-     * Jak wykrywamy, że plik się zmienił (ADR-016).
+     * Jak wykrywamy, że file się zmienił (ADR-016).
      *
      * Nie zależy od niej wysyłanie skrótu przy transferze — ten jest liczony zawsze
-     * i serwer go wymaga. Zależy od niej to, czy w ogóle **zapytamy**, czy plik uznany
+     * i serwer go wymaga. Zależy od niej to, czy w ogóle **zapytamy**, czy file uznany
      * za niezmieniony jest tym samym plikiem.
      */
     val integrityPolicy: IntegrityPolicy = IntegrityPolicy.FAST,
 
-    /** Po tylu nieudanych podejściach uznajemy plik za trwale problematyczny. */
+    /** Po tylu nieudanych podejściach uznajemy file za trwale problematyczny. */
     val maxAttempts: Int = 5,
 
     /**
-     * Poniżej tego rozmiaru plik idzie w paczce, a nie osobnym żądaniem (ADR-008).
+     * Poniżej tego rozmiaru file idzie w paczce, a nie osobnym żądaniem (ADR-008).
      *
      * Wartość podaje serwer w odpowiedzi na ping; klient nie zakłada własnej.
      * Próg zostanie wyznaczony pomiarem, a nie przyjęty z góry — to jeden
@@ -138,7 +138,7 @@ data class SyncConfig(
  * po cichu przy pierwszej zmianie komunikatu.
  */
 enum class InterruptReason {
-    /** Wyczerpany budżet pracy w tle. Kolejka czeka; ponawianie teraz nic nie da. */
+    /** Wyczerpany budżet pracy w tle. Kolejka czeka; ponawianie now nic nie da. */
     BUDGET,
 
     /** Zerwane połączenie. Warto spróbować ponownie, gdy sieć wróci. */

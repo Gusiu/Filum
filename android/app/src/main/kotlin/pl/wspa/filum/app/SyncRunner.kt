@@ -176,7 +176,7 @@ class SyncRunner(private val container: AppContainer) {
 
     // --- skan ---
 
-    /** Zwraca pliki i informację, czy udało się użyć szybkiej ścieżki. */
+    /** Zwraca files i informację, czy udało się użyć szybkiej ścieżki. */
     private suspend fun collectFiles(mode: String): Pair<Sequence<ScannedFile>, Boolean> {
         val exclusions = ExclusionRules(
             userPrefixes = container.database.exclusions().active().map { it.pathPrefix }
