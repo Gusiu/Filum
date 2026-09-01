@@ -1,168 +1,197 @@
-# Filum — serwer
+# Filum — server
 
-.NET 9, ASP.NET Core minimal APIs. Implementacja zasobów z
+.NET 9, ASP.NET Core minimal APIs. Implements the resources described in
 [../docs/PROTOCOL.md](../docs/PROTOCOL.md).
 
-## Projekty
+## Projects
 
-| Projekt | Odpowiedzialność |
+| Project | Responsibility |
 |---|---|
-| `Filum.Protocol` | modele DTO, `PathRules`, stałe protokołu — bez operacji plikowych |
-| `Filum.Core` | silnik składowania, certyfikat serwera, rejestr urządzeń |
-| `Filum.Server` | Kestrel z mTLS, zasoby HTTP, parowanie, panel |
-| `Filum.Tray` | ikona w zasobniku systemowym |
-| `Filum.Protocol.Tests` | wektory ścieżek wspólne z klientem Androida |
-| `Filum.Core.Tests` | silnik składowania, bezpieczeństwo, testy integracyjne API |
+| `Filum.Protocol` | DTOs, `PathRules`, protocol constants — no file operations |
+| `Filum.Core` | storage engine, server certificate, device registry, integrity ledger |
+| `Filum.Server` | Kestrel with mTLS, HTTP resources, pairing, panel |
+| `Filum.Tray` | system tray icon |
+| `Filum.Protocol.Tests` | path vectors shared with the Android client |
+| `Filum.Core.Tests` | storage engine, security, integrity, API integration tests |
 
-## Uruchamianie
+## Running
 
 ```bash
 cd server && dotnet run --project src/Filum.Server --no-launch-profile
 ```
 
-| Ustawienie | Domyślnie | Znaczenie |
+| Setting | Default | Meaning |
 |---|---|---|
-| `Filum:Root` | `%LOCALAPPDATA%\Filum\backup` | katalog backupu |
-| `Filum:ConfigDirectory` | `%LOCALAPPDATA%\Filum` | klucz prywatny serwera |
-| `Filum:Bind` | `0.0.0.0` | adres nasłuchu |
+| `Filum:Root` | `%LOCALAPPDATA%\Filum\backup` | backup directory |
+| `Filum:ConfigDirectory` | `%LOCALAPPDATA%\Filum` | server private key |
+| `Filum:Bind` | `0.0.0.0` | listen address |
 | `Filum:Port` | `8765` | port |
-| `Filum:EnableMdns` | `true` | rozgłaszanie usługi w sieci lokalnej |
+| `Filum:EnableMdns` | `true` | advertise the service on the local network |
+| `Filum:RequireDigest` | `true` | reject uploads that carry no digest |
 
-Każde ustawienie da się nadpisać zmienną środowiskową, np. `Filum__Root`.
+Every setting can be overridden by an environment variable, e.g. `Filum__Root`.
 
-Klucz prywatny leży **poza katalogiem backupu**. Ten bywa kopiowany na inny dysk
-albo odtwarzany z kopii, więc klucz wyciekłby razem z danymi.
+The private key lives **outside the backup directory**. That directory gets copied to
+another disk or restored from a backup, and the key would travel with the data.
 
-## Bezpieczeństwo
+`Filum:RequireDigest` is worth understanding before turning it off. With it on, a file
+that arrives without a digest is refused before any bytes reach the disk, and every
+accepted file is recorded in the ledger. Turning it off makes the digest optional and
+leaves those files out of the ledger — reasonable for an installation that only cares
+about getting data back, not about being able to show what it received.
 
-Od etapu 4 obowiązuje **wzajemne przypięcie kluczy** (§3.1 protokołu, ADR-005):
+## Security
 
-- serwer generuje przy pierwszym starcie parę EC P-256 i certyfikat samopodpisany,
-- telefon przy parowaniu przekazuje swój certyfikat, serwer zapamiętuje odcisk klucza,
-- każdy zasób poza `/api/v1/pair` wymaga certyfikatu klienta o znanym odcisku.
+Since stage 4, **mutual key pinning** applies (protocol §3.1, ADR-005):
 
-Nie ma urzędu certyfikacji ani tokenów wędrujących w każdym żądaniu. Odebranie
-dostępu zgubionemu telefonowi to skreślenie jednego wpisu w rejestrze.
+- on first start the server generates an EC P-256 pair and a self-signed certificate,
+- during pairing the phone hands over its certificate and the server records the key's fingerprint,
+- every resource other than `/api/v1/pair` requires a client certificate with a known fingerprint.
 
-Dzięki temu nasłuch na `0.0.0.0` jest bezpieczny: bez sparowanego klucza żaden
-zasób zapisujący nie odpowiada.
+There is no certificate authority and no token riding along in every request. Revoking
+a lost phone's access means striking one entry from the registry.
+
+This is what makes listening on `0.0.0.0` safe: without a paired key, no writing
+resource answers at all.
+
+## Integrity ledger
+
+Every accepted file appends a line to `<device>/.filum/integrity.jsonl`, and each line
+carries the digest of the line before it (protocol §9.2). Removing, altering or
+inserting an entry breaks the chain from that point on, so partial tampering is
+detectable. The panel shows the entry count and the chain verdict per device.
+
+The chain hashes the stored line verbatim rather than the deserialised object: were the
+serialiser ever to reorder fields, hashing the object would invalidate the entire
+history without anyone touching it.
+
+The file is plain JSONL with no byte-order mark, so verifying it takes a few lines in
+any language and does not go through this project's code at all. That independence is
+the point — a ledger only our own implementation can read is worth exactly as much as
+trust in that implementation.
+
+What the chain does **not** give you is protection against someone with disk access
+rebuilding the ledger from scratch. Signing it with the server key would not help
+either, since that key sits on the same machine. The honest guarantee is detectability
+of partial tampering, not impossibility of tampering.
 
 ## Panel
 
-Otwórz w przeglądarce **na komputerze z serwerem**:
+Open in a browser **on the machine running the server**:
 
 ```
 https://127.0.0.1:8765/
 ```
 
-Pokazuje stan serwera, wolne miejsce, listę sparowanych telefonów wraz z liczbą
-plików i zajętością, a pod `/parowanie` rysuje kod QR do sparowania kolejnego
-urządzenia.
+It shows server status, free space, and the paired phones with their file counts, sizes
+and ledger state. Under `/parowanie` it draws a QR code for pairing another device.
 
-Panel jest dostępny **wyłącznie z pętli zwrotnej** — wydaje tokeny parowania
-i pokazuje zawartość kopii, więc wystawienie go w sieci pozwalałoby obcemu
-urządzeniu sparować się bez wiedzy właściciela (ADR-010). Certyfikat jest
-samopodpisany, więc przeglądarka ostrzeże przy pierwszym wejściu.
+The panel is reachable **from loopback only** — it issues pairing tokens and shows the
+contents of the backup, so exposing it on the network would let a stranger's device
+pair without the owner knowing (ADR-010). The certificate is self-signed, so the
+browser will warn on first visit.
 
-Ten sam token da się pobrać z wiersza poleceń:
+The same token can be fetched from the command line:
 
 ```bash
 curl -sk https://127.0.0.1:8765/api/v1/pair/new
 ```
 
-Token jest jednorazowy i żyje 10 minut.
+The token is single-use and lives for 10 minutes.
 
-### Wyłączenie i rozparowanie urządzenia
+### Disabling and unpairing a device
 
-Wyłączone urządzenie dostaje `403` na każde żądanie, ale jego kopia zostaje
-nietknięta. Rozparowanie usuwa wyłącznie wpis `device.json` — pliki zostają,
-bo najczęstszy powód rozparowania to zgubiony telefon, czyli dokładnie ta
-chwila, w której kopia jest najbardziej potrzebna.
+A disabled device gets `403` on every request, but its backup is untouched. Unpairing
+removes only the `device.json` entry — the files stay, because the most common reason
+to unpair is a lost phone, which is exactly when the backup matters most.
 
-## Uruchamianie jako usługa Windows
+## Running as a Windows service
 
-Ten sam plik wykonywalny działa w obu trybach — wykrywa sam, jak został uruchomiony.
-Usługa jest potrzebna, żeby kopia przyjmowała się także przy wylogowanym użytkowniku.
+The same executable works either way — it detects how it was started. The service is
+what lets the backup keep accepting files while no user is logged in.
 
-Publikacja do jednego pliku:
+Publish as a single file:
 
 ```bash
 cd server && dotnet publish src/Filum.Server -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
 ```
 
-Rejestracja usługi (wiersz poleceń z uprawnieniami administratora):
+Register the service (command prompt with administrator rights):
 
 ```bash
-sc.exe create Filum binPath= "C:\ścieżka\do\Filum.Server.exe" start= auto
+sc.exe create Filum binPath= "C:\path\to\Filum.Server.exe" start= auto
 ```
 
-Usługa działa w sesji 0 i **nie może wyświetlać interfejsu** — dlatego ikona
-w zasobniku jest osobnym procesem uruchamianym przy logowaniu (ADR-010).
+The service runs in session 0 and **cannot show a UI** — which is why the tray icon is
+a separate process started at logon (ADR-010).
 
-Katalog konfiguracji domyślnie zależy od konta, na którym działa usługa, więc przy
-rejestracji warto podać `Filum:Root` i `Filum:ConfigDirectory` jawnie — inaczej
-usługa uruchomiona jako `LocalSystem` użyje innych katalogów niż serwer
-uruchamiany ręcznie.
+The configuration directory defaults to something account-dependent, so it is worth
+passing `Filum:Root` and `Filum:ConfigDirectory` explicitly at registration time —
+otherwise a service running as `LocalSystem` will use different directories than the
+server started by hand.
 
-## Ikona w zasobniku
+## Tray icon
 
 ```bash
 cd server && dotnet run --project src/Filum.Tray
 ```
 
-Pokazuje, czy serwer działa, ilu telefonów dotyczy kopia i ile zostało miejsca.
-Pod prawym przyciskiem: panel, ekran parowania i katalog kopii.
+Shows whether the server is running, how many phones the backup covers and how much
+space is left. Right-click gives the panel, the pairing screen and the backup directory.
 
-Jest **osobnym procesem**, bo usługa Windows działa w sesji 0 i nie może wyświetlać
-interfejsu. Rozmawia z serwerem przez to samo lokalne API co panel — nie ma między
-nimi żadnego kanału specjalnego.
+It is a **separate process**, because a Windows service runs in session 0 and cannot
+show a UI. It talks to the server over the same local API as the panel — there is no
+special channel between them.
 
-Certyfikat serwera weryfikuje po odcisku klucza odczytanym z `server.pfx`, a nie po
-łańcuchu zaufania. Dzięki temu nie ufa czemukolwiek, co zdąży zająć port 8765.
+It verifies the server certificate by the key fingerprint read from `server.pfx`, not
+by a trust chain. That way it does not trust whatever happens to claim port 8765.
 
-Katalog konfiguracji i port można nadpisać zmiennymi `FILUM_CONFIG` i `FILUM_PORT`.
+The configuration directory and port can be overridden with `FILUM_CONFIG` and
+`FILUM_PORT`.
 
-## Testy
+## Tests
 
 ```bash
 cd server && dotnet test
 ```
 
-## Przejazd ręczny
+## Manual walkthrough
 
-Certyfikat serwera jest samopodpisany, więc `curl` potrzebuje `-k`; telefon
-zamiast tego sprawdza odcisk klucza. Odcisk można zweryfikować niezależnie:
+The server certificate is self-signed, so `curl` needs `-k`; the phone checks the key
+fingerprint instead. That fingerprint can be verified independently:
 
 ```bash
 openssl s_client -connect 127.0.0.1:8765 </dev/null 2>/dev/null | openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl base64 | tr '+/' '-_' | tr -d '='
 ```
 
-Wynik musi być identyczny z polem `k` z `/api/v1/pair/new`.
+The result must match the `k` field from `/api/v1/pair/new`.
 
-Wysyłka pliku wymaga sparowanego certyfikatu (`X-Filum-Path` to base64url bez dopełnienia):
+Sending a file requires a paired certificate. `X-Filum-Path` is base64url without
+padding, and `X-Filum-Digest` carries the SHA-256 of the whole file — required by
+default, and checked when the transfer closes:
 
 ```bash
-curl -sk --cert client.crt --key client.key -X PUT https://127.0.0.1:8765/api/v1/file -H "X-Filum-Path: RENJTS9DYW1lcmEvYS5qcGc" -H "X-Filum-Size: 28" -H "X-Filum-Mtime: 1756400000" -H "X-Filum-Offset: 0" --data-binary @plik.jpg
+curl -sk --cert client.crt --key client.key -X PUT https://127.0.0.1:8765/api/v1/file -H "X-Filum-Path: RENJTS9DYW1lcmEvYS5qcGc" -H "X-Filum-Size: 28" -H "X-Filum-Mtime: 1756400000" -H "X-Filum-Offset: 0" -H "X-Filum-Digest: 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08" --data-binary @file.jpg
 ```
 
-Wznowienie polega na powtórzeniu żądania z `X-Filum-Offset` równym wartości
-`offset` z ostatniej odpowiedzi. Niezgodne przesunięcie daje `409` z polem
-`expectedOffset`.
+Resuming means repeating the request with `X-Filum-Offset` set to the `offset` from the
+last response. A mismatched offset yields `409` with an `expectedOffset` field.
 
-## Co jest zaimplementowane
+## What is implemented
 
-| Zasób | Stan |
+| Resource | State |
 |---|---|
-| panel: stan, urządzenia, kod QR, raport sierot | tak, tylko z pętli zwrotnej |
-| `GET /api/v1/admin/status` | tak, tylko z pętli zwrotnej |
-| `GET /api/v1/pair/new` | tak, tylko z pętli zwrotnej |
-| `POST /api/v1/pair` | tak, token jednorazowy, limit 5 prób na 15 minut |
-| `GET /api/v1/ping` | tak, z listą adresów lokalnych (§4.4) |
-| `POST /api/v1/manifest` | tak, z polem `rejected` |
-| `PUT /api/v1/file` | tak, wznawianie i wersjonowanie |
-| mTLS z przypięciem kluczy | tak |
-| rozgłaszanie mDNS | tak |
-| `POST /api/v1/bundle` | tak |
-| `POST /api/v1/verify` | tak |
-| `GET /api/v1/orphans` | tak |
-| ikona w zasobniku systemowym | tak, osobny proces |
+| panel: status, devices, QR code, orphan report, ledger state | yes, loopback only |
+| `GET /api/v1/admin/status` | yes, loopback only |
+| `GET /api/v1/pair/new` | yes, loopback only |
+| `POST /api/v1/pair` | yes, single-use token, 5 attempts per 15 minutes |
+| `GET /api/v1/ping` | yes, with the list of local addresses (§4.4) |
+| `POST /api/v1/manifest` | yes, with `rejected` and `divergent` |
+| `PUT /api/v1/file` | yes, resuming and versioning |
+| mTLS with key pinning | yes |
+| mDNS advertising | yes |
+| integrity ledger with chained digests | yes |
+| `POST /api/v1/bundle` | yes |
+| `POST /api/v1/verify` | yes |
+| `GET /api/v1/orphans` | yes |
+| system tray icon | yes, separate process |

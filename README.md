@@ -1,104 +1,106 @@
 # Filum
 
-Jednokierunkowy backup plików z telefonu z Androidem na komputer z Windows,
-bez chmury i bez pośredników przechowujących dane.
+One-way file backup from an Android phone to a Windows PC, with no cloud and no
+intermediary holding the data.
 
-Praca inżynierska, WSPA.
+Engineering thesis, WSPA.
+
+> The design documents under `docs/` are written in Polish, as the thesis itself is.
+> They remain normative: this file summarises them, it does not replace them.
 
 ---
 
-## Czym to jest — i czym nie jest
+## What it is, and what it is not
 
-Filum to **backup, nie synchronizacja**. Różnica jest zasadnicza i to z niej
-wynika cała architektura: usunięcie pliku w telefonie **nie usuwa go z komputera**.
+Filum is a **backup, not a sync**. The distinction is not cosmetic — the whole
+architecture follows from it: deleting a file on the phone **does not delete it
+from the PC**.
 
-Popularne narzędzia (Syncthing, Resilio, FolderSync, Nextcloud) realizują
-synchronizację dwukierunkową i propagują usunięcia. Użytkownik porządkujący
-galerię traci kopię zapasową dokładnie wtedy, gdy najbardziej jej potrzebuje.
-Zbiór plików przechowywanych przez Filum jest monotoniczny — może wyłącznie rosnąć.
+The well-known tools (Syncthing, Resilio, FolderSync, Nextcloud) synchronise in
+both directions and propagate deletions. Someone tidying up their gallery loses
+the backup at precisely the moment they need it. The set of files Filum keeps is
+monotonic — it can only grow.
 
-## Komponenty
+## Components
 
-| Katalog | Opis |
+| Directory | Description |
 |---|---|
-| `server/` | usługa HTTP na Windows: .NET 9, panel w przeglądarce, ikona w zasobniku |
-| `android/` | klient: Kotlin, Compose, WorkManager, Room, OkHttp |
+| `server/` | HTTP service for Windows: .NET 9, browser panel, tray icon |
+| `android/` | client: Kotlin, Compose, WorkManager, Room, OkHttp |
 
-## Najważniejsze właściwości
+## Key properties
 
-- **Nic nie ginie.** Serwer nie udostępnia operacji usuwania. Zmieniona zawartość
-  pod znaną ścieżką nie nadpisuje poprzedniej — stara wersja jest odkładana.
-- **Przezroczyste składowanie.** Na dysku leży zwykłe drzewo katalogów,
-  przeglądalne w Eksploratorze. Odtworzenie nie wymaga tej aplikacji.
-- **Integralność jest sprawdzalna.** Skrót każdego przyjętego pliku trafia do
-  dopisywanego rejestru, w którym każdy wiersz niesie skrót poprzedniego. Usunięcie
-  albo podmiana wpisu rozspójnia wszystko, co po nim następuje. Rejestr jest zwykłym
-  plikiem JSONL — da się go sprawdzić bez tej aplikacji, kilkoma wierszami kodu.
-- **Wykrywanie zmian jest wyborem użytkownika.** Tryb szybki porównuje rozmiar
-  i czas modyfikacji; tryb dokładny liczy skrót każdego pliku przy każdym skanie
-  i wykrywa podmianę, która metadanych nie ruszyła.
-- **Transfer wznawialny** na trzech poziomach: w środku pliku, w środku kolejki
-  i w środku kampanii rozłożonej na wiele cykli.
-- **Adres nie jest tożsamością.** Serwer rozpoznaje się po kluczu publicznym,
-  a klient trzyma zbiór tras i ściga je równolegle: sieć lokalna, mDNS, sieć
-  nakładkowa. Zmiana routera czy wyjście z domu nie wymagają konfiguracji.
-- **Wzajemne przypięcie kluczy (mTLS)** zamiast tokenu w postaci jawnej.
+- **Nothing is lost.** The server exposes no delete operation. Different content
+  under a known path does not overwrite what is there — the old version is filed away.
+- **Storage is transparent.** What lands on disk is an ordinary directory tree,
+  browsable in Explorer. Restoring does not require this application.
+- **Integrity is checkable.** The digest of every accepted file goes into an
+  append-only ledger where each line carries the digest of the one before it.
+  Removing or altering an entry breaks everything that follows. The ledger is plain
+  JSONL — it can be verified without this application, in a few lines of code.
+- **Change detection is the user's choice.** Fast mode compares size and modification
+  time; thorough mode hashes every file on every scan and catches a substitution that
+  left the metadata alone.
+- **Transfers resume** at three levels: mid-file, mid-queue, and mid-campaign across
+  many cycles.
+- **An address is not an identity.** The server is recognised by its public key, and
+  the client keeps a set of routes and races them in parallel: local network, mDNS,
+  overlay network. Changing routers or leaving the house requires no configuration.
+- **Mutual key pinning (mTLS)** instead of a bearer token in the clear.
 
-## Dokumentacja
+## Documentation
 
-| Dokument | Zawartość |
+| Document | Contents |
 |---|---|
-| [docs/PROTOCOL.md](docs/PROTOCOL.md) | specyfikacja protokołu — normatywna dla obu implementacji |
-| [docs/PATH-RULES.md](docs/PATH-RULES.md) | normalizacja i sanityzacja ścieżek pod NTFS |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | podział na moduły, przepływy, kolejność budowy |
-| [docs/DECISIONS.md](docs/DECISIONS.md) | rejestr decyzji architektonicznych z odrzuconymi alternatywami |
-| [docs/testvectors/paths.tsv](docs/testvectors/paths.tsv) | wspólne wektory testowe sanityzacji ścieżek |
+| [docs/PROTOCOL.md](docs/PROTOCOL.md) | protocol specification — normative for both implementations |
+| [docs/PATH-RULES.md](docs/PATH-RULES.md) | path normalisation and sanitisation for NTFS |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | module breakdown, flows, build order |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | architecture decision record, including the rejected alternatives |
+| [docs/testvectors/paths.tsv](docs/testvectors/paths.tsv) | shared test vectors for path sanitisation |
 
-Serwer i klient są pisane niezależnie, w różnych językach, i pogodzone wyłącznie
-przez specyfikację oraz wspólne wektory testowe. Jest to celowe: implementacja
-od zera na podstawie samego dokumentu jest dowodem, że dokument jest kompletny.
+Server and client are written independently, in different languages, and reconciled
+solely through the specification and the shared test vectors. That is deliberate:
+implementing from the document alone is the evidence that the document is complete.
 
-## Środowisko docelowe
+## Target environment
 
-- Telefon: Android 11 lub nowszy (`minSdk 30`), `targetSdk 36`
-- Instalacja poza sklepem — wymagane `MANAGE_EXTERNAL_STORAGE`
-- Komputer: Windows 10/11, NTFS
-- Biblioteka dowolnego rozmiaru; pierwsza synchronizacja rozkłada się na tyle cykli, ile potrzeba
+- Phone: Android 11 or newer (`minSdk 30`), `targetSdk 36`
+- Sideloaded — requires `MANAGE_EXTERNAL_STORAGE`
+- PC: Windows 10/11, NTFS
+- A library of any size; the first sync spreads over as many cycles as it needs
 
-## Stan prac
+## Status
 
-Etapy 1–9 z [tabeli kolejności budowy](docs/ARCHITECTURE.md#8-kolejność-budowy).
+Stages 1–9 of the [build order table](docs/ARCHITECTURE.md#8-kolejność-budowy).
 
-| Element | Stan |
+| Item | State |
 |---|---|
-| specyfikacja protokołu i architektura | spisane |
-| serwer: parowanie, ping, manifest, wznawialny transfer, wersjonowanie | działa |
-| mTLS z wzajemnym przypięciem kluczy | działa, sprawdzone na prawdziwym TLS |
-| klient: siedem modułów, od reguł ścieżek po silnik cyklu | działa, APK się buduje |
-| harmonogram i praca w tle z pilnowaniem budżetu 6 h | działa |
-| panel serwera i ikona w zasobniku | działa |
-| wykrywanie serwera przez mDNS | działa |
-| agregacja małych plików w paczki | działa |
-| kontrola integralności i raport sierot | działa |
-| rejestr przyjęć spięty łańcuchem skrótów | działa, weryfikowalny niezależnie |
-| tryb dokładny wykrywania zmian (skrót w manifeście) | działa |
-| serwer jako usługa Windows | działa, nierejestrowany |
-| **test zgodności klient↔serwer** | przechodzi |
-| **184 testy serwera, 189 testów klienta** | zielone |
-| skaner kodu QR aparatem telefonu | niezaczęte |
+| protocol specification and architecture | written |
+| server: pairing, ping, manifest, resumable transfer, versioning | works |
+| mTLS with mutual key pinning | works, checked against real TLS |
+| client: seven modules, from path rules to the cycle engine | works, APK builds |
+| scheduling and background work within the budget | works |
+| server panel and tray icon | works |
+| server discovery over mDNS | works |
+| small files aggregated into bundles | works |
+| integrity checks and the orphan report | works |
+| append-only ledger chained by digests | works, independently verifiable |
+| thorough change detection (digest in the manifest) | works |
+| server as a Windows service | works, not registered |
+| **client↔server conformance test** | passes |
+| **184 server tests, 189 client tests** | green |
+| QR scanning with the phone camera | not started |
 
-Serwer i klient są pisane niezależnie, w różnych językach, i pogodzone wyłącznie
-przez specyfikację oraz wspólne wektory testowe. `EndToEndTest` uruchamia prawdziwy
-klient kotlinowy przeciwko prawdziwemu serwerowi w C# i sprawdza, czy oba wyliczają
-tę samą tożsamość pliku — szczegóły w [android/README.md](android/README.md).
-Ten test zarabia na siebie: rozbieżność między pominiętym a pustym polem w odpowiedzi
-manifestu przechodziła przez komplet testów jednostkowych po obu stronach i wyszła
-dopiero tutaj.
+`EndToEndTest` runs the real Kotlin client against the real C# server and checks that
+both compute the same file identity — details in [android/README.md](android/README.md).
+That test earns its keep: a disagreement over whether an empty optional field is
+omitted or written as null passed the full unit suite on both sides and only surfaced
+there.
 
-Cykl nie był jeszcze przejechany na prawdziwym telefonie: `MediaStore`, Android
-Keystore i uprawnienie do pamięci da się sprawdzić wyłącznie na urządzeniu.
+The cycle has not yet been run on a real phone: `MediaStore`, the Android Keystore
+and the storage permission can only be exercised on a device.
 
-## Budowanie
+## Building
 
 ```bash
 cd server && dotnet test
@@ -108,4 +110,4 @@ cd server && dotnet test
 cd server && dotnet run --project src/Filum.Server --no-launch-profile
 ```
 
-Klient Androida wymaga Android Studio — szczegóły w [android/README.md](android/README.md).
+The Android client needs Android Studio — details in [android/README.md](android/README.md).
