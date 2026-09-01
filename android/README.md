@@ -1,9 +1,9 @@
-# Filum — klient Android
+# Filum — Android client
 
-Kotlin, Compose, Room, OkHttp. Implementacja klienta z
-[../docs/PROTOCOL.md](../docs/PROTOCOL.md) i [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
+Kotlin, Compose, Room, OkHttp. Implements the client side of
+[../docs/PROTOCOL.md](../docs/PROTOCOL.md) and [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
 
-## Budowanie
+## Building
 
 ```bash
 cd android && ./gradlew :app:assembleDebug
@@ -13,54 +13,53 @@ cd android && ./gradlew :app:assembleDebug
 cd android && ./gradlew test
 ```
 
-Wymaga Android Studio (Gradle, kompilator Kotlina, SDK). Wersje narzędzi:
+Requires Android Studio (Gradle, the Kotlin compiler, the SDK). Tool versions:
 AGP 9.3.2, Gradle 9.5, Kotlin 2.3.10, `compileSdk 37`, `targetSdk 36`.
 
-`compileSdk` i `targetSdk` to dwie różne rzeczy. Kompilujemy wobec 37, bo tego
-wymagają nowsze biblioteki AndroidX, ale o zachowaniu systemu decyduje `targetSdk` —
-i ten zostaje na 36 zgodnie z ADR-013, żeby na razie ominąć wymóg
-`ACCESS_LOCAL_NETWORK` z Androida 17.
+`compileSdk` and `targetSdk` are two different things. We compile against 37 because
+the newer AndroidX libraries require it, but system behaviour is governed by
+`targetSdk` — and that stays at 36 per ADR-013, to sidestep the `ACCESS_LOCAL_NETWORK`
+requirement introduced in Android 17 for now.
 
-## Moduły
+## Modules
 
-| Moduł | Odpowiedzialność | Zależy od Androida |
+| Module | Responsibility | Depends on Android |
 |---|---|---|
-| `:core:protocol` | modele wymiany, `PathRules`, odczyt kodu parowania | nie — czysty JVM |
-| `:core:crypto` | klucz w Android Keystore, przypięcie klucza serwera | częściowo |
-| `:core:net` | klient zasobów, wyścig tras, mDNS, przypięcie gniazd do Wi-Fi | częściowo |
-| `:core:data` | Room: kolejka, dziennik, budżet usługi pierwszoplanowej | tak |
-| `:core:scan` | `MediaStore` z licznikiem generacji, obchód drzewa, wykluczenia | częściowo |
-| `:core:sync` | silnik cyklu: manifest, wznawianie, paczkowanie, klasyfikacja błędów | nie — za interfejsami |
-| `:app` | parowanie, ekran główny, foldery, dziennik, składanie zależności | tak |
+| `:core:protocol` | wire models, `PathRules`, pairing-code parsing, integrity policy | no — plain JVM |
+| `:core:crypto` | key in the Android Keystore, server key pinning | partly |
+| `:core:net` | resource client, route racing, mDNS, binding sockets to Wi-Fi | partly |
+| `:core:data` | Room: queue, journal, foreground-service budget, settings | yes |
+| `:core:scan` | `MediaStore` with the generation counter, tree walk, exclusions | partly |
+| `:core:sync` | cycle engine: manifest, resuming, bundling, error classification | no — behind interfaces |
+| `:app` | pairing, home, folders, journal, dependency wiring | yes |
 
-Podział nie jest ozdobnikiem. Najtrudniejsze części — reguły ścieżek, wyścig tras
-i decyzje silnika o tym, co ponowić, a co odłożyć — leżą w modułach, które testują
-się na zwykłej maszynie wirtualnej, bez emulatora i w sekundach.
+The split is not decoration. The hardest parts — path rules, route racing, and the
+engine's decisions about what to retry and what to defer — sit in modules that test on
+an ordinary JVM, with no emulator, in seconds.
 
-## Testy
+## Tests
 
-189 testów jednostkowych, wszystkie na JVM:
+189 unit tests, all on the JVM:
 
-- **reguły ścieżek** — te same wektory `docs/testvectors/paths.tsv` co implementacja w C#,
-- **przypięcie klucza** — wektory ze stałych certyfikatów z odciskami policzonymi przez openssl,
-- **klient zasobów** — `MockWebServer` z prawdziwym TLS i `requireClientAuth`,
-- **wyścig tras** — zegar wirtualny, więc opóźnienia w sekundach nie wydłużają wykonania,
-- **skaner** — prawdziwe pliki w katalogu tymczasowym,
-- **silnik** — pełne atrapy kolejki i serwera, sprawdzające przejścia stanów,
-- **decyzja o ponowieniu pracy w tle** — wydzielona z workera, żeby dała się przetestować,
-- **paczkowanie małych plików** — podział, limity i częściowe niepowodzenie paczki,
-- **polityka integralności** — czy tryb dokładny dokłada skrót do manifestu, czy skrót
-  towarzyszy każdemu fragmentowi i czy zgłoszona rozbieżność trafia do dziennika.
+- **path rules** — the same `docs/testvectors/paths.tsv` vectors as the C# implementation,
+- **key pinning** — vectors from fixed certificates whose fingerprints were computed with openssl,
+- **resource client** — `MockWebServer` with real TLS and `requireClientAuth`,
+- **route racing** — a virtual clock, so delays measured in seconds do not lengthen the run,
+- **scanner** — real files in a temporary directory,
+- **engine** — full fakes for the queue and the server, checking state transitions,
+- **the background-retry decision** — extracted from the worker so it can be tested at all,
+- **small-file bundling** — splitting, limits, and partial bundle failure,
+- **integrity policy** — whether thorough mode adds a digest to the manifest, whether the
+  digest accompanies every chunk, and whether a reported divergence reaches the journal.
 
-### Test zgodności między implementacjami
+### Cross-implementation conformance test
 
-`EndToEndTest` uruchamia **prawdziwy klient kotlinowy przeciwko prawdziwemu serwerowi
-w C#**, po prawdziwym mTLS. Testy jednostkowe po obu stronach sprawdzają, czy każda
-implementacja robi to, co jej autor zamierzył — dopiero ten test sprawdza, czy
-zamierzenia się pokrywają.
+`EndToEndTest` runs the **real Kotlin client against the real C# server**, over real
+mTLS. The unit tests on each side check that each implementation does what its author
+intended — only this test checks that the two intentions agree.
 
-Jest pomijany, dopóki nie ma zmiennych środowiskowych, więc nie psuje zwykłej kompilacji.
-Żeby go uruchomić, wystartuj serwer, pobierz kod parowania i podaj jego składowe:
+It is skipped until the environment variables are present, so it does not break an
+ordinary build. To run it, start the server, fetch a pairing code and pass its parts:
 
 ```bash
 curl -sk https://127.0.0.1:8765/api/v1/pair/new
@@ -70,34 +69,35 @@ curl -sk https://127.0.0.1:8765/api/v1/pair/new
 cd android && FILUM_HOST=127.0.0.1 FILUM_PORT=8765 FILUM_PIN=<k> FILUM_TOKEN=<t> ./gradlew :core:sync:testDebugUnitTest --tests "*EndToEndTest*" --rerun-tasks
 ```
 
-Test wysyła cztery pliki, w tym nazwę z dwukropkiem i nazwę z polskimi znakami,
-a potem żąda manifestu po raz drugi. Serwer musi wtedy zgłosić, że ma komplet —
-rozjazd w jednostkach `mtime` albo w normalizacji Unicode ujawniłby się właśnie
-tutaj, jako ponowna prośba o te same pliki.
+The test sends four files, among them a name with a colon and a name with Polish
+diacritics, then asks for the manifest a second time. The server must then report that
+it has everything — a disagreement over `mtime` units or Unicode normalisation would
+surface right here, as a repeated request for the same files.
 
-Warto go uruchamiać po każdej zmianie w kształcie odpowiedzi. Ostatnia taka zmiana
-dodała do manifestu pole opcjonalne: serwer wypisywał je jako `null`, klient uznawał
-`null` za błąd składni i przerywał synchronizację. Komplet testów jednostkowych po
-obu stronach był zielony — bo każda strona robiła dokładnie to, co jej autor zamierzył.
+It is worth running after every change to the shape of a response. The most recent such
+change added an optional field to the manifest: the server wrote it as `null`, the
+client treated `null` as a syntax error and abandoned the sync. The full unit suite was
+green on both sides — because each side did exactly what its author intended.
 
-## Stan
+## Status
 
-| Element | Stan |
+| Item | State |
 |---|---|
-| parowanie, ping, manifest, wznawialny transfer | działa, sprawdzone przeciwko serwerowi |
-| ekrany: parowanie, główny, dziennik | działają |
-| skanowanie: `MediaStore` i pełny obchód | zaimplementowane, nieuruchomione na telefonie |
-| harmonogram: ręcznie, codziennie, co tydzień | działa |
-| usługa pierwszoplanowa z pilnowaniem budżetu | działa |
-| wykrywanie przez mDNS | działa, sprawdzone przeciwko serwerowi |
-| kontrola integralności próbki plików | działa |
-| ekran wykluczeń (Foldery) | działa |
-| skaner kodu QR aparatem | niezaczęte |
+| pairing, ping, manifest, resumable transfer | works, checked against the server |
+| screens: pairing, home, journal | work |
+| scanning: `MediaStore` and the full tree walk | implemented, not run on a phone |
+| scheduling: manual, daily, weekly | works |
+| foreground service that watches its budget | works |
+| discovery over mDNS | works, checked against the server |
+| integrity check over a sample of files | works |
+| fast/thorough change-detection toggle | works |
+| exclusions screen (Folders) | works |
+| QR scanning with the camera | not started |
 
-Parowanie odbywa się przez wklejenie ciągu `filum1:…` ze schowka. Skaner aparatem
-dojdzie razem z panelem serwera, który i tak musi ten kod narysować (etap 7).
+Pairing is done by pasting the `filum1:…` string from the clipboard. Camera scanning
+will land alongside the server panel, which has to draw that code anyway (stage 7).
 
-**Cykl nie był jeszcze przejechany na prawdziwym telefonie.** Kod protokołu jest
-zweryfikowany przeciwko serwerowi, ale `MediaStore`, Android Keystore, uprawnienie
-`MANAGE_EXTERNAL_STORAGE` i przypięcie gniazd do Wi-Fi da się sprawdzić wyłącznie
-na urządzeniu.
+**The cycle has not yet been run on a real phone.** The protocol code is verified
+against the server, but `MediaStore`, the Android Keystore, the
+`MANAGE_EXTERNAL_STORAGE` permission and binding sockets to Wi-Fi can only be exercised
+on a device.

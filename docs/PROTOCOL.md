@@ -451,6 +451,7 @@ implementacje MUSZĄ przechodzić ten sam zestaw.
       versions/                 # poprzednie wersje (§8.3)
         DCIM/Camera/IMG_0001.20260828T211430Z.JPG
       index.jsonl               # mapowania ścieżek rozstrzygniętych z kolizji
+      integrity.jsonl           # rejestr przyjęć spięty łańcuchem skrótów (§9.2)
       orphans-<session>.json
 ```
 
@@ -518,7 +519,7 @@ do rejestru.
 
 Odpowiada na pytanie: co i kiedy serwer przyjął, i czy od tamtej pory ktoś to ruszył.
 
-Każdy przyjęty plik dopisuje wiersz do `.filum/meta/integrity.jsonl` urządzenia:
+Każdy przyjęty plik dopisuje wiersz do `.filum/integrity.jsonl` urządzenia:
 
 ```jsonc
 { "n": 1, "at": 1756400000, "p": "DCIM/IMG_0001.JPG",
