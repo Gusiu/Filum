@@ -33,12 +33,12 @@ public class TransferStoreTests
         using var h = new Harness();
         var content = Harness.Bytes("0123456789");
 
-        var outcome = await h.WriteAsync("Movies/klip.mp4", content[..4], content.Length, Mtime, 0);
+        var outcome = await h.WriteAsync("Movies/clip.mp4", content[..4], content.Length, Mtime, 0);
 
         Assert.Equal(ChunkStatus.Ok, outcome.Status);
         Assert.False(outcome.Complete);
-        Assert.False(h.StoredExists("Movies/klip.mp4"));
-        Assert.Equal(4, h.PartLength("Movies/klip.mp4"));
+        Assert.False(h.StoredExists("Movies/clip.mp4"));
+        Assert.Equal(4, h.PartLength("Movies/clip.mp4"));
     }
 
     [Fact]
@@ -47,12 +47,12 @@ public class TransferStoreTests
         using var h = new Harness();
         var content = Harness.Bytes("0123456789ABCDEF");
 
-        await h.WriteAsync("Movies/klip.mp4", content[..6], content.Length, Mtime, 0);
-        var outcome = await h.WriteAsync("Movies/klip.mp4", content[6..], content.Length, Mtime, 6);
+        await h.WriteAsync("Movies/clip.mp4", content[..6], content.Length, Mtime, 0);
+        var outcome = await h.WriteAsync("Movies/clip.mp4", content[6..], content.Length, Mtime, 6);
 
         Assert.Equal(ChunkStatus.Ok, outcome.Status);
         Assert.True(outcome.Complete);
-        Assert.Equal(content, h.ReadStored("Movies/klip.mp4"));
+        Assert.Equal(content, h.ReadStored("Movies/clip.mp4"));
     }
 
     [Fact]
@@ -61,8 +61,8 @@ public class TransferStoreTests
         using var h = new Harness();
         var content = Harness.Bytes("0123456789");
 
-        await h.WriteAsync("Movies/klip.mp4", content[..4], content.Length, Mtime, 0);
-        var outcome = await h.WriteAsync("Movies/klip.mp4", content[7..], content.Length, Mtime, 7);
+        await h.WriteAsync("Movies/clip.mp4", content[..4], content.Length, Mtime, 0);
+        var outcome = await h.WriteAsync("Movies/clip.mp4", content[7..], content.Length, Mtime, 7);
 
         Assert.Equal(ChunkStatus.OffsetMismatch, outcome.Status);
         Assert.Equal(4, outcome.ExpectedOffset);
@@ -77,8 +77,8 @@ public class TransferStoreTests
         using var h = new Harness();
         var first = Harness.Bytes("0123456789");
 
-        await h.WriteAsync("Movies/klip.mp4", first[..4], first.Length, Mtime, 0);
-        var outcome = await h.WriteAsync("Movies/klip.mp4", first[4..], 20, Mtime + 5, 4);
+        await h.WriteAsync("Movies/clip.mp4", first[..4], first.Length, Mtime, 0);
+        var outcome = await h.WriteAsync("Movies/clip.mp4", first[4..], 20, Mtime + 5, 4);
 
         Assert.Equal(ChunkStatus.OffsetMismatch, outcome.Status);
         Assert.Equal(0, outcome.ExpectedOffset);
@@ -129,22 +129,22 @@ public class TransferStoreTests
     public async Task ANewVersion_FilesTheOldCopyIntoVersions()
     {
         using var h = new Harness();
-        var stara = Harness.Bytes("wersja pierwsza");
+        var oldContent = Harness.Bytes("wersja pierwsza");
         var updated = Harness.Bytes("second version, longer");
 
-        h.Seed("Documents/notatka.txt", stara, Mtime);
-        var outcome = await h.WriteWholeAsync("Documents/notatka.txt", updated, Mtime + 3600);
+        h.Seed("Documents/note.txt", oldContent, Mtime);
+        var outcome = await h.WriteWholeAsync("Documents/note.txt", updated, Mtime + 3600);
 
         Assert.Equal(ChunkStatus.Ok, outcome.Status);
         Assert.NotNull(outcome.VersionedPath);
-        Assert.Equal(updated, h.ReadStored("Documents/notatka.txt"));
+        Assert.Equal(updated, h.ReadStored("Documents/note.txt"));
 
         var archived = h.VersionFiles();
         Assert.Single(archived);
 
         var versionAbsolute = Path.Combine(h.Paths.DeviceRoot(Harness.Slug),
                                            outcome.VersionedPath!.Replace('/', Path.DirectorySeparatorChar));
-        Assert.Equal(stara, File.ReadAllBytes(LongPath.Extended(versionAbsolute)));
+        Assert.Equal(oldContent, File.ReadAllBytes(LongPath.Extended(versionAbsolute)));
     }
 
     [Fact]
@@ -152,13 +152,13 @@ public class TransferStoreTests
     {
         using var h = new Harness();
         // 2025-01-15 10:30:00 UTC
-        const long staryMtime = 1_736_937_000;
+        const long oldMtime = 1_736_937_000;
 
-        h.Seed("Documents/notatka.txt", Harness.Bytes("stara"), staryMtime);
-        await h.WriteWholeAsync("Documents/notatka.txt", Harness.Bytes("updated"), Mtime);
+        h.Seed("Documents/note.txt", Harness.Bytes("oldContent"), oldMtime);
+        await h.WriteWholeAsync("Documents/note.txt", Harness.Bytes("updated"), Mtime);
 
-        var expected = DateTimeOffset.FromUnixTimeSeconds(staryMtime).UtcDateTime.ToString("yyyyMMdd'T'HHmmss'Z'");
-        Assert.Equal($"notatka.{expected}.txt", h.VersionFiles().Single());
+        var expected = DateTimeOffset.FromUnixTimeSeconds(oldMtime).UtcDateTime.ToString("yyyyMMdd'T'HHmmss'Z'");
+        Assert.Equal($"note.{expected}.txt", h.VersionFiles().Single());
     }
 
     [Fact]
@@ -166,12 +166,12 @@ public class TransferStoreTests
     {
         using var h = new Harness();
 
-        h.Seed("Documents/notatka.txt", Harness.Bytes("pierwsza"), Mtime);
-        await h.WriteWholeAsync("Documents/notatka.txt", Harness.Bytes("druga"), Mtime + 100);
-        await h.WriteWholeAsync("Documents/notatka.txt", Harness.Bytes("trzecia"), Mtime + 200);
+        h.Seed("Documents/note.txt", Harness.Bytes("pierwsza"), Mtime);
+        await h.WriteWholeAsync("Documents/note.txt", Harness.Bytes("druga"), Mtime + 100);
+        await h.WriteWholeAsync("Documents/note.txt", Harness.Bytes("trzecia"), Mtime + 200);
 
         Assert.Equal(2, h.VersionFiles().Count);
-        Assert.Equal(Harness.Bytes("trzecia"), h.ReadStored("Documents/notatka.txt"));
+        Assert.Equal(Harness.Bytes("trzecia"), h.ReadStored("Documents/note.txt"));
     }
 
     [Fact]
@@ -181,10 +181,10 @@ public class TransferStoreTests
         // Overwriting would be silent data loss.
         using var h = new Harness();
 
-        h.Seed("Documents/notatka.txt", Harness.Bytes("aaaa"), Mtime);
-        await h.WriteWholeAsync("Documents/notatka.txt", Harness.Bytes("bbbb"), Mtime + 1);
-        h.Seed("Documents/notatka.txt", Harness.Bytes("cccc"), Mtime);
-        await h.WriteWholeAsync("Documents/notatka.txt", Harness.Bytes("dddd"), Mtime + 2);
+        h.Seed("Documents/note.txt", Harness.Bytes("aaaa"), Mtime);
+        await h.WriteWholeAsync("Documents/note.txt", Harness.Bytes("bbbb"), Mtime + 1);
+        h.Seed("Documents/note.txt", Harness.Bytes("cccc"), Mtime);
+        await h.WriteWholeAsync("Documents/note.txt", Harness.Bytes("dddd"), Mtime + 2);
 
         var archived = h.VersionFiles();
         Assert.Equal(2, archived.Count);

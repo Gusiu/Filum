@@ -122,39 +122,39 @@ class SyncEngineTest {
     @Test
     fun `resuming starts from the offset the server gave`(@TempDir dir: Path) = runTest {
         setUp()
-        val a = file(dir, "klip.mp4", "0123456789ABCDEF")
+        val a = file(dir, "clip.mp4", "0123456789ABCDEF")
 
         // The server already holds the first 6 bytes from an earlier interrupted transfer.
-        transport.received["klip.mp4"] = StringBuilder("012345")
-        transport.manifestResponder = { ApiResult.Ok(ManifestResponse(0, listOf(NeededFile("klip.mp4", 6)))) }
+        transport.received["clip.mp4"] = StringBuilder("012345")
+        transport.manifestResponder = { ApiResult.Ok(ManifestResponse(0, listOf(NeededFile("clip.mp4", 6)))) }
 
         run(listOf(a))
 
-        assertEquals("0123456789ABCDEF", transport.content("klip.mp4"))
+        assertEquals("0123456789ABCDEF", transport.content("clip.mp4"))
         // The crucial part: we sent only the missing 10 bytes, not the whole file again.
-        assertEquals(listOf(Triple("klip.mp4", 6L, 10L)), transport.putCalls)
+        assertEquals(listOf(Triple("clip.mp4", 6L, 10L)), transport.putCalls)
     }
 
     @Test
     fun `an offset conflict is repaired with the value from the server`(@TempDir dir: Path) = runTest {
         setUp()
-        val a = file(dir, "klip.mp4", "0123456789")
+        val a = file(dir, "clip.mp4", "0123456789")
 
         // Our queue claims the server has 8 bytes; it has 4.
-        transport.received["klip.mp4"] = StringBuilder("0123")
-        transport.manifestResponder = { ApiResult.Ok(ManifestResponse(0, listOf(NeededFile("klip.mp4", 8)))) }
+        transport.received["clip.mp4"] = StringBuilder("0123")
+        transport.manifestResponder = { ApiResult.Ok(ManifestResponse(0, listOf(NeededFile("clip.mp4", 8)))) }
 
         val outcome = run(listOf(a))
 
         assertInstanceOf(SyncOutcome.Completed::class.java, outcome)
-        assertEquals("0123456789", transport.content("klip.mp4"))
+        assertEquals("0123456789", transport.content("clip.mp4"))
         assertTrue(journal.has("offset_corrected"))
     }
 
     @Test
     fun `a circling offset conflict does not loop forever`(@TempDir dir: Path) = runTest {
         setUp()
-        val a = file(dir, "klip.mp4", "0123456789")
+        val a = file(dir, "clip.mp4", "0123456789")
 
         // The server names a different value every time — something on the other side is
         // changing while we work. Without a limit this loop would never end.
@@ -169,21 +169,21 @@ class SyncEngineTest {
         val outcome = run(listOf(a))
 
         assertInstanceOf(SyncOutcome.Completed::class.java, outcome)
-        assertEquals(FakeQueue.State.TRANSIENT, queue.state("klip.mp4"))
-        assertEquals("unstable offset", queue.error("klip.mp4"))
+        assertEquals(FakeQueue.State.TRANSIENT, queue.state("clip.mp4"))
+        assertEquals("unstable offset", queue.error("clip.mp4"))
     }
 
     @Test
     fun `a large file goes in chunks`(@TempDir dir: Path) = runTest {
         setUp()
-        val a = file(dir, "duzy.bin", "x".repeat(100))
+        val a = file(dir, "large.bin", "x".repeat(100))
 
         run(listOf(a), config = SyncConfig(chunkBytes = 30))
 
         assertEquals(4, transport.putCalls.size)
         assertEquals(listOf(0L, 30L, 60L, 90L), transport.putCalls.map { it.second })
         assertEquals(listOf(30L, 30L, 30L, 10L), transport.putCalls.map { it.third })
-        assertEquals("x".repeat(100), transport.content("duzy.bin"))
+        assertEquals("x".repeat(100), transport.content("large.bin"))
     }
 
     // --- the integrity digest (§9) ---
@@ -206,13 +206,13 @@ class SyncEngineTest {
         // phone's storage — and it left resumed files out of the ledger, which is to say
         // precisely the largest ones, where the confirmation matters most.
         setUp()
-        val a = file(dir, "klip.mp4", "0123456789")
-        transport.received["klip.mp4"] = StringBuilder("01234")
-        transport.manifestResponder = { ApiResult.Ok(ManifestResponse(0, listOf(NeededFile("klip.mp4", 5)))) }
+        val a = file(dir, "clip.mp4", "0123456789")
+        transport.received["clip.mp4"] = StringBuilder("01234")
+        transport.manifestResponder = { ApiResult.Ok(ManifestResponse(0, listOf(NeededFile("clip.mp4", 5)))) }
 
         run(listOf(a))
 
-        assertEquals(64, transport.digestsSeen["klip.mp4"]!!.length)
+        assertEquals(64, transport.digestsSeen["clip.mp4"]!!.length)
     }
 
     @Test
@@ -221,11 +221,11 @@ class SyncEngineTest {
         // (ADR-016). Sending it only on the last chunk would mean every earlier one
         // getting refused.
         setUp()
-        val a = file(dir, "duzy.bin", "x".repeat(100))
+        val a = file(dir, "large.bin", "x".repeat(100))
 
         run(listOf(a), config = SyncConfig(chunkBytes = 30))
 
-        val chunks = transport.putCalls.count { it.first == "duzy.bin" }
+        val chunks = transport.putCalls.count { it.first == "large.bin" }
         assertTrue(chunks > 1, "the file was to go in several chunks, it went in $chunks")
         assertEquals(chunks, transport.digestsPerCall.count { it != null })
     }

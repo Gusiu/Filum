@@ -135,10 +135,10 @@ class ExclusionRulesTest {
 
     @Test
     fun `the user's exclusions add to the defaults`() {
-        val custom = ExclusionRules(userPrefixes = listOf("Download", "/Movies/robocze/"))
+        val custom = ExclusionRules(userPrefixes = listOf("Download", "/Movies/scratch/"))
 
-        assertTrue(custom.isExcluded("Download/duzy.iso"))
-        assertTrue(custom.isExcluded("Movies/robocze/klip.mp4"))
+        assertTrue(custom.isExcluded("Download/large.iso"))
+        assertTrue(custom.isExcluded("Movies/scratch/clip.mp4"))
         assertTrue(custom.isExcluded("Android/data/x/y"), "the defaults still apply")
         assertFalse(custom.isExcluded("Movies/wakacje.mp4"))
     }
@@ -204,7 +204,7 @@ class FilesystemScannerTest {
     @Test
     fun `an excluded subtree is never visited`(@TempDir dir: Path) {
         val root = dir.toFile()
-        file(root, "Android/data/com.example/duzy.dat", "x")
+        file(root, "Android/data/com.example/large.dat", "x")
         file(root, "Android/media/com.whatsapp/foto.jpg", "y")
         file(root, "DCIM/a.jpg", "z")
 

@@ -71,9 +71,9 @@ public class ManifestResolverTests
     {
         using var h = new Harness();
         var content = Harness.Bytes("0123456789ABCDEF");
-        await h.WriteAsync("Movies/klip.mp4", content[..6], content.Length, Mtime, 0);
+        await h.WriteAsync("Movies/clip.mp4", content[..6], content.Length, Mtime, 0);
 
-        var result = h.Manifest.Resolve(Harness.Slug, [Entry("Movies/klip.mp4", content.Length, Mtime)]);
+        var result = h.Manifest.Resolve(Harness.Slug, [Entry("Movies/clip.mp4", content.Length, Mtime)]);
 
         Assert.Equal(6, Assert.Single(result.Needed).Offset);
     }
@@ -83,10 +83,10 @@ public class ManifestResolverTests
     {
         using var h = new Harness();
         var content = Harness.Bytes("0123456789ABCDEF");
-        await h.WriteAsync("Movies/klip.mp4", content[..6], content.Length, Mtime, 0);
+        await h.WriteAsync("Movies/clip.mp4", content[..6], content.Length, Mtime, 0);
 
         // the same file, but the phone reports a different mtime — the part is useless
-        var result = h.Manifest.Resolve(Harness.Slug, [Entry("Movies/klip.mp4", content.Length, Mtime + 30)]);
+        var result = h.Manifest.Resolve(Harness.Slug, [Entry("Movies/clip.mp4", content.Length, Mtime + 30)]);
 
         Assert.Equal(0, Assert.Single(result.Needed).Offset);
     }

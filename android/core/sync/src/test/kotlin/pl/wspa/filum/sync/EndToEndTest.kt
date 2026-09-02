@@ -75,7 +75,7 @@ class EndToEndTest {
             label = "Klient testowy",
         )
         val pairResponse = assertInstanceOf(ApiResult.Ok::class.java, paired)
-        println("sparowano, deviceKey=${(pairResponse.value as pl.wspa.filum.protocol.PairResponse).deviceKey}")
+        println("paired, deviceKey=${(pairResponse.value as pl.wspa.filum.protocol.PairResponse).deviceKey}")
 
         val client = api(withIdentity = true)
 
@@ -90,7 +90,7 @@ class EndToEndTest {
 
         write(root, "DCIM/Camera/IMG_0001.JPG", "zawartosc zdjecia")
         write(root, "Documents/zdjęcie-łąka.txt", "non-ascii name")
-        write(root, "Movies/duzy.bin", "x".repeat(200_000))
+        write(root, "Movies/large.bin", "x".repeat(200_000))
 
         val scanned = FilesystemScanner(
             root, ExclusionRules(includeDefaults = false), nowSeconds = { Long.MAX_VALUE / 2 },
@@ -107,7 +107,7 @@ class EndToEndTest {
             setLastModified(1_756_400_000_000)
         }
         scanned += pl.wspa.filum.scan.ScannedFile(
-            canonicalPath = "Documents/raport:v2.txt",
+            canonicalPath = "Documents/report:v2.txt",
             absolutePath = zDwukropkiem.absolutePath,
             size = zDwukropkiem.length(),
             mtimeSeconds = 1_756_400_000,
@@ -165,7 +165,7 @@ class EndToEndTest {
         assertTrue(response.needed.isEmpty(), "nothing should be needed: ${response.needed}")
         assertTrue(response.rejected.isEmpty(), "no path should have been rejected")
 
-        println("dziennik: ${journal.codes()}")
+        println("journal: ${journal.codes()}")
     }
 
     private fun write(root: File, path: String, content: String) {

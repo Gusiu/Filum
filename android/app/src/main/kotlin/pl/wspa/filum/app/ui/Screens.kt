@@ -87,7 +87,7 @@ fun PairingScreen(
                 "module — a separate chip where one is available, and the processor's trusted " +
                 "environment where it is not. The private key leaves the device in neither " +
                 "case. The level actually used is recorded " +
-                "w dzienniku przy parowaniu.",
+                "in the journal at pairing time.",
             style = MaterialTheme.typography.bodySmall,
         )
     }

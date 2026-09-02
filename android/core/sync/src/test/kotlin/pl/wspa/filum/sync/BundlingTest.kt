@@ -58,15 +58,15 @@ class BundlingTest {
     @Test
     fun `small files go in a bundle, large ones on their own`(@TempDir dir: Path) = runTest {
         setUp()
-        val male = (1..5).map { file(dir, "maly$it.txt", 100) }
-        val duzy = file(dir, "duzy.bin", 5_000)
+        val smallFiles = (1..5).map { file(dir, "small$it.txt", 100) }
+        val large = file(dir, "large.bin", 5_000)
 
-        val outcome = run(male + duzy, SyncConfig(smallFileThreshold = 1_000))
+        val outcome = run(smallFiles + large, SyncConfig(smallFileThreshold = 1_000))
 
         assertInstanceOf(SyncOutcome.Completed::class.java, outcome)
         assertEquals(1, transport.bundles.size, "five small files make one bundle")
         assertEquals(5, transport.bundles.single().size)
-        assertEquals(listOf("duzy.bin"), transport.putCalls.map { it.first })
+        assertEquals(listOf("large.bin"), transport.putCalls.map { it.first })
     }
 
     @Test
@@ -210,13 +210,13 @@ class BundlingTest {
     @Test
     fun `a file deleted before bundling does not abort the bundle`(@TempDir dir: Path) = runTest {
         setUp()
-        val znika = file(dir, "znika.txt", 10)
+        val vanishing = file(dir, "vanishing.txt", 10)
         val zostaje = file(dir, "zostaje.txt", 10)
-        File(znika.absolutePath).delete()
+        File(vanishing.absolutePath).delete()
 
-        run(listOf(znika, zostaje), SyncConfig(smallFileThreshold = 1_000))
+        run(listOf(vanishing, zostaje), SyncConfig(smallFileThreshold = 1_000))
 
-        assertEquals(FakeQueue.State.PERMANENT, queue.state("znika.txt"))
+        assertEquals(FakeQueue.State.PERMANENT, queue.state("vanishing.txt"))
         assertEquals(FakeQueue.State.DONE, queue.state("zostaje.txt"))
         assertEquals(listOf(listOf("zostaje.txt")), transport.bundles)
     }

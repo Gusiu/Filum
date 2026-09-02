@@ -46,11 +46,11 @@ builder.Services.AddSingleton<IClientCertificateProvider, ConnectionClientCertif
 builder.Services.AddSingleton<AdminService>();
 
 // Local network advertising. A convenience, not a precondition: when multicast
-// nie przejdzie, telefon nadal znajdzie serwer po zapisanych adresach (§4.2).
+// does not get through, the phone still finds the server by its stored addresses (§4.2).
 builder.Services.AddSingleton<MdnsAdvertiser>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<MdnsAdvertiser>());
 
-// Panel serwera. Blazor po stronie serwera, bo stan i tak tu mieszka, a przy
+// The server panel. Server-side Blazor, because the state lives here anyway and, being
 // reached from loopback only, the channel's latency is imperceptible.
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 
@@ -122,7 +122,7 @@ public static class FilumPaths
     }
 
     /// <summary>
-    /// Katalog na klucz prywatny serwera. Celowo POZA katalogiem backupu: ten bywa
+    /// The directory for the server's private key. Deliberately OUTSIDE the backup directory: that gets
     /// copied to another disk or restored from a copy, so the key would travel with the data.
     /// </summary>
     public static string ResolveConfigDirectory(FilumOptions options) =>

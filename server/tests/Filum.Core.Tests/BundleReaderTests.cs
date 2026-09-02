@@ -144,14 +144,14 @@ public class BundleReaderTests
     public async Task ANewVersionInsideABundle_FilesTheOldCopyAway()
     {
         using var h = new Harness();
-        h.Seed("notatka.txt", Harness.Bytes("stara wersja"), Mtime - 100);
+        h.Seed("note.txt", Harness.Bytes("old version"), Mtime - 100);
 
-        var results = await ReadAsync(h, Bundle(("notatka.txt", "nowa wersja", null)));
+        var results = await ReadAsync(h, Bundle(("note.txt", "new version", null)));
 
         Assert.True(results[0].Ok);
         Assert.NotNull(results[0].Versioned);
         Assert.Single(h.VersionFiles());
-        Assert.Equal("nowa wersja", Encoding.UTF8.GetString(h.ReadStored("notatka.txt")));
+        Assert.Equal("new version", Encoding.UTF8.GetString(h.ReadStored("note.txt")));
     }
 
     // --- broken framing invalidates the whole bundle ---

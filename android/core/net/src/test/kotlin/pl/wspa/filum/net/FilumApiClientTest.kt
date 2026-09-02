@@ -223,12 +223,12 @@ class FilumApiClientTest {
     fun `resuming sends only the missing part`(@TempDir dir: Path) = runTest {
         // Without this, resuming is pointless: we would send the file from the start while
         // merely declaring an offset, and the server would splice the bytes out of order.
-        val file = File(dir.toFile(), "klip.mp4").apply { writeText("0123456789ABCDEF") }
+        val file = File(dir.toFile(), "clip.mp4").apply { writeText("0123456789ABCDEF") }
         server.enqueue(json("""{"received":6,"offset":16,"complete":true,"versioned":null}"""))
 
         api().putFile(
             endpoint = endpoint(),
-            canonicalPath = "Movies/klip.mp4",
+            canonicalPath = "Movies/clip.mp4",
             file = file,
             size = 16,
             mtime = 1_756_400_000,
