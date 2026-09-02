@@ -30,15 +30,15 @@ import java.util.UUID
 
 sealed interface CycleResult {
     data class Done(val outcome: SyncOutcome, val endpoint: ServerEndpoint) : CycleResult
-    data class NotPaired(val message: String = "Aplikacja nie jest sparowana z serwerem.") : CycleResult
+    data class NotPaired(val message: String = "The application is not paired with a server.") : CycleResult
     data class NoRoute(val failures: List<String>) : CycleResult
 }
 
 /**
- * Jeden pełny cykl: znajdź serwer, zeskanuj, uzgodnij manifest, wyślij.
+ * One full cycle: find the server, scan, agree the manifest, upload.
  *
- * Kolejność jest istotna. Trasę wybieramy **przed** skanem, bo skan bez odbiorcy
- * to zmarnowana bateria; a odpowiedź na ping przy okazji odświeża zbiór tras (§4.4).
+ * The order matters. The route is chosen **before** the scan, because a scan with nobody
+ * to receive is wasted battery; and the ping response refreshes the route set on the way (§4.4).
  */
 class SyncRunner(private val container: AppContainer) {
 
@@ -60,14 +60,14 @@ class SyncRunner(private val container: AppContainer) {
             probe = { endpoint -> FilumApiClient(clients.forProbe(endpoint.kind)).ping(endpoint) }
         )
 
-        // Najpierw zapisane trasy — w zdecydowanej większości cykli któraś z nich
-        // odpowie i nie ma powodu płacić za wykrywanie.
+        // Stored routes first — in the vast majority of cycles one of them answers and
+        // there is no reason to pay for discovery.
         var race = racer.fastest(loadCandidates(server))
 
         if (race !is RaceOutcome.Reached) {
-            // Żadna zapisana trasa nie zadziałała. To jedyna sytuacja, w której
-            // samoaktualizacja zbioru tras (§4.4) nie ma się od czego odbić:
-            // telefon nie był w domu przez zmianę routera i nie ma sieci nakładkowej.
+            // No stored route worked. This is the one situation in which the route set's
+            // self-update (§4.4) has nothing to bootstrap from: the phone was away from home
+            // across a router change and has no overlay network.
             val discovered = MdnsDiscovery(container.context).findByPin(server.serverPin)
 
             if (discovered.isNotEmpty()) {
@@ -90,10 +90,10 @@ class SyncRunner(private val container: AppContainer) {
         val journal = RoomJournal(container.database.log())
         journal.record(
             JournalLevel.INFO, "route_selected",
-            "Połączono przez ${reached.endpoint} w ${reached.elapsedMillis} ms.",
+            "Connected over ${reached.endpoint} in ${reached.elapsedMillis} ms.",
         )
 
-        // Domyślne ustawienia, dopóki użytkownik niczego nie zmienił — pierwszy cykl
+        // Default settings until the user changes anything — the first cycle after
         // po instalacji nie ma jeszcze wiersza w bazie.
         val settings = container.database.settings().get() ?: SettingsEntity()
 
@@ -106,9 +106,9 @@ class SyncRunner(private val container: AppContainer) {
             transport = ApiSyncTransport(FilumApiClient(clients.forKind(reached.endpoint.kind)), reached.endpoint),
             queue = container.queue,
             journal = journal,
-            // Limity bierzemy z odpowiedzi na ping; klient nie zakłada własnych (§5.1).
-            // Polityka integralności jest wyjątkiem — o niej decyduje użytkownik
-            // urządzenia, a nie serwer, bo to jego czas i bateria za nią płacą.
+            // The limits come from the ping response; the client assumes none of its own (§5.1).
+            // The integrity policy is the exception — that is the device user's decision, not
+            // the server's, because it is their time and battery that pay for it.
             config = SyncConfig(
                 manifestBatch = reached.ping.limits.manifestBatch,
                 smallFileThreshold = reached.ping.limits.smallFileThreshold.toLong(),
@@ -132,8 +132,8 @@ class SyncRunner(private val container: AppContainer) {
             "Znaleziono serwer w sieci lokalnej: ${discovered.joinToString { it.toString() }}",
         )
 
-        // Zapisujemy od razu: przy następnym cyklu trasa będzie już w zbiorze
-        // kandydatów i wykrywanie nie będzie potrzebne.
+        // Stored immediately: on the next cycle the route is already among the
+        // candidates and discovery will not be needed.
         container.database.endpoints().upsert(
             discovered.map { EndpointEntity(it.host, it.port, it.kind.name) }
         )
@@ -147,15 +147,15 @@ class SyncRunner(private val container: AppContainer) {
             ServerEndpoint(entity.host, entity.port, kind)
         }
 
-        Log.d(TAG, "Kandydatów na trasę: ${stored.size} (serwer ${server.label})")
+        Log.d(TAG, "Route candidates: ${stored.size} (server ${server.label})")
         return stored
     }
 
     /**
-     * Zapisuje zwycięską trasę i dopisuje adresy, które serwer sam o sobie zgłosił.
+     * Stores the winning route and adds the addresses the server reported about itself.
      *
-     * To jest mechanizm z §4.4: jedno udane połączenie dowolną drogą odświeża wszystkie
-     * pozostałe, więc zmiana routera w domu nie wymaga żadnej interakcji użytkownika.
+     * This is the mechanism from §4.4: one successful connection by any road refreshes all the
+     * others, so changing the home router needs no user interaction at all.
      */
     private suspend fun rememberRoutes(reached: RaceOutcome.Reached) {
         val dao = container.database.endpoints()
@@ -176,7 +176,7 @@ class SyncRunner(private val container: AppContainer) {
 
     // --- skan ---
 
-    /** Zwraca files i informację, czy udało się użyć szybkiej ścieżki. */
+    /** Returns the files and whether the fast path could be used. */
     private suspend fun collectFiles(mode: String): Pair<Sequence<ScannedFile>, Boolean> {
         val exclusions = ExclusionRules(
             userPrefixes = container.database.exclusions().active().map { it.pathPrefix }
@@ -193,8 +193,8 @@ class SyncRunner(private val container: AppContainer) {
                 )
                 return changed.asSequence() to true
             }
-            // null oznacza cofnięty licznik, czyli przebudowany indeks MediaStore —
-            // różnica byłaby niepełna, więc schodzimy do pełnego obchodu drzewa.
+            // null means the counter went backwards, i.e. the MediaStore index was rebuilt —
+            // the delta would be partial, so we drop to a full tree walk.
         }
 
         val root = File(pl.wspa.filum.scan.Environment.externalStorageRootPath())
@@ -221,7 +221,7 @@ class SyncRunner(private val container: AppContainer) {
                 endedAt = System.currentTimeMillis(),
                 filesDone = files,
                 bytesSent = bytes,
-                result = if (usedDelta) result else "$result (pełny skan)",
+                result = if (usedDelta) result else "$result (full scan)",
             )
         )
     }

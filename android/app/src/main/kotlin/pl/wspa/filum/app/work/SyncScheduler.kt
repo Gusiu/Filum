@@ -18,12 +18,12 @@ import pl.wspa.filum.data.SettingsEntity
 import java.time.Duration
 
 /**
- * Rejestracja pracy okresowej i uruchamianie na żądanie.
+ * Registering periodic work and starting it on demand.
  *
- * Cykl automatyczny ma **warunki**, cykl ręczny ich **nie ma**. To nie jest
- * niekonsekwencja: warunki chronią użytkownika przed niespodzianką, a naciśnięcie
- * przycisku jest właśnie świadomą decyzją. Rozmiar transferu przez sieć komórkową
- * pokazuje przy tym ekran główny.
+ * An automatic cycle has **conditions**, a manual one **does not**. That is not an
+ * inconsistency: the conditions protect the user from a surprise, and pressing the button
+ * is precisely a deliberate decision. The size of a transfer over cellular is shown by the
+ * home screen at the time.
  */
 object SyncScheduler {
 
@@ -48,8 +48,8 @@ object SyncScheduler {
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, Duration.ofMinutes(15))
             .build()
 
-        // UPDATE, nie REPLACE: zmiana harmonogramu nie może kasować odliczania
-        // do najbliższego uruchomienia ani gubić pracy właśnie trwającej.
+        // UPDATE, not REPLACE: changing the schedule must not reset the countdown to the
+        // next run, nor lose work that is currently in progress.
         manager.enqueueUniquePeriodicWork(PERIODIC_WORK, ExistingPeriodicWorkPolicy.UPDATE, request)
     }
 
@@ -69,7 +69,7 @@ object SyncScheduler {
         }
     }
 
-    /** Czy jakikolwiek cykl właśnie trwa — do wygaszenia przycisku w interfejsie. */
+    /** Whether any cycle is running — used to grey out the button in the interface. */
     fun observeRunning(context: Context): Flow<Boolean> =
         WorkManager.getInstance(context)
             .getWorkInfosForUniqueWorkFlow(MANUAL_WORK)
@@ -78,14 +78,14 @@ object SyncScheduler {
     private fun constraintsFor(settings: SettingsEntity): Constraints = Constraints.Builder()
         .setRequiredNetworkType(if (settings.unmeteredOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
         .setRequiresCharging(settings.requireCharging)
-        // Transfer przy niskim poziomie baterii to najprostszy sposób, żeby
-        // użytkownik znienawidził aplikację.
+        // Transferring on a low battery is the simplest way to make a user hate the
+        // application.
         .setRequiresBatteryNotLow(true)
         .build()
 
     /**
-     * Okno swobody dla systemu. Im szersze, tym lepiej dla baterii — Android może
-     * dołączyć naszą pracę do okna, w którym i tak budzi urządzenie.
+     * Flexibility for the system. The wider the better for the battery — Android can attach
+     * our work to a window in which it wakes the device anyway.
      */
     private fun flexOf(interval: Duration): Duration =
         if (interval.toDays() >= 7) Duration.ofHours(12) else Duration.ofHours(4)

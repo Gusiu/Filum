@@ -15,13 +15,13 @@ import kotlin.math.min
 /**
  * Silnik jednego cyklu synchronizacji.
  *
- * Całość jest zbudowana wokół jednej zasady: **każdy krok zapisuje stan**. Zabicie
- * procesu w dowolnym momencie kosztuje najwyżej jeden fragment pliku, bo wznawialność
- * działa na trzech poziomach — w środku pliku (przesunięcie), w środku kolejki
- * (baza przeżywa restart) i w środku kampanii (pierwszy zrzut rozłożony na kilka nocy).
+ * The whole thing is built around one principle: **every step saves state**. Killing the
+ * process at any moment costs at most one chunk of one file, because resumability works at
+ * three levels — mid-file (an offset), mid-queue (the database survives a restart) and
+ * mid-campaign (the first dump spread over several nights).
  *
- * Dzięki temu limit sześciu godzin usługi pierwszoplanowej przestaje być problemem:
- * silnik robi tyle, ile zdąży, i kończy sam.
+ * That is what makes the six-hour foreground service limit stop being a problem: the engine
+ * does what it can and ends by itself.
  */
 class SyncEngine(
     private val transport: SyncTransport,
@@ -48,9 +48,9 @@ class SyncEngine(
         return upload(deadline)
     }
 
-    // --- uzgodnienie manifestu (§5.2 protokołu) ---
+    // --- agreeing the manifest (protocol §5.2) ---
 
-    /** Zwraca wynik, gdy trzeba przerwać; `null`, gdy można przejść do wysyłki. */
+    /** Returns an outcome when we have to stop; `null` when uploading can begin. */
     private suspend fun reconcile(
         sessionId: String,
         mode: String,
@@ -61,7 +61,7 @@ class SyncEngine(
         var index = 0
 
         if (!batches.hasNext()) {
-            journal.record(JournalLevel.INFO, "manifest_empty", "Skan nie znalazł żadnych plików.")
+            journal.record(JournalLevel.INFO, "manifest_empty", "The scan found no files.")
             return null
         }
 
@@ -86,24 +86,24 @@ class SyncEngine(
 
                 is ApiResult.Unreachable -> {
                     journal.record(JournalLevel.WARN, "manifest_unreachable", response.message)
-                    return SyncOutcome.Failed("Serwer nieosiągalny: ${response.message}")
+                    return SyncOutcome.Failed("Server unreachable: ${response.message}")
                 }
 
                 is ApiResult.Failure -> {
                     journal.record(JournalLevel.ERROR, response.code, response.message)
-                    return SyncOutcome.Failed("Serwer odrzucił manifest: ${response.message}")
+                    return SyncOutcome.Failed("The server refused the manifest: ${response.message}")
                 }
             }
 
             index++
 
-            // Uzgodnienie stu tysięcy plików to pięćdziesiąt żądań. Przy wyczerpanym
-            // budżecie kończymy tutaj — kolejka jest już częściowo zapisana, więc
-            // następny cykl podejmie pracę od tego miejsca.
+            // Agreeing a hundred thousand files takes fifty requests. With the budget spent
+            // we stop here — the queue is already partly written, so the next cycle picks
+            // the work up from this point.
             if (deadline.reached()) {
                 journal.record(
                     JournalLevel.INFO, "deadline_manifest",
-                    "Koniec budżetu w trakcie uzgadniania manifestu, partia $index.",
+                    "Budget exhausted while agreeing the manifest, batch $index.",
                 )
                 return SyncOutcome.Interrupted(InterruptReason.BUDGET, filesSent, bytesSent)
             }
@@ -113,12 +113,12 @@ class SyncEngine(
     }
 
     /**
-     * Skrót do manifestu — liczony wyłącznie w trybie dokładnym.
+     * The digest for the manifest — computed in thorough mode only.
      *
-     * Termin sprawdzamy tutaj, a nie tylko między partiami: partia liczy do dwóch
-     * tysięcy pozycji, a przy dużych plikach jej zahaszowanie potrafi trwać dłużej
-     * niż całe pozostałe okno pracy w tle. Pominięcie skrótu jest bezpieczne —
-     * serwer potraktuje pozycję jak w trybie szybkim.
+     * The deadline is checked here, not only between batches: a batch holds up to two thousand
+     * entries, and with large files hashing one can take longer than the whole remaining
+     * background window. Omitting a digest is safe — the server will treat the entry as it
+     * would in fast mode.
      */
     private fun digestFor(file: ScannedFile, deadline: Deadline): String? {
         if (config.integrityPolicy != IntegrityPolicy.THOROUGH) return null
@@ -127,8 +127,8 @@ class SyncEngine(
         return try {
             sha256(File(file.absolutePath))
         } catch (e: IOException) {
-            // Plik zniknął albo jest nieczytelny. Nie ma sensu przerywać uzgadniania —
-            // transfer i tak zgłosi to samo, tylko z konkretniejszym komunikatem.
+            // The file vanished or is unreadable. There is no point aborting the exchange —
+            // the transfer will report the same thing with a more specific message.
             null
         }
     }
@@ -140,18 +140,18 @@ class SyncEngine(
         val needed = response.needed.associate { it.path to it.offset }
         val rejected = response.rejected.associate { it.path to it.error }
 
-        // Zawartość zmieniona przy nietkniętych metadanych. Plik i tak trafi do kolejki,
-        // bo serwer wpisał go do "needed" — ale to jest zdarzenie, o którym użytkownik
-        // ma się dowiedzieć, a nie zwykła aktualizacja.
+        // Content changed with the metadata untouched. The file enters the queue anyway,
+        // because the server put it in "needed" — but this is an event the user is to be
+        // told about, not an ordinary update.
         for (path in response.divergent) {
             journal.record(
                 JournalLevel.WARN, "integrity_divergent",
-                "$path: zawartość różni się od zapisanej w rejestrze mimo zgodnego rozmiaru i czasu modyfikacji.",
+                "$path: the content differs from what the ledger recorded, despite matching size and modification time.",
             )
         }
 
-        // Serwer podaje liczbę posiadanych plików, ale nie ich listę. Wszystko, czego
-        // nie ma ani w "needed", ani w "rejected", serwer już ma — i nie wysyłamy tego.
+        // The server reports how many files it holds, but not which. Anything in neither
+        // "needed" nor "rejected" the server already has — and we do not send it.
         val alreadyThere = batch.map { it.canonicalPath }
             .filterNot { it in needed || it in rejected }
 
@@ -164,7 +164,7 @@ class SyncEngine(
         }
     }
 
-    // --- wysyłka ---
+    // --- uploading ---
 
     private suspend fun upload(deadline: Deadline): SyncOutcome {
         while (true) {
@@ -175,8 +175,8 @@ class SyncEngine(
                 return SyncOutcome.Completed(filesSent, bytesSent)
             }
 
-            // Małe files idą paczkami, duże pojedynczo. Przy stu tysiącach plików,
-            // z których większość jest drobna, narzut żądania HTTP zaczyna dominować
+            // Small files go in bundles, large ones on their own. Across a hundred thousand
+            // files, most of them tiny, HTTP request overhead starts to dominate
             // nad transferem danych (ADR-008).
             val (small, large) = batch.partition { it.size <= config.smallFileThreshold && it.bytesSent == 0L }
 
@@ -206,14 +206,14 @@ class SyncEngine(
     }
 
     /**
-     * Zakończenie z powodu budżetu. Zawsze przez tę jedną drogę, bo cykl nocny bez
-     * wpisu w dzienniku jest nie do zdiagnozowania — użytkownik widzi tylko, że rano
-     * część plików nie doszła, i nie ma jak sprawdzić dlaczego.
+     * Ending because of the budget. Always through this one path, because a night cycle with
+     * no journal entry cannot be diagnosed — all the user sees is that some files did not
+     * arrive by morning, with no way to find out why.
      */
     private suspend fun stopOnBudget(): SyncOutcome {
         journal.record(
             JournalLevel.INFO, "deadline_upload",
-            "Koniec budżetu; kończę czysto po $filesSent plikach ($bytesSent B).",
+            "Budget exhausted; stopping cleanly after $filesSent files ($bytesSent B).",
         )
         return SyncOutcome.Interrupted(InterruptReason.BUDGET, filesSent, bytesSent)
     }
@@ -221,11 +221,11 @@ class SyncEngine(
     private enum class SendResult { SENT, SKIPPED, FAILED, INTERRUPTED }
 
     /**
-     * Dzieli files na paczki mieszczące się w limitach z odpowiedzi na ping.
+     * Splits files into bundles fitting the limits from the ping response.
      *
-     * Plik większy od limitu paczki nie może w niej pojechać — trafia do niej sam,
-     * a i tak zostanie odrzucony przez próg rozmiaru wyżej; tutaj pilnujemy tylko,
-     * żeby nie zbudować paczki, której serwer nie przyjmie.
+     * A file larger than the bundle limit cannot travel in one — it ends up alone in a bundle
+     * and is rejected by the size threshold above anyway; all we watch here is that we never
+     * build a bundle the server would refuse.
      */
     private fun group(files: List<QueuedFile>): List<List<QueuedFile>> {
         val groups = mutableListOf<List<QueuedFile>>()
@@ -258,11 +258,11 @@ class SyncEngine(
             val file = File(queued.absolutePath)
 
             if (!file.isFile) {
-                queue.markPermanentFailure(queued.canonicalPath, "file już nie istnieje")
+                queue.markPermanentFailure(queued.canonicalPath, "the file no longer exists")
                 continue
             }
             if (file.length() != queued.size || Math.floorDiv(file.lastModified(), 1000L) != queued.mtime) {
-                queue.markTransientFailure(queued.canonicalPath, "file zmienił się po skanie")
+                queue.markTransientFailure(queued.canonicalPath, "the file changed after the scan")
                 continue
             }
 
@@ -285,15 +285,15 @@ class SyncEngine(
             }
 
             is ApiResult.Unreachable -> {
-                // Paczka nie doszła w całości. Wszystkie jej files wracają do kolejki —
-                // nie mamy pojęcia, ile z nich serwer zdążył zapisać, a ponowna
-                // wysyłka niczego nie psuje, bo manifest i tak je odsieje.
+                // The bundle did not arrive whole. All of its files return to the queue — we
+                // have no idea how many the server managed to store, and re-sending breaks
+                // nothing, because the manifest will sift them out anyway.
                 entries.forEach { queue.markTransientFailure(it.canonicalPath, result.message) }
                 SendResult.INTERRUPTED
             }
 
             is ApiResult.Failure -> {
-                // Uszkodzone ramkowanie albo przekroczony limit unieważnia całą paczkę.
+                // Broken framing or an exceeded limit invalidates the whole bundle.
                 entries.forEach { queue.markTransientFailure(it.canonicalPath, result.code) }
                 journal.record(JournalLevel.WARN, result.code, "Paczka odrzucona: ${result.message}")
                 SendResult.FAILED
@@ -317,8 +317,8 @@ class SyncEngine(
                 continue
             }
 
-            // Odrzucenie pojedynczego pliku w paczce ma tę samą wagę co przy PUT:
-            // zła ścieżka jest trwała, reszta warta ponowienia.
+            // Rejecting one file inside a bundle carries the same weight as on a PUT:
+            // a bad path is permanent, the rest is worth retrying.
             val error = result.error.orEmpty()
             if (error in PERMANENT_BUNDLE_ERRORS) {
                 queue.markPermanentFailure(result.path, error)
@@ -328,8 +328,8 @@ class SyncEngine(
             }
         }
 
-        // Serwer nie wspomniał o pliku, który wysłaliśmy. Nie zakładamy powodzenia —
-        // wraca do kolejki i wyjaśni się przy najbliższym manifeście.
+        // The server said nothing about a file we sent. We do not assume success — it
+        // returns to the queue and resolves itself at the next manifest.
         for ((path, _) in byPath) {
             if (path !in reported) queue.markTransientFailure(path, "brak wyniku w odpowiedzi")
         }
@@ -339,29 +339,29 @@ class SyncEngine(
         val file = File(entry.absolutePath)
 
         if (!file.isFile) {
-            // Użytkownik usunął file między skanem a wysyłką. To nie jest błąd —
+            // The user deleted the file between the scan and the upload. That is not an error —
             // kopia z poprzednich cykli i tak zostaje na serwerze (niezmiennik I1).
-            queue.markPermanentFailure(entry.canonicalPath, "file już nie istnieje")
+            queue.markPermanentFailure(entry.canonicalPath, "the file no longer exists")
             return SendResult.SKIPPED
         }
 
         val currentMtime = Math.floorDiv(file.lastModified(), 1000L)
         if (file.length() != entry.size || currentMtime != entry.mtime) {
-            // Plik zmienił się po skanie. Wysyłanie go now skleiłoby dwie wersje;
-            // wróci do kolejki przy następnym skanie, już z aktualną tożsamością.
-            queue.markTransientFailure(entry.canonicalPath, "file zmienił się po skanie")
+            // The file changed after the scan. Sending it now would splice two versions;
+            // it returns to the queue on the next scan, with an up-to-date identity.
+            queue.markTransientFailure(entry.canonicalPath, "the file changed after the scan")
             journal.record(
                 JournalLevel.INFO, "file_changed",
-                "${entry.canonicalPath} zmienił się po skanie; wróci w następnym cyklu.",
+                "${entry.canonicalPath} changed after the scan; it will return next cycle.",
             )
             return SendResult.SKIPPED
         }
 
         if (entry.attempts >= config.maxAttempts) {
-            queue.markPermanentFailure(entry.canonicalPath, "przekroczono limit prób")
+            queue.markPermanentFailure(entry.canonicalPath, "attempt limit exceeded")
             journal.record(
                 JournalLevel.ERROR, "too_many_attempts",
-                "${entry.canonicalPath}: ${config.maxAttempts} nieudanych podejść, odkładam.",
+                "${entry.canonicalPath}: ${config.maxAttempts} failed attempts, setting it aside.",
             )
             return SendResult.FAILED
         }
@@ -373,9 +373,9 @@ class SyncEngine(
         var offset = entry.bytesSent
         var mismatches = 0
 
-        // Skrót liczymy zawsze, także przy wznowieniu. Wznawianie oszczędza transmisję,
-        // a nie odczyt z pamięci telefonu — a serwer bez skrótu i tak niczego nie przyjmie
-        // (ADR-016). Cena to jeden lokalny odczyt pliku; korzyść to wpis w rejestrze.
+        // The digest is always computed, including on resume. Resuming saves transmission,
+        // not reads from the phone's storage — and without a digest the server accepts
+        // nothing anyway (ADR-016). The price is one local read; the gain is a ledger entry.
         val digest = sha256(file)
 
         while (offset < entry.size) {
@@ -390,9 +390,9 @@ class SyncEngine(
                 mtime = entry.mtime,
                 offset = offset,
                 length = length,
-                // Skrót idzie z każdym fragmentem, choć serwer sprawdza go dopiero przy
-                // domknięciu. Inaczej wymóg z ADR-016 odrzucałby fragmenty pośrednie,
-                // a kilkadziesiąt bajtów nagłówka na 32 MB ciała nie robi różnicy.
+                // The digest goes with every chunk, although the server only checks it on
+                // commit. Otherwise the ADR-016 requirement would reject the intermediate ones,
+                // and a few dozen header bytes against a 32 MB body make no difference.
                 digest = digest,
             )
 
@@ -416,12 +416,12 @@ class SyncEngine(
                 is ApiResult.Failure -> {
                     val expected = result.expectedOffset
                     if (expected != null && expected != offset) {
-                        // Serwer wie lepiej, ile ma. Przestawiamy się na jego stan,
-                        // ale nie w nieskończoność: krążenie oznaczałoby, że coś
-                        // po drugiej stronie zmienia się w trakcie.
+                        // The server knows better what it holds. We adopt its state, but not
+                        // indefinitely: circling would mean something on the other side is
+                        // changing while we work.
                         mismatches++
                         if (mismatches > MAX_OFFSET_CORRECTIONS) {
-                            queue.markTransientFailure(entry.canonicalPath, "niestabilne przesunięcie")
+                            queue.markTransientFailure(entry.canonicalPath, "unstable offset")
                             return SendResult.FAILED
                         }
 
@@ -439,8 +439,8 @@ class SyncEngine(
             }
         }
 
-        // Pętla wyszła bez potwierdzenia domknięcia — serwer policzył inaczej niż my.
-        queue.markTransientFailure(entry.canonicalPath, "serwer nie potwierdził kompletności")
+        // The loop exited with no confirmation of completion — the server counted differently.
+        queue.markTransientFailure(entry.canonicalPath, "the server did not confirm completion")
         return SendResult.FAILED
     }
 
@@ -479,15 +479,15 @@ class SyncEngine(
     }
 
     private companion object {
-        /** Ile pozycji bierzemy z kolejki naraz. Mniej znaczy częstsze zapytania do bazy. */
+        /** How many entries we take from the queue at once. Fewer means more database queries. */
         const val UPLOAD_BATCH = 256
 
-        /** Błędy paczki, po których ponawianie nie ma sensu — to wada pliku, nie sieci. */
+        /** Bundle errors after which retrying is pointless — the fault is the file's, not the network's. */
         val PERMANENT_BUNDLE_ERRORS = setOf(
             "absolute", "traversal", "dot_segment", "empty_segment", "nul", "path_too_long",
         )
 
-        /** Ile razy dajemy serwerowi poprawić nasze wyobrażenie o przesunięciu. */
+        /** How many times we let the server correct our idea of the offset. */
         const val MAX_OFFSET_CORRECTIONS = 3
     }
 }

@@ -20,7 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 
-/** Katalog widoczny na ekranie wyboru, wraz z tym, czy użytkownik go wykluczył. */
+/** A directory shown on the selection screen, along with whether the user excluded it. */
 data class FolderChoice(
     val path: String,
     val excluded: Boolean,
@@ -48,20 +48,20 @@ fun FoldersScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("Foldery", style = MaterialTheme.typography.headlineMedium)
-            TextButton(onClick = onBack) { Text("Wróć") }
+            TextButton(onClick = onBack) { Text("Back") }
         }
 
         Text(
-            "Zaznacz katalogi, których nie chcesz w kopii zapasowej. " +
-                "Pliki już wysłane zostają na komputerze — wykluczenie dotyczy tego, " +
-                "co pójdzie dalej.",
+            "Tick the directories you do not want in the backup. " +
+                "Files already sent stay on the computer — an exclusion applies to what " +
+                "goes from here on.",
             style = MaterialTheme.typography.bodyMedium,
         )
 
         if (loading) {
             Text("Czytam katalogi…", style = MaterialTheme.typography.bodyMedium)
         } else if (folders.isEmpty()) {
-            Text("Nie udało się odczytać katalogów pamięci.", style = MaterialTheme.typography.bodyMedium)
+            Text("The storage directories could not be read.", style = MaterialTheme.typography.bodyMedium)
         } else {
             folders.forEach { folder ->
                 Row(
@@ -78,10 +78,10 @@ fun FoldersScreen(
                         Text(
                             buildString {
                                 append(
-                                    if (folder.fileCount >= 0) "${folder.fileCount} elementów"
-                                    else "niedostępny",
+                                    if (folder.fileCount >= 0) "${folder.fileCount} items"
+                                    else "unavailable",
                                 )
-                                if (folder.suggested) append(" — często warto pominąć")
+                                if (folder.suggested) append(" — often worth skipping")
                             },
                             style = MaterialTheme.typography.bodySmall,
                         )
@@ -96,13 +96,13 @@ fun FoldersScreen(
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("Zawsze pomijane", style = MaterialTheme.typography.titleSmall)
                 Text(
-                    "Android/data i Android/obb są od Androida 11 niedostępne dla aplikacji " +
-                        "i nie próbujemy tego obchodzić. Pomijamy też miniatury, kosz i pamięci " +
-                        "podręczne — to dane odtwarzalne.",
+                    "Android/data and Android/obb have been inaccessible to applications since " +
+                        "Android 11 and we do not try to work around that. Thumbnails, trash and " +
+                        "caches are skipped too — that data is reproducible.",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Text(
-                    "Android/media pozostaje w kopii: tam trzyma swoje files między innymi " +
+                    "Android/media stays in the backup: that is where WhatsApp, among others, " +
                         "WhatsApp.",
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace,

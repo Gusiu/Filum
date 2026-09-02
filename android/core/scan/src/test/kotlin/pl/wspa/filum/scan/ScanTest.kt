@@ -161,7 +161,7 @@ class ExclusionRulesTest {
 
 /**
  * Walking the directory tree. The class is plain Kotlin on the JVM, so we test it
- * na prawdziwych plikach w katalogu tymczasowym — bez emulatora i bez atrap.
+ * against real files in a temporary directory — with no emulator and no fakes.
  */
 class FilesystemScannerTest {
 

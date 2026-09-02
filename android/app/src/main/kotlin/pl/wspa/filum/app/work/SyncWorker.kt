@@ -19,12 +19,12 @@ import pl.wspa.filum.protocol.ManifestRequest
 import pl.wspa.filum.sync.Deadline
 
 /**
- * Cykl synchronizacji wykonywany w tle, jako usługa pierwszoplanowa typu `dataSync`.
+ * The sync cycle run in the background, as a `dataSync` foreground service.
  *
- Praca jest z założenia przerywalna. Nie próbujemy dokończyć wszystkiego za jednym
- * razem: pierwsza synchronizacja obejmuje całą bibliotekę urządzenia i przy typowym
- * telefonie nie mieści się w jednym oknie pracy w tle, niezależnie od tego, ile ta
- * biblioteka waży. Worker robi tyle, ile pozwala budżet, zapisuje stan i kończy sam.
+ * The work is interruptible by design. We do not try to finish everything in one go:
+ * the first sync covers the device's whole library and on a typical phone does not fit
+ * into a single background window, whatever that library weighs. The worker does what the
+ * budget allows, saves state and ends by itself.
  */
 class SyncWorker(
     context: Context,
@@ -38,9 +38,9 @@ class SyncWorker(
         budget.prune()
 
         if (!budget.hasRoomToStart()) {
-            // Budżet wyczerpany w oknie kroczącym. To nie jest błąd — po prostu
-            // nie ta doba. Zwracamy powodzenie, żeby WorkManager nie mnożył prób.
-            log(LogLevel.INFO, "budget_exhausted", "Budżet pracy w tle wyczerpany; wracam później.")
+            // The budget is spent for the rolling window. That is not an error — just not
+            // today. We return success so WorkManager does not multiply attempts.
+            log(LogLevel.INFO, "budget_exhausted", "Background work budget spent; coming back later.")
             return Result.success()
         }
 
@@ -50,8 +50,8 @@ class SyncWorker(
 
         setForeground(foregroundInfo("Szukam serwera…"))
 
-        // Bez blokady oszczędzanie energii karty Wi-Fi potrafi wielokrotnie ściąć
-        // przepustowość, a budżet leci wtedy na czekanie zamiast na transfer.
+        // Without the lock, Wi-Fi power saving can cut throughput several times over,
+        // and the budget then drains on waiting rather than on transferring.
         val wifiLock = acquireWifiLock()
 
         return try {
@@ -61,14 +61,14 @@ class SyncWorker(
             )
             interpret(result)
         } catch (e: Exception) {
-            Log.w(TAG, "Cykl zakończony wyjątkiem", e)
+            Log.w(TAG, "The cycle ended in an exception", e)
             log(LogLevel.ERROR, "worker_failed", e.message ?: e::class.java.simpleName)
             Result.retry()
         } finally {
             runCatching { wifiLock?.release() }
-            // Zużyty czas zapisujemy zawsze, także po wyjątku i po anulowaniu —
-            // inaczej budżet przestałby odzwierciedlać rzeczywistość i system
-            // ubiłby pracę w losowym momencie następnego cyklu.
+            // Time spent is always recorded, including after an exception and after
+            // cancellation — otherwise the budget would stop reflecting reality and the
+            // system would kill the work at a random point in the next cycle.
             budget.record(startedAt, System.currentTimeMillis())
         }
     }
@@ -80,11 +80,11 @@ class SyncWorker(
     }
 
     /**
-     * Czy ten cykl ma uzgodnić komplet plików.
+     * Whether this cycle should agree the complete file set.
      *
-     * Skan przyrostowy jest tani, ale opiera się na liczniku MediaStore, który nie
-     * obejmuje plików spoza indeksu. Okresowa pełna rekoncyliacja wyłapuje to, co
-     * przyrost przeoczył — i tylko ona pozwala serwerowi policzyć sieroty (§5.6).
+     * An incremental scan is cheap but rests on the MediaStore counter, which does not
+     * cover files outside the index. A periodic full reconciliation catches what the
+     * increment missed — and it is the only thing that lets the server compute orphans (§5.6).
      */
     private suspend fun isFullReconciliation(): Boolean {
         val last = container.database.scanState().get(VOLUME)?.lastFullScanAt ?: return true
@@ -124,8 +124,8 @@ class SyncWorker(
         val manager = applicationContext.getSystemService(NotificationManager::class.java) ?: return
 
         manager.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "Synchronizacja", NotificationManager.IMPORTANCE_LOW).apply {
-                description = "Postęp kopii zapasowej w tle"
+            NotificationChannel(CHANNEL_ID, "Sync", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "Progress of the background backup"
                 setShowBadge(false)
             }
         )
@@ -138,7 +138,7 @@ class SyncWorker(
         private const val WIFI_LOCK_TAG = "filum:sync"
         private const val VOLUME = "external_primary"
 
-        /** Co ile wykonujemy pełne uzgodnienie zamiast przyrostu. */
+        /** How often we do a full reconciliation instead of an increment. */
         private const val FULL_SCAN_INTERVAL_MILLIS = 7L * 24 * 60 * 60 * 1000
     }
 }

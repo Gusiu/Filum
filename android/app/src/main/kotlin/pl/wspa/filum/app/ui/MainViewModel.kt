@@ -53,8 +53,8 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
-     * Czy cykl właśnie trwa. Stan pochodzi z WorkManagera, a nie z pola w tej klasie:
-     * praca przeżywa zamknięcie ekranu, więc pytamy o nią tam, gdzie naprawdę jest.
+     * Whether a cycle is running. The state comes from WorkManager, not from a field in this
+     * class: the work outlives the screen, so we ask about it where it actually lives.
      */
     val running: StateFlow<Boolean> =
         SyncScheduler.observeRunning(container.context)
@@ -107,19 +107,19 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     /**
-     * Cykl ręczny idzie przez tę samą drogę co nocny — przez WorkManagera.
+     * A manual cycle takes the same road as a nightly one — through WorkManager.
      *
-     * Osobna ścieżka „na już" oznaczałaby drugą implementację tego samego, testowaną
-     * przy okazji, i pewność, że któraś z nich prędzej czy później zacznie się
-     * zachowywać inaczej.
+     * A separate "right now" path would mean a second implementation of the same thing, tested
+     * incidentally, and a certainty that sooner or later one of them would start behaving
+     * differently.
      */
     fun syncNow() {
         SyncScheduler.runNow(container.context)
     }
 
     /**
-     * Sprawdza próbkę plików (§5.5). Wyłącznie na żądanie użytkownika: serwer liczy
-     * przy tym skróty swoich kopii, więc operacja jest kosztowna po obu stronach.
+     * Checks a sample of files (§5.5). Only on the user's request: the server hashes its own
+     * copies while doing it, so the operation is expensive on both sides.
      */
     fun verify() {
         if (_state.value.verifying) return
@@ -135,27 +135,27 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
                     is VerificationResult.Done -> when {
                         result.corrupted.isNotEmpty() ->
                             "Uszkodzone kopie: ${result.corrupted.size} z ${result.checked}. " +
-                                "Zostaną wysłane ponownie przy najbliższej pełnej synchronizacji."
+                                "They will be re-sent at the next full sync."
 
                         result.missing.isNotEmpty() ->
-                            "Brakuje ${result.missing.size} z ${result.checked} plików; " +
-                                "dojdą przy najbliższej synchronizacji."
+                            "${result.missing.size} of ${result.checked} files are missing; " +
+                                "they will arrive at the next sync."
 
-                        else -> "Sprawdzono ${result.checked} plików — wszystkie zgodne."
+                        else -> "Checked ${result.checked} files — all matching."
                     }
 
-                    is VerificationResult.Failed -> "Nie udało się sprawdzić: ${result.reason}"
+                    is VerificationResult.Failed -> "The check could not be run: ${result.reason}"
                 },
             )
         }
     }
 
     /**
-     * Wczytuje katalogi najwyższego poziomu razem z bieżącymi wykluczeniami.
+     * Loads the top-level directories along with the current exclusions.
      *
-     * Liczba elementów pochodzi z jednego wywołania `list()`, nie z obchodu drzewa:
-     * ekran ma się otworzyć od razu, a dokładna liczba plików w Download nikomu
-     * nie jest potrzebna do podjęcia decyzji.
+     * The item count comes from a single `list()` call, not from walking the tree: the screen
+     * is to open at once, and nobody needs the exact number of files in Download to make a
+     * decision.
      */
     fun openFolders() {
         _state.value = _state.value.copy(screen = Screen.FOLDERS, foldersLoading = true)
@@ -260,10 +260,10 @@ fun describe(session: SyncSessionEntity?): String = when {
     session == null -> "Jeszcze nie synchronizowano."
     session.endedAt == null -> "Cykl w toku…"
     session.result?.startsWith("completed") == true ->
-        "Ostatnio: ${session.filesDone} plików, ${formatBytes(session.bytesSent)}."
+        "Last run: ${session.filesDone} files, ${formatBytes(session.bytesSent)}."
 
     session.result?.startsWith("interrupted") == true ->
         "Przerwano po ${session.filesDone} plikach, ${formatBytes(session.bytesSent)}."
 
-    else -> "Ostatnia próba nie powiodła się."
+    else -> "The last attempt did not succeed."
 }

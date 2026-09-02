@@ -20,11 +20,11 @@ import pl.wspa.filum.protocol.QrPayload
 import pl.wspa.filum.sync.JournalLevel
 
 /**
- * Zależności aplikacji, składane ręcznie.
+ * The application's dependencies, wired by hand.
  *
- * Świadomie bez biblioteki wstrzykiwania: graf ma kilkanaście węzłów i jest w całości
- * widoczny w tym pliku. Dla pracy dyplomowej czytelność jest ważniejsza niż oszczędność
- * kilku linii, a każda dodatkowa warstwa to kolejna rzecz do wyjaśnienia przy obronie.
+ * Deliberately without an injection library: the graph has a dozen or so nodes and is
+ * visible in its entirety in this file. For a thesis, legibility beats saving a few lines,
+ * and every extra layer is one more thing to explain at the defence.
  */
 class AppContainer(val context: Context) {
 
@@ -42,7 +42,7 @@ class AppContainer(val context: Context) {
 
     val verification: VerificationRunner by lazy { VerificationRunner(this) }
 
-    /** Ustawienia z wartościami domyślnymi przy pierwszym uruchomieniu. */
+    /** The settings, with defaults on first run. */
     suspend fun settings(): SettingsEntity =
         database.settings().get() ?: SettingsEntity().also { database.settings().save(it) }
 }
@@ -57,11 +57,11 @@ sealed interface PairingResult {
 }
 
 /**
- * Przebieg parowania (§3.3 protokołu).
+ * The pairing exchange (protocol §3.3).
  *
- * Telefon generuje własną parę kluczy w Android Keystore, przedstawia certyfikat
- * serwerowi i zapamiętuje odcisk klucza serwera z kodu QR. Od tej chwili adres
- * przestaje być tożsamością — liczy się wyłącznie klucz (ADR-006).
+ * The phone generates its own key pair in the Android Keystore, presents the certificate
+ * to the server and remembers the server's key fingerprint from the QR code. From then on
+ * the address stops being an identity — only the key counts (ADR-006).
  */
 class PairingController(private val container: AppContainer) {
 
@@ -73,9 +73,9 @@ class PairingController(private val container: AppContainer) {
 
         val identity = DeviceIdentity.loadOrCreate()
 
-        // Podczas parowania nie mamy jeszcze prawa przedstawiać certyfikatu klienta —
-        // /pair jest jedynym zasobem dostępnym bez mTLS. Zaufanie do serwera opiera się
-        // wyłącznie na odcisku klucza z kodu QR.
+        // During pairing we have no right to present a client certificate yet — /pair is
+        // the one resource reachable without mTLS. Trust in the server rests solely on the
+        // key fingerprint from the QR code.
         val bootstrapTls = FilumTls.bundle(payload.key, keyManagers = null)
         val api = FilumApiClient(FilumHttpClients(bootstrapTls, container.networkBinder).forKind(EndpointKind.MANUAL))
 
@@ -83,30 +83,30 @@ class PairingController(private val container: AppContainer) {
             ServerEndpoint.parse(it, EndpointKind.MANUAL, payload.port)
         }
         if (candidates.isEmpty()) {
-            return PairingResult.Rejected("Kod parowania nie zawiera adresu serwera.")
+            return PairingResult.Rejected("The pairing code contains no server address.")
         }
 
-        var lastProblem = "Nie udało się połączyć z serwerem."
+        var lastProblem = "Could not connect to the server."
 
         for (endpoint in candidates) {
             when (val result = api.pair(endpoint, payload.token, identity.certificateDer, deviceLabel)) {
                 is ApiResult.Ok -> {
                     persist(payload, result.value.serverInstanceId, identity, candidates)
 
-                    // Poziom zabezpieczenia klucza trafia do dziennika przy parowaniu:
-                    // to jedyny moment, w którym powstaje, a przy diagnozowaniu warto
-                    // wiedzieć, czy klucz siedzi w osobnym układzie, czy tylko w TEE.
+                    // The key's security level goes into the journal at pairing time:
+                    // this is the only moment it is created, and when diagnosing it helps to
+                    // know whether the key sits in a separate chip or only in a TEE.
                     RoomJournal(container.database.log()).record(
                         JournalLevel.INFO, "paired",
-                        "Sparowano z ${payload.name}. Klucz urządzenia: ${describe(identity.security)}.",
+                        "Paired with ${payload.name}. Device key: ${describe(identity.security)}.",
                     )
 
                     return PairingResult.Paired(payload.name, endpoint)
                 }
 
                 is ApiResult.Failure -> {
-                    // Token jest jednorazowy: nieudana próba go zużyła, więc dalsze
-                    // adresy nie mają czego spróbować. Kończymy z czytelnym powodem.
+                    // The token is single-use: a failed attempt consumed it, so the remaining
+                    // addresses have nothing to try. We stop with a legible reason.
                     return PairingResult.Rejected(result.message)
                 }
 
@@ -140,8 +140,8 @@ class PairingController(private val container: AppContainer) {
 
     private fun describe(security: KeySecurity): String = when (security) {
         KeySecurity.STRONGBOX -> "osobny element bezpieczny (StrongBox)"
-        KeySecurity.TRUSTED_ENVIRONMENT -> "zaufane środowisko procesora (TEE)"
-        KeySecurity.SOFTWARE -> "pamięć procesu — brak wsparcia sprzętowego"
+        KeySecurity.TRUSTED_ENVIRONMENT -> "the processor's trusted environment (TEE)"
+        KeySecurity.SOFTWARE -> "process memory — no hardware backing"
         KeySecurity.UNKNOWN -> "nieustalony poziom zabezpieczenia"
     }
 

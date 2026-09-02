@@ -23,9 +23,9 @@ import java.nio.file.Path
 /**
  * Silnik jednego cyklu synchronizacji.
  *
- * To jest najważniejszy zestaw testów w całym kliencie: tutaj zapadają decyzje
- * o tym, co ponowić, co odłożyć na trwałe i kiedy skończyć — a każda z nich
- * kończy się albo utratą pliku, albo wysyłaniem go w kółko.
+ * This is the most important suite in the whole client: the decisions taken here are what
+ * to retry, what to set aside permanently and when to stop — and each of them ends either
+ * in losing a file or in sending it over and over.
  */
 class SyncEngineTest {
 
@@ -55,12 +55,12 @@ class SyncEngineTest {
     }
 
     /**
-     * Uruchamia cykl z **wyłączonym paczkowaniem**.
+     * Runs a cycle with **bundling turned off**.
      *
-     * Ta klasa sprawdza ścieżkę pojedynczego PUT: wznawianie, konflikty przesunięcia,
-     * podział na fragmenty i skrót kontrolny. Przy domyślnym progu wszystkie testowe
-     * files byłyby na to za małe i poszłyby paczką, więc próg zerujemy jawnie.
-     * Ścieżkę paczki pokrywa BundlingTest.
+     * This class covers the single-PUT path: resuming, offset conflicts, chunking and the
+     * integrity digest. At the default threshold every test file would be too small for that
+     * and would go in a bundle, so the threshold is zeroed explicitly.
+     * The bundle path is covered by BundlingTest.
      */
     private suspend fun run(
         files: List<ScannedFile>,
@@ -69,7 +69,7 @@ class SyncEngineTest {
     ): SyncOutcome = engine(config.copy(smallFileThreshold = 0))
         .run("sesja-1", ManifestRequest.MODE_DELTA, files.asSequence(), deadline)
 
-    // --- ścieżka podstawowa ---
+    // --- the basic path ---
 
     @Test
     fun `the files the server needs arrive there intact`(@TempDir dir: Path) = runTest {
@@ -92,8 +92,8 @@ class SyncEngineTest {
         val a = file(dir, "DCIM/a.jpg", "aaa")
         val b = file(dir, "DCIM/b.jpg", "bbb")
 
-        // Serwer zgłasza tylko b jako potrzebne. Pliku a nie ma ani w "needed",
-        // ani w "rejected", więc serwer go ma — i nie wolno go wysyłać ponownie.
+        // The server reports only b as needed. File a is in neither "needed" nor
+        // "rejected", so the server has it — and it must not be sent again.
         transport.manifestResponder = { ApiResult.Ok(ManifestResponse(1, listOf(NeededFile("DCIM/b.jpg", 0)))) }
 
         val outcome = run(listOf(a, b))
@@ -124,14 +124,14 @@ class SyncEngineTest {
         setUp()
         val a = file(dir, "klip.mp4", "0123456789ABCDEF")
 
-        // Serwer ma już pierwsze 6 bajtów z przerwanego wcześniej transferu.
+        // The server already holds the first 6 bytes from an earlier interrupted transfer.
         transport.received["klip.mp4"] = StringBuilder("012345")
         transport.manifestResponder = { ApiResult.Ok(ManifestResponse(0, listOf(NeededFile("klip.mp4", 6)))) }
 
         run(listOf(a))
 
         assertEquals("0123456789ABCDEF", transport.content("klip.mp4"))
-        // Kluczowe: wysłaliśmy wyłącznie brakujące 10 bajtów, nie cały file od nowa.
+        // The crucial part: we sent only the missing 10 bytes, not the whole file again.
         assertEquals(listOf(Triple("klip.mp4", 6L, 10L)), transport.putCalls)
     }
 
@@ -140,7 +140,7 @@ class SyncEngineTest {
         setUp()
         val a = file(dir, "klip.mp4", "0123456789")
 
-        // Nasza kolejka twierdzi, że serwer ma 8 bajtów, a on ma 4.
+        // Our queue claims the server has 8 bytes; it has 4.
         transport.received["klip.mp4"] = StringBuilder("0123")
         transport.manifestResponder = { ApiResult.Ok(ManifestResponse(0, listOf(NeededFile("klip.mp4", 8)))) }
 
@@ -156,13 +156,13 @@ class SyncEngineTest {
         setUp()
         val a = file(dir, "klip.mp4", "0123456789")
 
-        // Serwer za każdym razem podaje inną wartość — coś się po drugiej stronie
-        // zmienia w trakcie. Bez limitu ta pętla nigdy by się nie skończyła.
-        var kolejne = 0L
+        // The server names a different value every time — something on the other side is
+        // changing while we work. Without a limit this loop would never end.
+        var nextOffset = 0L
         transport.putInterceptor = { _, _, _ ->
-            kolejne = (kolejne + 1) % 5
+            nextOffset = (nextOffset + 1) % 5
             ApiResult.failure(
-                HttpStatus.CONFLICT, ErrorResponse("offset_mismatch", "wciąż nie tak", kolejne),
+                HttpStatus.CONFLICT, ErrorResponse("offset_mismatch", "still wrong", nextOffset),
             )
         }
 
@@ -170,7 +170,7 @@ class SyncEngineTest {
 
         assertInstanceOf(SyncOutcome.Completed::class.java, outcome)
         assertEquals(FakeQueue.State.TRANSIENT, queue.state("klip.mp4"))
-        assertEquals("niestabilne przesunięcie", queue.error("klip.mp4"))
+        assertEquals("unstable offset", queue.error("klip.mp4"))
     }
 
     @Test
@@ -186,25 +186,25 @@ class SyncEngineTest {
         assertEquals("x".repeat(100), transport.content("duzy.bin"))
     }
 
-    // --- skrót kontrolny (§9) ---
+    // --- the integrity digest (§9) ---
 
     @Test
     fun `a small file gets its digest on the last chunk`(@TempDir dir: Path) = runTest {
         setUp()
-        val a = file(dir, "maly.txt", "abc")
+        val a = file(dir, "small.txt", "abc")
 
         run(listOf(a))
 
-        assertNotNull(transport.digestsSeen["maly.txt"], "skrót powinien dojechać przy domknięciu")
-        assertEquals(64, transport.digestsSeen["maly.txt"]!!.length)
+        assertNotNull(transport.digestsSeen["small.txt"], "the digest should arrive on commit")
+        assertEquals(64, transport.digestsSeen["small.txt"]!!.length)
     }
 
     @Test
     fun `a resumed file gets a digest too`(@TempDir dir: Path) = runTest {
-        // Wcześniej skrót przy wznawianiu pomijaliśmy, żeby nie czytać pliku od początku.
-        // To była oszczędność na niewłaściwej rzeczy: wznawianie ratuje transmisję, a nie
-        // odczyt z pamięci telefonu — i zostawiało wznawiane files poza rejestrem, czyli
-        // dokładnie te największe, przy których najbardziej zależy nam na potwierdzeniu.
+        // We used to skip the digest on resume so as not to read the file from the start.
+        // That saved the wrong thing: resuming rescues transmission, not reads from the
+        // phone's storage — and it left resumed files out of the ledger, which is to say
+        // precisely the largest ones, where the confirmation matters most.
         setUp()
         val a = file(dir, "klip.mp4", "0123456789")
         transport.received["klip.mp4"] = StringBuilder("01234")
@@ -217,25 +217,25 @@ class SyncEngineTest {
 
     @Test
     fun `the digest goes with every chunk`(@TempDir dir: Path) = runTest {
-        // Serwer sprawdza skrót dopiero przy domknięciu, ale wymaga go od każdego
-        // żądania (ADR-016). Wysyłanie tylko na ostatnim fragmencie oznaczałoby
-        // odrzucenie wszystkich wcześniejszych.
+        // The server only checks the digest on commit, but requires one on every request
+        // (ADR-016). Sending it only on the last chunk would mean every earlier one
+        // getting refused.
         setUp()
         val a = file(dir, "duzy.bin", "x".repeat(100))
 
         run(listOf(a), config = SyncConfig(chunkBytes = 30))
 
-        val fragmenty = transport.putCalls.count { it.first == "duzy.bin" }
-        assertTrue(fragmenty > 1, "file miał pójść w kilku fragmentach, poszedł w $fragmenty")
-        assertEquals(fragmenty, transport.digestsPerCall.count { it != null })
+        val chunks = transport.putCalls.count { it.first == "duzy.bin" }
+        assertTrue(chunks > 1, "the file was to go in several chunks, it went in $chunks")
+        assertEquals(chunks, transport.digestsPerCall.count { it != null })
     }
 
-    // --- tryb dokładny (ADR-016) ---
+    // --- thorough mode (ADR-016) ---
 
     @Test
     fun `fast mode computes no digests for the manifest`(@TempDir dir: Path) = runTest {
         setUp()
-        val a = file(dir, "a.txt", "zawartość")
+        val a = file(dir, "a.txt", "content")
 
         run(listOf(a), config = SyncConfig(integrityPolicy = IntegrityPolicy.FAST))
 
@@ -244,10 +244,10 @@ class SyncEngineTest {
 
     @Test
     fun `thorough mode adds a digest to the manifest`(@TempDir dir: Path) = runTest {
-        // To jest jedyna różnica widoczna dla serwera — i to ona pozwala mu zestawić
-        // deklarację klienta z rejestrem, zanim cokolwiek zostanie przesłane.
+        // This is the only difference the server sees — and it is what lets it compare the
+        // client's claim against the ledger before anything is transferred.
         setUp()
-        val a = file(dir, "a.txt", "zawartość")
+        val a = file(dir, "a.txt", "content")
 
         run(listOf(a), config = SyncConfig(integrityPolicy = IntegrityPolicy.THOROUGH))
 
@@ -256,16 +256,16 @@ class SyncEngineTest {
 
     @Test
     fun `a divergence reported by the server reaches the journal`(@TempDir dir: Path) = runTest {
-        // Plik i tak wróci przez "needed", więc bez wpisu w dzienniku podmiana
-        // zachowująca metadane byłaby nieodróżnialna od zwykłej edycji.
+        // The file returns through "needed" anyway, so without a journal entry a
+        // metadata-preserving substitution would be indistinguishable from an ordinary edit.
         setUp()
-        val a = file(dir, "umowa.pdf", "treść")
+        val a = file(dir, "contract.pdf", "text")
         transport.manifestResponder = {
             ApiResult.Ok(
                 ManifestResponse(
                     have = 0,
-                    needed = listOf(NeededFile("umowa.pdf", 0)),
-                    divergent = listOf("umowa.pdf"),
+                    needed = listOf(NeededFile("contract.pdf", 0)),
+                    divergent = listOf("contract.pdf"),
                 ),
             )
         }
@@ -275,7 +275,7 @@ class SyncEngineTest {
         assertTrue(journal.has("integrity_divergent"))
     }
 
-    // --- błędy ---
+    // --- errors ---
 
     @Test
     fun `a path rejected in the manifest is never sent at all`(@TempDir dir: Path) = runTest {
@@ -346,19 +346,19 @@ class SyncEngineTest {
     @Test
     fun `a file deleted after the scan is deferred without an error`(@TempDir dir: Path) = runTest {
         setUp()
-        val a = file(dir, "znika.txt", "x")
+        val a = file(dir, "vanishes.txt", "x")
         File(a.absolutePath).delete()
 
         val outcome = run(listOf(a))
 
         assertInstanceOf(SyncOutcome.Completed::class.java, outcome)
-        assertEquals(FakeQueue.State.PERMANENT, queue.state("znika.txt"))
-        assertEquals("file już nie istnieje", queue.error("znika.txt"))
+        assertEquals(FakeQueue.State.PERMANENT, queue.state("vanishes.txt"))
+        assertEquals("the file no longer exists", queue.error("vanishes.txt"))
     }
 
     @Test
     fun `a file changed after the scan is not spliced from two versions`(@TempDir dir: Path) = runTest {
-        // Wysłanie go now dałoby na serwerze file, który nigdy nie istniał.
+        // Sending it now would leave a file on the server that never existed.
         setUp()
         val a = file(dir, "rosnie.txt", "krotki")
         File(a.absolutePath).writeText("znacznie dluzsza zawartosc")
@@ -384,7 +384,7 @@ class SyncEngineTest {
         assertTrue(journal.has("too_many_attempts"))
     }
 
-    // --- budżet ---
+    // --- the budget ---
 
     @Test
     fun `an exhausted budget ends the cycle cleanly before uploading`(@TempDir dir: Path) = runTest {
@@ -402,15 +402,15 @@ class SyncEngineTest {
         setUp()
         val files = (1..5).map { file(dir, "file$it.txt", "zawartosc$it") }
 
-        var wyslane = 0
-        val deadline = Deadline { wyslane >= 2 }
-        transport.putInterceptor = { _, _, _ -> wyslane++; null }
+        var sent = 0
+        val deadline = Deadline { sent >= 2 }
+        transport.putInterceptor = { _, _, _ -> sent++; null }
 
         val outcome = run(files, deadline = deadline)
 
         val interrupted = assertInstanceOf(SyncOutcome.Interrupted::class.java, outcome)
         assertEquals(2, interrupted.filesSent)
-        // Reszta czeka w kolejce; następny cykl podejmie ją bez ponownego skanu.
+        // The rest waits in the queue; the next cycle picks it up without rescanning.
         assertEquals(3, queue.pendingCount())
         assertTrue(journal.has("deadline_upload"))
     }

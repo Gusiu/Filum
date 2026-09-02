@@ -70,7 +70,7 @@ class EndpointRacerTest {
     @Test
     fun `probing of the losing routes is cancelled`() {
         // Without cancellation the phone would hold connections it will never use —
-        // przy pracy nocnej na baterii to nie jest drobiazg.
+        // during overnight work on battery that is no small thing.
         val zakonczone = AtomicInteger()
 
         runTest {

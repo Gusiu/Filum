@@ -48,8 +48,8 @@ fun PairingScreen(
     ) {
         Text("Parowanie", style = MaterialTheme.typography.headlineMedium)
         Text(
-            "Na komputerze otwórz panel Filum i pobierz kod parowania, " +
-                "a następnie wklej go poniżej. Kod jest ważny 10 minut i działa raz.",
+            "On the computer, open the Filum panel and get a pairing code, " +
+                "then paste it below. The code is valid for 10 minutes and works once.",
             style = MaterialTheme.typography.bodyMedium,
         )
 
@@ -65,7 +65,7 @@ fun PairingScreen(
         OutlinedTextField(
             value = label,
             onValueChange = { label = it },
-            label = { Text("Nazwa tego telefonu") },
+            label = { Text("This phone's name") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -75,7 +75,7 @@ fun PairingScreen(
             enabled = !state.pairing && code.isNotBlank() && label.isNotBlank(),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(if (state.pairing) "Paruję…" else "Sparuj")
+            Text(if (state.pairing) "Pairing…" else "Pair")
         }
 
         state.lastError?.let {
@@ -83,10 +83,10 @@ fun PairingScreen(
         }
 
         Text(
-            "Telefon wygeneruje własny klucz i zapisze go w module bezpieczeństwa " +
-                "urządzenia — użyje osobnego układu, jeśli ten jest dostępny, a w jego " +
-                "braku zaufanego środowiska procesora. Klucz prywatny nie opuszcza " +
-                "urządzenia w żadnym z tych przypadków. Użyty poziom zapisuje się " +
+            "The phone will generate its own key and store it in the device's security " +
+                "module — a separate chip where one is available, and the processor's trusted " +
+                "environment where it is not. The private key leaves the device in neither " +
+                "case. The level actually used is recorded " +
                 "w dzienniku przy parowaniu.",
             style = MaterialTheme.typography.bodySmall,
         )
@@ -104,11 +104,11 @@ fun LogScreen(events: List<LogEventEntity>, onBack: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("Dziennik", style = MaterialTheme.typography.headlineSmall)
-            TextButton(onClick = onBack) { Text("Wróć") }
+            TextButton(onClick = onBack) { Text("Back") }
         }
 
         if (events.isEmpty()) {
-            Text("Brak zdarzeń.", style = MaterialTheme.typography.bodyMedium)
+            Text("No events.", style = MaterialTheme.typography.bodyMedium)
             return
         }
 

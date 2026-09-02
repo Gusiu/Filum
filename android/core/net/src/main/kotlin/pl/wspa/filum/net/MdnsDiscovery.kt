@@ -78,7 +78,7 @@ class MdnsDiscovery(context: Context) {
         }
     }
 
-    /** Znajduje serwer o konkretnym odcisku klucza; ignoruje cudze instancje. */
+    /** Finds the server with a specific key fingerprint; other instances are ignored. */
     suspend fun findByPin(pin: String, timeoutMillis: Long = DEFAULT_TIMEOUT_MILLIS): List<ServerEndpoint> =
         discover(timeoutMillis)
             .filter { it.pin == null || it.pin == pin }

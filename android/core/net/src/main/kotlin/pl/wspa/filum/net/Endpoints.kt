@@ -27,7 +27,7 @@ enum class EndpointKind {
 }
 
 /**
- * Jeden kandydat na dotarcie do serwera. Klient nie przechowuje „adresu serwera",
+ * One candidate route to the server. The client stores no "server address",
  * only a set of such candidates (ADR-006) — the identity is the key fingerprint, not an address.
  */
 data class ServerEndpoint(

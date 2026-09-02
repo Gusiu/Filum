@@ -23,22 +23,22 @@ sealed interface VerificationResult {
 }
 
 /**
- * Kontrola integralności kopii (§5.5 protokołu, ADR-002).
+ * Integrity checking of the copy (protocol §5.5, ADR-002).
  *
- To nie jest to samo, co wykrywanie zmian z §9.3. Tamto pyta, czy file na telefonie
- * jest nadal tym samym plikiem; ta operacja pyta, czy to, co leży na dysku komputera,
- * jest nadal tym, co tam wysłaliśmy. Nośnik potrafi po cichu przekłamać bajt, a kopia
- * zapasowa, która o tym nie wie, jest kopią złudzenia.
+ * This is not the same as the change detection in §9.3. That asks whether a file on the phone
+ * is still the same file; this operation asks whether what lies on the computer's disk is
+ * still what we sent there. Storage media can silently corrupt a byte, and a backup that
+ * does not know it is a backup of an illusion.
  *
- * Sprawdzamy **próbkę**, nie całość: pełna weryfikacja oznaczałaby odczyt całej
- * pamięci telefonu i całego dysku serwera, a losowa próbka wykrywa systematyczne
- * uszkodzenie nośnika przy koszcie liczonym w sekundach.
+ * We check a **sample**, not everything: a full verification would mean reading the
+ * phone's entire storage and the server's entire disk, while a random sample detects
+ * systematic media failure at a cost measured in seconds.
  */
 class VerificationRunner(private val container: AppContainer) {
 
     suspend fun verifySample(sampleSize: Int = DEFAULT_SAMPLE): VerificationResult {
         val server = container.database.pairedServers().get()
-            ?: return VerificationResult.Failed("Aplikacja nie jest sparowana z serwerem.")
+            ?: return VerificationResult.Failed("The application is not paired with a server.")
 
         val identity = DeviceIdentity.loadOrCreate(server.keyAlias)
         val clients = FilumHttpClients(
@@ -50,7 +50,7 @@ class VerificationRunner(private val container: AppContainer) {
             ?: return VerificationResult.Failed("Nie znaleziono serwera.")
 
         val sample = sample(sampleSize)
-        if (sample.isEmpty()) return VerificationResult.Failed("Skan nie znalazł plików do sprawdzenia.")
+        if (sample.isEmpty()) return VerificationResult.Failed("The scan found no files to check.")
 
         val entries = sample.mapNotNull { file ->
             digestOf(File(file.absolutePath))?.let { VerifyEntry(file.canonicalPath, it) }
@@ -64,8 +64,8 @@ class VerificationRunner(private val container: AppContainer) {
                 journal(
                     if (response.mismatch.isEmpty()) JournalLevel.INFO else JournalLevel.ERROR,
                     "verified",
-                    "Sprawdzono ${entries.size} plików: ${response.ok.size} zgodnych, " +
-                        "${response.mismatch.size} uszkodzonych, ${response.missing.size} brakujących.",
+                    "Checked ${entries.size} files: ${response.ok.size} matching, " +
+                        "${response.mismatch.size} corrupted, ${response.missing.size} missing.",
                 )
                 VerificationResult.Done(entries.size, response.mismatch, response.missing)
             }
@@ -89,17 +89,17 @@ class VerificationRunner(private val container: AppContainer) {
     }
 
     /**
-     * Losowa próbka warstwowa z bieżącego skanu.
+     * A stratified random sample from the current scan.
      *
-     * Losowa, nie „pierwsze N": uszkodzenie nośnika nie zaczyna się od początku
-     * alfabetu, a stała próbka sprawdzałaby w kółko te same files.
+     * Random rather than "the first N": media failure does not begin at the start of the
+     * alphabet, and a fixed sample would check the same files over and over.
      *
-     * Warstwowa, bo zwykłe losowanie z ograniczeniem rozmiaru miało wadę, której
-     * nie widać po wyniku: files powyżej progu nie trafiały do próbki **nigdy**.
-     * Przy typowej bibliotece telefonu to znaczyło, że nagrania wideo — czyli
-     * dane najbardziej kosztowne do odtworzenia — jako jedyne pozostawały trwale
-     * poza jakąkolwiek kontrolą. Osobna pula dla plików dużych kosztuje kilka
-     * odczytów więcej, a usuwa całą tę martwą strefę.
+     * Stratified, because plain sampling with a size cap had a flaw the result does not show:
+     * files above the threshold entered the sample **never**. On a typical phone library that
+     * meant video recordings — the data most expensive to reproduce — were the only category
+     * permanently outside any checking at all. A separate pool for large files costs a few
+     * extra reads and removes that whole blind spot.
+     *
      */
     private suspend fun sample(size: Int): List<ScannedFile> {
         val exclusions = ExclusionRules(
@@ -113,8 +113,8 @@ class VerificationRunner(private val container: AppContainer) {
 
         val fromLarge = large.shuffled().take(size / LARGE_SHARE_DIVISOR)
 
-        // Niewykorzystaną część puli oddajemy drugiej warstwie zamiast zmniejszać
-        // próbkę: telefon bez dużych plików ma sprawdzać tyle samo, co każdy inny.
+        // The unused part of a pool goes to the other stratum rather than shrinking the
+        // sample: a phone with no large files should check as many as any other.
         return (fromLarge + small.shuffled().take(size - fromLarge.size)).shuffled()
     }
 
@@ -135,24 +135,24 @@ class VerificationRunner(private val container: AppContainer) {
         RoomJournal(container.database.log()).record(level, code, message)
 
     private companion object {
-        /** Limit serwera na jedno żądanie to 256 pozycji (§5.5). */
+        /** The server's limit for one request is 256 entries (§5.5). */
         const val DEFAULT_SAMPLE = 100
 
         /**
-         * Od tego rozmiaru file liczy się do puli „dużych".
+         * From this size a file counts towards the "large" pool.
          *
-         * Próg nie wyklucza z próbki, tylko rozdziela ją na dwie warstwy. Skrót liczy
-         * telefon **i** serwer, więc gdyby losowanie było jednorodne, jedna seria
-         * nagrań wideo zamieniłaby sprawdzenie w kilkuminutowy odczyt po obu stronach.
+         * The threshold does not exclude anything from the sample, it splits it into two strata.
+         * Both the phone **and** the server hash, so with uniform sampling one run of video
+         * recordings would turn the check into a multi-minute read on both sides.
          */
         const val LARGE_FILE_BYTES = 32L * 1024 * 1024
 
         /**
-         * Jaka część próbki jest zarezerwowana dla plików dużych — tutaj jedna piąta.
+         * What share of the sample is reserved for large files — here, one fifth.
          *
-         * Są rzadsze, ale zajmują większość miejsca. Udział proporcjonalny do liczby
-         * plików sprawiłby, że przy tysiącach zdjęć nagranie trafiałoby do próbki
-         * raz na kilkadziesiąt sprawdzeń.
+         * They are rarer but occupy most of the space. A share proportional to file count would
+         * mean that among thousands of photos a recording entered the sample once every few
+         * dozen checks.
          */
         const val LARGE_SHARE_DIVISOR = 5
     }

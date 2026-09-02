@@ -20,11 +20,11 @@ import java.io.IOException
 import java.nio.file.Path
 
 /**
- * Grupowanie małych plików w paczki (§5.4 protokołu, ADR-008).
+ * Grouping small files into bundles (protocol §5.4, ADR-008).
  *
- * Sedno tej optymalizacji to podział: co idzie paczką, co pojedynczo i co się dzieje,
- * gdy paczka częściowo zawiedzie. Pomyłka w którymkolwiek z tych miejsc albo gubi
- * files, albo wysyła je w kółko.
+ * The heart of this optimisation is the split: what goes in a bundle, what goes alone, and
+ * what happens when a bundle partly fails. A mistake in any of those either loses files or
+ * sends them over and over.
  */
 class BundlingTest {
 
@@ -53,7 +53,7 @@ class BundlingTest {
         SyncEngine(transport, queue, journal, config)
             .run("sesja", ManifestRequest.MODE_DELTA, files.asSequence(), nigdy)
 
-    // --- podział na paczki i pojedyncze żądania ---
+    // --- splitting into bundles and individual requests ---
 
     @Test
     fun `small files go in a bundle, large ones on their own`(@TempDir dir: Path) = runTest {
@@ -64,7 +64,7 @@ class BundlingTest {
         val outcome = run(male + duzy, SyncConfig(smallFileThreshold = 1_000))
 
         assertInstanceOf(SyncOutcome.Completed::class.java, outcome)
-        assertEquals(1, transport.bundles.size, "pięć małych plików to jedna paczka")
+        assertEquals(1, transport.bundles.size, "five small files make one bundle")
         assertEquals(5, transport.bundles.single().size)
         assertEquals(listOf("duzy.bin"), transport.putCalls.map { it.first })
     }
@@ -76,7 +76,7 @@ class BundlingTest {
 
         run(files, SyncConfig(smallFileThreshold = 1_000, bundleMaxBytes = 1_000))
 
-        // 400 B na file przy limicie 1000 B daje najwyżej dwa files na paczkę.
+        // 400 B per file against a 1000 B limit allows at most two files per bundle.
         assertEquals(3, transport.bundles.size)
         assertTrue(transport.bundles.all { it.size <= 2 }, "${transport.bundles}")
     }
@@ -94,8 +94,8 @@ class BundlingTest {
 
     @Test
     fun `a resumed file never goes into a bundle`(@TempDir dir: Path) = runTest {
-        // Paczka wysyła file w całości od zera. Wrzucenie do niej pliku, którego część
-        // serwer już ma, nadpisałoby postęp i zmarnowało dotychczasowy transfer.
+        // A bundle sends a file whole, from zero. Putting a file the server already holds
+        // part of into one would overwrite the progress and waste the transfer so far.
         setUp()
         val file = file(dir, "przerwany.bin", 500)
         transport.received["przerwany.bin"] = StringBuilder("x".repeat(200))
@@ -105,7 +105,7 @@ class BundlingTest {
 
         run(listOf(file), SyncConfig(smallFileThreshold = 1_000))
 
-        assertTrue(transport.bundles.isEmpty(), "file ze wznowieniem musi pójść przez PUT")
+        assertTrue(transport.bundles.isEmpty(), "a file with a resume point has to go by PUT")
         assertEquals(listOf(Triple("przerwany.bin", 200L, 300L)), transport.putCalls)
     }
 
@@ -121,7 +121,7 @@ class BundlingTest {
         assertEquals("x".repeat(3_000), transport.content("b.txt"))
     }
 
-    // --- częściowe niepowodzenie paczki ---
+    // --- partial bundle failure ---
 
     @Test
     fun `a rejected path inside a bundle is a permanent error`(@TempDir dir: Path) = runTest {
@@ -161,8 +161,8 @@ class BundlingTest {
 
     @Test
     fun `a file omitted from the response returns to the queue`(@TempDir dir: Path) = runTest {
-        // Serwer nie wspomniał o pliku, który wysłaliśmy. Uznanie tego za powodzenie
-        // byłoby cichą utratą — file zniknąłby z kolejki, nie trafiwszy na dysk.
+        // The server said nothing about a file we sent. Treating that as success would be
+        // silent loss — the file would vanish from the queue without reaching the disk.
         setUp()
         val a = file(dir, "a.txt", 10)
         val b = file(dir, "b.txt", 10)
@@ -180,8 +180,8 @@ class BundlingTest {
 
     @Test
     fun `a dropped connection returns the whole bundle to the queue`(@TempDir dir: Path) = runTest {
-        // Nie wiemy, ile plików serwer zdążył zapisać. Ponowna wysyłka niczego nie psuje,
-        // bo manifest i tak odsieje te, które już doszły.
+        // We do not know how many files the server managed to store. Re-sending breaks
+        // nothing, because the manifest will sift out the ones that arrived.
         setUp()
         val files = (1..4).map { file(dir, "p$it.txt", 10) }
         transport.bundleResponder = { ApiResult.Unreachable(IOException("zerwane")) }

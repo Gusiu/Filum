@@ -48,7 +48,7 @@ fun HomeScreen(
     ) {
         Text("Filum", style = MaterialTheme.typography.headlineMedium)
         Text(
-            "Kopia zapasowa telefonu na komputer. Serwer nigdy niczego nie usuwa.",
+            "A backup of this phone on your computer. The server never deletes anything.",
             style = MaterialTheme.typography.bodyMedium,
         )
 
@@ -61,24 +61,24 @@ fun HomeScreen(
                         style = MaterialTheme.typography.bodySmall,
                         fontFamily = FontFamily.Monospace,
                     )
-                    Text("W kolejce: ${state.pendingFiles} plików", style = MaterialTheme.typography.bodyMedium)
+                    Text("Queued: ${state.pendingFiles} files", style = MaterialTheme.typography.bodyMedium)
                     Text(describe(state.lastSession), style = MaterialTheme.typography.bodyMedium)
                 }
             }
         }
 
         if (!state.hasStorageAccess) {
-            // Bez pełnego dostępu skan zobaczy wyłącznie katalogi mediów, więc
-            // dokumenty i pobrane files nigdy nie trafiłyby do kopii (ADR-013).
+            // Without full access the scan sees only the media directories, so documents
+            // and downloads would never reach the backup (ADR-013).
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Brak dostępu do plików", style = MaterialTheme.typography.titleSmall)
+                    Text("No access to files", style = MaterialTheme.typography.titleSmall)
                     Text(
-                        "Filum potrzebuje dostępu do całej pamięci, żeby objąć kopią także " +
-                            "dokumenty i pobrane files, a nie tylko zdjęcia.",
+                        "Filum needs access to all storage so the backup can cover documents " +
+                            "and downloads too, not only photos.",
                         style = MaterialTheme.typography.bodySmall,
                     )
-                    Button(onClick = onRequestStorageAccess) { Text("Nadaj dostęp") }
+                    Button(onClick = onRequestStorageAccess) { Text("Grant access") }
                 }
             }
         }
@@ -92,7 +92,7 @@ fun HomeScreen(
         ) {
             if (running) {
                 CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                Text("  Pracuję…")
+                Text("  Working…")
             } else {
                 Text("Synchronizuj now")
             }
@@ -101,7 +101,7 @@ fun HomeScreen(
         state.lastError?.let { error ->
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text("Szczegóły", style = MaterialTheme.typography.titleSmall)
+                    Text("Details", style = MaterialTheme.typography.titleSmall)
                     Text(error, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
                 }
             }
@@ -114,16 +114,16 @@ fun HomeScreen(
         HorizontalDivider()
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Kontrola integralności", style = MaterialTheme.typography.titleSmall)
+            Text("Integrity check", style = MaterialTheme.typography.titleSmall)
             Text(
-                "Sprawdza, czy kopie na komputerze nadal odpowiadają plikom w telefonie. " +
-                    "Losowa próbka, uruchamiana ręcznie — sprawdzenie całej biblioteki " +
-                    "oznaczałoby odczyt całej pamięci po obu stronach.",
+                "Checks whether the copies on the computer still match the files on the phone. " +
+                    "A random sample, started by hand — checking the whole library would mean " +
+                    "reading all the storage on both sides.",
                 style = MaterialTheme.typography.bodySmall,
             )
 
             OutlinedButton(onClick = onVerify, enabled = !state.verifying && state.server != null) {
-                Text(if (state.verifying) "Sprawdzam…" else "Sprawdź próbkę")
+                Text(if (state.verifying) "Checking…" else "Check a sample")
             }
 
             state.verification?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
@@ -159,10 +159,10 @@ private fun ScheduleSelector(current: Schedule, onChange: (Schedule) -> Unit) {
 
         Text(
             when (current) {
-                Schedule.MANUAL -> "Kopia powstaje tylko po naciśnięciu przycisku."
+                Schedule.MANUAL -> "A backup is made only when you press the button."
                 Schedule.DAILY, Schedule.WEEKLY ->
-                    "Cykl automatyczny rusza przy ładowaniu i na sieci bez limitu danych. " +
-                        "Kończy się sam przed wyczerpaniem dobowego limitu pracy w tle."
+                    "The automatic cycle starts while charging and on an unmetered network. " +
+                        "It stops by itself before the daily background-work limit runs out."
             },
             style = MaterialTheme.typography.bodySmall,
         )
@@ -170,10 +170,10 @@ private fun ScheduleSelector(current: Schedule, onChange: (Schedule) -> Unit) {
 }
 
 /**
- * Wybór polityki wykrywania zmian (ADR-016).
+ * Choosing the change-detection policy (ADR-016).
  *
- * Opis mówi wprost, czego tryb szybki nie zauważy. Przełącznik bez tej informacji
- * byłby wyborem między „szybko" a „wolno", a to nie jest różnica, o którą tu chodzi.
+ * The description says outright what fast mode will miss. Without that, the switch would be
+ * a choice between "fast" and "slow", which is not the difference that matters here.
  */
 @Composable
 private fun IntegrityPolicySelector(current: IntegrityPolicy, onChange: (IntegrityPolicy) -> Unit) {
@@ -196,15 +196,15 @@ private fun IntegrityPolicySelector(current: IntegrityPolicy, onChange: (Integri
         Text(
             when (current) {
                 IntegrityPolicy.FAST ->
-                    "Plik uznajemy za zmieniony, gdy zmienił się jego rozmiar albo czas " +
-                        "modyfikacji. Skan nie czyta zawartości, więc jest szybki — ale " +
-                        "podmiana, która zachowała te dwie wartości, zostanie przeoczona."
+                    "A file counts as changed when its size or modification time changed. " +
+                        "The scan does not read file contents, so it is fast — but a substitution " +
+                        "that preserved those two values will go unnoticed."
 
                 IntegrityPolicy.THOROUGH ->
-                    "Każdy file jest liczony skrótem przy każdym skanie i porównywany " +
-                        "z zapisem serwera. Wykrywa podmianę zachowującą metadane. " +
-                        "Kosztuje odczyt całej biblioteki w każdym cyklu, więc trwa dłużej " +
-                        "i zużywa więcej baterii."
+                    "Every file is hashed on every scan and compared against the server's " +
+                        "record. This detects a substitution that preserved the metadata. " +
+                        "It costs reading the whole library every cycle, so it takes longer " +
+                        "and uses more battery."
             },
             style = MaterialTheme.typography.bodySmall,
         )
@@ -213,11 +213,11 @@ private fun IntegrityPolicySelector(current: IntegrityPolicy, onChange: (Integri
 
 private fun label(policy: IntegrityPolicy): String = when (policy) {
     IntegrityPolicy.FAST -> "Szybkie"
-    IntegrityPolicy.THOROUGH -> "Dokładne"
+    IntegrityPolicy.THOROUGH -> "Thorough"
 }
 
 private fun label(schedule: Schedule): String = when (schedule) {
-    Schedule.MANUAL -> "Ręcznie"
+    Schedule.MANUAL -> "Manual"
     Schedule.DAILY -> "Codziennie"
-    Schedule.WEEKLY -> "Co tydzień"
+    Schedule.WEEKLY -> "Weekly"
 }
