@@ -4,23 +4,23 @@ using Makaretu.Dns;
 namespace Filum.Server;
 
 /// <summary>
-/// Rozgłaszanie usługi w sieci lokalnej przez mDNS (§4.1 protokołu).
+/// Advertising the service on the local network over mDNS (protocol §4.1).
 ///
-/// Po co, skoro klient i tak trzyma zbiór tras i sam je odświeża (§4.4)? Bo ten
-/// mechanizm ma jedną lukę: aktualizuje się wyłącznie wtedy, gdy **choć jedna**
-/// zapisana trasa zadziała. Telefon, który nie był w domu przez tydzień zmiany
-/// routera i nie ma sieci nakładkowej, nie ma się od czego odbić.
+/// Why bother, when the client keeps a route set and refreshes it itself (§4.4)? Because
+/// that mechanism has one gap: it updates only when **at least one** stored route works.
+/// A phone that was away from home during the week the router changed, and has no overlay
+/// network, has nothing to bootstrap from.
 ///
-/// mDNS zamyka tę lukę: w tej samej sieci serwer da się znaleźć bez znajomości
-/// jego adresu, a odcisk klucza w rekordzie TXT pozwala od razu odrzucić cudze
-/// instancje, zanim w ogóle dojdzie do połączenia.
+/// mDNS closes that gap: on the same network the server can be found without knowing its
+/// address, and the key fingerprint in the TXT record rejects other people's instances
+/// before a connection is even attempted.
 /// </summary>
 public sealed class MdnsAdvertiser(
     FilumOptions options,
     CertificateStore certificates,
     ILogger<MdnsAdvertiser> logger) : IHostedService, IDisposable
 {
-    /// <summary>Typ usługi z §4.1. Nazwa jest częścią protokołu, nie może się zmienić.</summary>
+    /// <summary>The service type from §4.1. The name is part of the protocol and cannot change.</summary>
     public const string ServiceType = "_filum._tcp";
 
     private MulticastService? _multicast;
@@ -29,10 +29,10 @@ public sealed class MdnsAdvertiser(
     public string InstanceName => BuildInstanceName(certificates.Pin);
 
     /// <summary>
-    /// Nazwa instancji: <c>filum-</c> i osiem pierwszych znaków odcisku klucza.
+    /// The instance name: <c>filum-</c> plus the first eight characters of the key fingerprint.
     ///
-    /// Ten sam ciąg trafia do kodu parowania w polu <c>s</c>, więc telefon może
-    /// dopasować rozgłoszenie do serwera, z którym się sparował, jeszcze zanim
+    /// The same string goes into the pairing code's <c>s</c> field, so the phone can match
+    /// an advertisement to the server it paired with even before
     /// odczyta rekord TXT.
     /// </summary>
     public static string BuildInstanceName(string pin) => $"filum-{pin[..8]}";
@@ -41,7 +41,7 @@ public sealed class MdnsAdvertiser(
     {
         if (!options.EnableMdns)
         {
-            logger.LogInformation("Filum: rozgłaszanie mDNS wyłączone w konfiguracji");
+            logger.LogInformation("Filum: mDNS advertising disabled in configuration");
             return Task.CompletedTask;
         }
 
@@ -58,15 +58,15 @@ public sealed class MdnsAdvertiser(
             _discovery.Advertise(profile);
             _multicast.Start();
 
-            logger.LogInformation("Filum: rozgłaszam {Instance}.{Type} na porcie {Port}",
+            logger.LogInformation("Filum: advertising {Instance}.{Type} on port {Port}",
                                   InstanceName, ServiceType, options.Port);
         }
         catch (Exception ex)
         {
-            // Rozgłaszanie jest wygodą, nie warunkiem działania. Zapora, brak
-            // uprawnień do multicastu albo sieć bez jego obsługi nie mogą
-            // uniemożliwić przyjmowania kopii zapasowej.
-            logger.LogWarning(ex, "Filum: nie udało się uruchomić rozgłaszania mDNS; " +
+            // Advertising is a convenience, not a precondition. A firewall, missing
+            // multicast permissions or a network without multicast support must not
+            // stop the server from accepting a backup.
+            logger.LogWarning(ex, "Filum: could not start mDNS advertising; " +
                                   "telefon nadal znajdzie serwer po zapisanych adresach");
             Dispose();
         }

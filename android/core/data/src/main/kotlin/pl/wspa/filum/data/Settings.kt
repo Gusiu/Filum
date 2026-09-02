@@ -8,17 +8,17 @@ import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 import pl.wspa.filum.protocol.IntegrityPolicy
 
-/** Jak często aplikacja ma się budzić sama. */
+/** How often the application wakes itself. */
 enum class Schedule {
-    /** Wyłącznie po naciśnięciu przycisku. */
+    /** Only when the button is pressed. */
     MANUAL,
     DAILY,
     WEEKLY,
 }
 
 /**
- * Ustawienia użytkownika. Jeden wiersz — nie ma tu nic, co wymagałoby tabeli
- * kluczy i wartości, a jawny schemat lepiej znosi zmiany niż luźne pary.
+ * The user's settings. One row — there is nothing here that would need a key-value table,
+ * and an explicit schema survives change better than loose pairs.
  */
 @Entity(tableName = "settings")
 data class SettingsEntity(
@@ -26,20 +26,20 @@ data class SettingsEntity(
     val schedule: Schedule = Schedule.MANUAL,
 
     /**
-     * Cykl automatyczny wymaga ładowania i sieci nielimitowanej (§3.6 architektury).
-     * Wyłączenie tych warunków jest możliwe, ale to świadoma decyzja użytkownika —
-     * wysłanie całej biblioteki przez sieć komórkową nie ma się zdarzyć przypadkiem.
+     * The automatic cycle requires charging and an unmetered network (architecture §3.6).
+     * These conditions can be turned off, but that is a deliberate decision by the user —
+     * uploading a whole library over cellular is not to happen by accident.
      */
     val requireCharging: Boolean = true,
     val unmeteredOnly: Boolean = true,
 
     /**
-     * Jak wykrywamy zmianę pliku (ADR-016).
+     * How we detect that a file changed (ADR-016).
      *
-     * Domyślnie tryb szybki, bo tryb dokładny czyta całą bibliotekę przy każdym cyklu
-     * i na dużym zbiorze bywa kosztowny. Włączenie go jest świadomym wyborem, tak samo
-     * jak wyłączenie warunków powyżej — z tą różnicą, że tutaj płaci się czasem,
-     * a zyskuje wykrywalność podmiany zachowującej metadane.
+     * Fast mode by default, because thorough mode reads the whole library on every cycle
+     * and on a large set that gets expensive. Turning it on is a deliberate choice, just as
+     * turning off the conditions above is — with the difference that here you pay in time
+     * and gain the ability to detect a metadata-preserving substitution.
      */
     val integrityPolicy: IntegrityPolicy = IntegrityPolicy.FAST,
 ) {

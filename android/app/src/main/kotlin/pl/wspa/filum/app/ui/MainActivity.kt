@@ -33,8 +33,8 @@ class MainActivity : ComponentActivity() {
                 val log by model.log.collectAsState()
                 val running by model.running.collectAsState()
 
-                // Uprawnienie do całej pamięci nadaje się w ustawieniach systemu,
-                // poza aplikacją, więc po powrocie trzeba odczytać jego stan na nowo.
+                // Full storage access is granted in the system settings, outside the
+                // application, so its state has to be re-read on return.
                 LaunchedEffect(Unit) { model.refresh() }
 
                 Scaffold { insets ->
@@ -77,8 +77,8 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * MANAGE_EXTERNAL_STORAGE nie jest zwykłym uprawnieniem czasu wykonania — użytkownik
-     * nadaje je w osobnym ekranie ustawień systemu (ADR-013).
+     * MANAGE_EXTERNAL_STORAGE is not an ordinary runtime permission — the user grants it on a
+     * separate system settings screen (ADR-013).
      */
     private fun openStorageAccessSettings() {
         val intent = Intent(

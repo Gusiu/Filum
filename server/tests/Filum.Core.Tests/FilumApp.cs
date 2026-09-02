@@ -15,9 +15,9 @@ using Microsoft.Extensions.Hosting;
 namespace Filum.Core.Tests;
 
 /// <summary>
-/// Podstawiony dostęp do certyfikatu klienta. TestServer nie zestawia prawdziwego TLS,
-/// więc bez tego logiki autoryzacji nie dałoby się przetestować bez uruchamiania
-/// serwera z siecią.
+/// A stubbed way of reaching the client certificate. TestServer does not establish real
+/// TLS, so without this the authorisation logic could not be tested without running the
+/// server with a network.
 /// </summary>
 public sealed class StubClientCertificateProvider : IClientCertificateProvider
 {
@@ -27,9 +27,9 @@ public sealed class StubClientCertificateProvider : IClientCertificateProvider
 }
 
 /// <summary>
-/// TestServer nie ustawia adresu zdalnego, a panel i zasoby administracyjne wpuszczają
-/// wyłącznie połączenia z pętli zwrotnej. Podstawiamy adres, zamiast rozluźniać warunek
-/// w kodzie produkcyjnym — dzięki temu da się też sprawdzić, co widzi obce urządzenie.
+/// TestServer sets no remote address, while the panel and the administrative resources
+/// admit loopback connections only. We substitute the address rather than loosening the
+/// condition in production code — which also lets us check what a stranger's device sees.
 /// </summary>
 public sealed class RemoteAddressFilter(Func<IPAddress> address) : IStartupFilter
 {
@@ -44,7 +44,7 @@ public sealed class RemoteAddressFilter(Func<IPAddress> address) : IStartupFilte
     };
 }
 
-/// <summary>Serwer uruchomiony w pamięci, na własnym katalogu tymczasowym.</summary>
+/// <summary>The server running in memory, on a temporary directory of its own.</summary>
 public sealed class FilumApp : WebApplicationFactory<Program>
 {
     private readonly TempRoot _root = new();
@@ -52,12 +52,12 @@ public sealed class FilumApp : WebApplicationFactory<Program>
 
     public string Root => _root.Path;
 
-    /// <summary>Adres, z którego rzekomo przychodzą żądania. Domyślnie pętla zwrotna.</summary>
+    /// <summary>The address requests supposedly come from. Loopback by default.</summary>
     public IPAddress RemoteAddress { get; set; } = IPAddress.Loopback;
 
     public StubClientCertificateProvider Certificates { get; } = new();
 
-    /// <summary>Certyfikat klienta użyty w parowaniu — odpowiednik klucza z Android Keystore.</summary>
+    /// <summary>The client certificate used in pairing — the counterpart of the Android Keystore key.</summary>
     public X509Certificate2 ClientCertificate { get; } = CertificateStore.InMemory().Certificate;
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -66,12 +66,12 @@ public sealed class FilumApp : WebApplicationFactory<Program>
         builder.UseSetting("Filum:ConfigDirectory", _config.Path);
         builder.UseSetting("Filum:ManifestBatch", "3");
 
-        // Bez tego każda instancja testowa zajmowałaby gniazda multicastu, a kilka
-        // naraz wchodzi sobie w drogę. Rozgłaszanie sprawdzamy osobno, na żywym serwerze.
+        // Without this every test instance would claim multicast sockets, and several at
+        // once get in each other's way. Advertising is tested separately, on a live server.
         builder.UseSetting("Filum:EnableMdns", "false");
 
-        // Testy zasobów HTTP sprawdzają parsowanie nagłówków i kody odpowiedzi;
-        // politykę integralności ma własny zestaw, który włącza wymóg jawnie.
+        // The HTTP resource tests check header parsing and response codes; the integrity
+        // policy has a suite of its own, which turns the requirement on explicitly.
         builder.UseSetting("Filum:RequireDigest", "false");
 
         builder.ConfigureServices(services =>
@@ -86,11 +86,11 @@ public sealed class FilumApp : WebApplicationFactory<Program>
     private string? _slug;
 
     /// <summary>
-    /// Przechodzi pełny przebieg parowania przez HTTP i zwraca nazwę katalogu urządzenia.
+    /// Runs the full pairing exchange over HTTP and returns the device directory name.
     ///
-    /// Wynik jest zapamiętywany, bo serwer ogranicza parowanie do 5 prób na 15 minut
-    /// z jednego adresu (§3.3). Parowanie w konstruktorze każdego testu wyczerpywałoby
-    /// ten limit — co zresztą wyszło przy pierwszym uruchomieniu tych testów.
+    /// The result is remembered, because the server limits pairing to 5 attempts per 15
+    /// minutes from one address (§3.3). Pairing in every test's constructor would exhaust
+    /// that limit — as it duly did the first time these tests were run.
     /// </summary>
     public async Task<string> PairAsync(string label = "Galaxy S24 Ultra")
     {

@@ -6,11 +6,11 @@ using System.Text.Json;
 namespace Filum.Core.Tests;
 
 /// <summary>
-/// Odczyt paczki małych plików (§5.4 protokołu, ADR-008).
+/// Reading a bundle of small files (protocol §5.4, ADR-008).
 ///
-/// Ramkowanie jest binarne, więc jedyne, co naprawdę może pójść nie tak, to granice:
-/// przesunięcie o bajt sprawia, że nagłówek następnego pliku czytamy ze środka
-/// zawartości poprzedniego. Testy celują właśnie w to.
+/// The framing is binary, so the one thing that can genuinely go wrong is the boundaries:
+/// slip by a byte and the next file's header gets read from the middle of the previous
+/// file's content. That is what these tests aim at.
 /// </summary>
 public class BundleReaderTests
 {
@@ -18,7 +18,7 @@ public class BundleReaderTests
 
     private static string Digest(byte[] content) => Convert.ToHexStringLower(SHA256.HashData(content));
 
-    /// <summary>Buduje paczkę w postaci, w jakiej wysyła ją klient.</summary>
+    /// <summary>Builds a bundle in the form the client sends it.</summary>
     private static byte[] Bundle(params (string Path, string Content, string? Digest)[] files)
     {
         using var stream = new MemoryStream();
@@ -51,7 +51,7 @@ public class BundleReaderTests
         Reader(h).ReadAsync(Harness.Slug, new MemoryStream(bundle), CancellationToken.None);
 
     [Fact]
-    public async Task PaczkaZKilkomaPlikami_ZapisujeWszystkie()
+    public async Task ABundleOfSeveralFiles_StoresThemAll()
     {
         using var h = new Harness();
 
@@ -68,10 +68,10 @@ public class BundleReaderTests
     }
 
     [Fact]
-    public async Task GranicePlikowSaZachowane_ZawartoscNieWyciekaMiedzyNimi()
+    public async Task FileBoundariesHold_ContentDoesNotLeakBetweenThem()
     {
-        // Przesunięcie o jeden bajt objawiłoby się właśnie tutaj: drugi plik dostałby
-        // ogon pierwszego, a trzeci nagłówek czytalibyśmy ze środka danych.
+        // A one-byte slip would show up right here: the second file would get the tail of
+        // the first, and the third header would be read from the middle of the data.
         using var h = new Harness();
 
         await ReadAsync(h, Bundle(
@@ -85,7 +85,7 @@ public class BundleReaderTests
     }
 
     [Fact]
-    public async Task PustaPaczka_JestPoprawna()
+    public async Task AnEmptyBundle_IsValid()
     {
         using var h = new Harness();
 
@@ -93,7 +93,7 @@ public class BundleReaderTests
     }
 
     [Fact]
-    public async Task CzasModyfikacjiJestOdtwarzany()
+    public async Task ModificationTimeIsRestored()
     {
         using var h = new Harness();
 
@@ -102,22 +102,22 @@ public class BundleReaderTests
         Assert.Equal(Mtime, h.StoredMtime("a.txt"));
     }
 
-    // --- częściowe powodzenie ---
+    // --- partial success ---
 
     [Fact]
-    public async Task ZlySkrot_OdrzucaJedenPlik_ANieCalaPaczke()
+    public async Task AWrongDigest_RejectsOneFile_NotTheWholeBundle()
     {
         using var h = new Harness();
 
         var results = await ReadAsync(h, Bundle(
             ("dobry.txt", "poprawna zawartosc", null),
-            ("zly.txt", "zawartosc", Digest(Encoding.UTF8.GetBytes("coś innego"))),
+            ("bad.txt", "content", Digest(Encoding.UTF8.GetBytes("something else"))),
             ("kolejny.txt", "tez poprawna", null)));
 
         Assert.True(results[0].Ok);
         Assert.False(results[1].Ok);
         Assert.Equal("digest_mismatch", results[1].Error);
-        Assert.True(results[2].Ok, "plik po odrzuconym musi dojść — ramki się nie przesunęły");
+        Assert.True(results[2].Ok, "the file after the rejected one must arrive — the frames did not slip");
 
         Assert.True(h.StoredExists("dobry.txt"));
         Assert.False(h.StoredExists("zly.txt"));
@@ -125,7 +125,7 @@ public class BundleReaderTests
     }
 
     [Fact]
-    public async Task OdrzuconaSciezka_NiePrzerywaPaczki()
+    public async Task ARejectedPath_DoesNotAbortTheBundle()
     {
         using var h = new Harness();
 
@@ -138,26 +138,26 @@ public class BundleReaderTests
         Assert.True(results[1].Ok);
     }
 
-    // --- niezmiennik I2: wersjonowanie działa też w paczce ---
+    // --- invariant I2: versioning applies inside a bundle too ---
 
     [Fact]
-    public async Task NowaWersjaPlikuWPaczce_OdkladaStaraKopie()
+    public async Task ANewVersionInsideABundle_FilesTheOldCopyAway()
     {
         using var h = new Harness();
-        h.Seed("notatka.txt", Harness.Bytes("stara wersja"), Mtime - 100);
+        h.Seed("note.txt", Harness.Bytes("old version"), Mtime - 100);
 
-        var results = await ReadAsync(h, Bundle(("notatka.txt", "nowa wersja", null)));
+        var results = await ReadAsync(h, Bundle(("note.txt", "new version", null)));
 
         Assert.True(results[0].Ok);
         Assert.NotNull(results[0].Versioned);
         Assert.Single(h.VersionFiles());
-        Assert.Equal("nowa wersja", Encoding.UTF8.GetString(h.ReadStored("notatka.txt")));
+        Assert.Equal("new version", Encoding.UTF8.GetString(h.ReadStored("note.txt")));
     }
 
-    // --- uszkodzone ramkowanie unieważnia całą paczkę ---
+    // --- broken framing invalidates the whole bundle ---
 
     [Fact]
-    public async Task UrwanyNaglowek_JestBledemCalejPaczki()
+    public async Task ATruncatedHeader_FailsTheWholeBundle()
     {
         using var h = new Harness();
 
@@ -165,34 +165,34 @@ public class BundleReaderTests
     }
 
     [Fact]
-    public async Task NiedorzecznaDlugoscNaglowka_JestOdrzucana()
+    public async Task AnAbsurdHeaderLength_IsRejected()
     {
         using var h = new Harness();
         var bundle = new byte[8];
         BinaryPrimitives.WriteUInt32BigEndian(bundle, 500_000);
 
         var error = await Assert.ThrowsAsync<BundleFormatException>(() => ReadAsync(h, bundle));
-        Assert.Contains("długość", error.Message);
+        Assert.Contains("length", error.Message);
     }
 
     [Fact]
-    public async Task NaglowekBezSkrotu_JestOdrzucany()
+    public async Task AHeaderWithoutADigest_IsRejected()
     {
-        // Skrót jest w paczce wymagany: bez niego nie wykrylibyśmy przesunięcia ramek,
-        // bo zawartość jednego pliku wyglądałaby jak poprawna zawartość innego.
+        // The digest is required inside a bundle: without it a frame slip would go
+        // unnoticed, because one file's content would look like another's, correctly.
         using var h = new Harness();
 
         var error = await Assert.ThrowsAsync<BundleFormatException>(
             () => ReadAsync(h, Bundle(("a.txt", "x", "nie-jest-skrotem"))));
 
-        Assert.Contains("skrótu", error.Message);
+        Assert.Contains("digest", error.Message);
     }
 
     [Fact]
-    public async Task NaglowekNieBedacyJsonem_JestOdrzucany()
+    public async Task AHeaderThatIsNotJson_IsRejected()
     {
         using var h = new Harness();
-        var junk = Encoding.UTF8.GetBytes("to nie jest json");
+        var junk = Encoding.UTF8.GetBytes("this is not json");
         var bundle = new byte[4 + junk.Length];
         BinaryPrimitives.WriteUInt32BigEndian(bundle, (uint)junk.Length);
         junk.CopyTo(bundle, 4);
@@ -203,7 +203,7 @@ public class BundleReaderTests
     // --- limity z odpowiedzi na ping ---
 
     [Fact]
-    public async Task PaczkaPrzekraczajacaLiczbePlikow_JestOdrzucana()
+    public async Task ABundleOverTheFileCount_IsRejected()
     {
         using var h = new Harness(o => o.BundleMaxCount = 2);
 
@@ -212,13 +212,29 @@ public class BundleReaderTests
     }
 
     [Fact]
-    public async Task PaczkaPrzekraczajacaRozmiar_JestOdrzucana()
+    public async Task ASingleFileOverTheBundleLimit_IsRejected()
     {
         using var h = new Harness(o => o.BundleMaxBytes = 100);
 
         var error = await Assert.ThrowsAsync<BundleFormatException>(
-            () => ReadAsync(h, Bundle(("duzy", new string('x', 200), null))));
+            () => ReadAsync(h, Bundle(("big", new string('x', 200), null))));
 
-        Assert.Contains("rozmiar", error.Message);
+        Assert.Contains("Invalid size", error.Message);
+    }
+
+    [Fact]
+    public async Task FilesAddingUpOverTheLimit_AreRejected()
+    {
+        // Each file on its own fits; together they do not. The running total is what
+        // catches this, and it had no test until the per-file guard above turned out
+        // to be the one firing for both cases.
+        using var h = new Harness(o => o.BundleMaxBytes = 100);
+
+        var error = await Assert.ThrowsAsync<BundleFormatException>(
+            () => ReadAsync(h, Bundle(
+                ("a", new string('x', 60), null),
+                ("b", new string('y', 60), null))));
+
+        Assert.Contains("exceeds", error.Message);
     }
 }

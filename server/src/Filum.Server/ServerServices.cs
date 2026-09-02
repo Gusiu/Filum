@@ -7,12 +7,12 @@ using Filum.Core;
 namespace Filum.Server;
 
 /// <summary>
-/// Liczniki plików i bajtów per urządzenie, prezentowane w odpowiedzi na ping
+/// Per-device file and byte counters, reported in the ping response
 /// i w panelu.
 ///
-/// Ping bierze udział w wyścigu tras (§4.2), więc musi być tani. Przechodzenie
-/// drzewa przy każdym wywołaniu byłoby nie do przyjęcia przy 100 tys. plików,
-/// dlatego wartość pochodzi z pamięci podręcznej, a odświeżenie idzie w tle
+/// Ping takes part in the route race (§4.2), so it has to be cheap. Walking the tree on
+/// every call would be unacceptable across a hundred thousand files, so the value comes
+/// from a cache and the refresh happens in the background
 /// i nigdy nie blokuje odpowiedzi.
 /// </summary>
 public sealed class DeviceStats(StoragePaths paths, ILogger<DeviceStats> logger)
@@ -24,7 +24,7 @@ public sealed class DeviceStats(StoragePaths paths, ILogger<DeviceStats> logger)
     private readonly ConcurrentDictionary<string, Entry> _cache = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, byte> _running = new(StringComparer.Ordinal);
 
-    /// <summary>Ostatnio policzone wartości; odświeża je w tle, gdy się zestarzały.</summary>
+    /// <summary>The last computed values; refreshed in the background once stale.</summary>
     public (long Count, long Bytes) For(string slug)
     {
         var entry = _cache.GetValueOrDefault(slug);
@@ -46,7 +46,7 @@ public sealed class DeviceStats(StoragePaths paths, ILogger<DeviceStats> logger)
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                logger.LogWarning(ex, "Nie udało się przeliczyć statystyk urządzenia {Slug}", slug);
+                logger.LogWarning(ex, "Could not recompute statistics for device {Slug}", slug);
             }
             finally
             {
@@ -73,9 +73,9 @@ public sealed class DeviceStats(StoragePaths paths, ILogger<DeviceStats> logger)
 }
 
 /// <summary>
-/// Adresy, pod którymi serwer sam siebie widzi. Trafiają do odpowiedzi na ping, dzięki
-/// czemu zbiór tras u klienta aktualizuje się sam (§4.4) — jedno udane połączenie
-/// dowolną drogą odświeża wszystkie pozostałe.
+/// The addresses the server sees itself under. They go into the ping response, which is
+/// what lets the client's route set update itself (§4.4) — one successful connection by
+/// any road refreshes all the others.
 /// </summary>
 public static class LocalEndpoints
 {

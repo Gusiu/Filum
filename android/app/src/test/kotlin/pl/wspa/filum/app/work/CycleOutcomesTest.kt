@@ -11,9 +11,9 @@ import pl.wspa.filum.sync.SyncOutcome
 /**
  * Decyzja o ponowieniu pracy w tle.
  *
- * Każdy z tych przypadków ma konkretną cenę, gdy zostanie pomylony: ponawianie
- * tam, gdzie nie trzeba, dobija się do wyłączonego serwera i zjada baterię;
- * brak ponowienia tam, gdzie było potrzebne, cicho porzuca kolejkę do następnej doby.
+ * Each of these cases has a concrete price when confused with another: retrying where it
+ * is not needed hammers at a switched-off server and eats the battery; not retrying where
+ * it was needed quietly abandons the queue until the next day.
  */
 class CycleOutcomesTest {
 
@@ -22,7 +22,7 @@ class CycleOutcomesTest {
     private fun done(outcome: SyncOutcome) = CycleResult.Done(outcome, endpoint)
 
     @Test
-    fun `ukonczony cykl konczy prace`() {
+    fun `a completed cycle finishes the work`() {
         assertEquals(
             WorkerDecision.SUCCESS,
             CycleOutcomes.decide(done(SyncOutcome.Completed(filesSent = 12, bytesSent = 4096))),
@@ -30,9 +30,9 @@ class CycleOutcomesTest {
     }
 
     @Test
-    fun `wyczerpany budzet nie jest bledem`() {
-        // Limit jest dobowy. Ponawianie za piętnaście minut nic nie zmieni,
-        // a kolejka i tak czeka na następne okno.
+    fun `an exhausted budget is not an error`() {
+        // The limit is daily. Retrying in fifteen minutes changes nothing, and the
+        // queue waits for the next window anyway.
         assertEquals(
             WorkerDecision.SUCCESS,
             CycleOutcomes.decide(done(SyncOutcome.Interrupted(InterruptReason.BUDGET, 40, 900))),
@@ -40,7 +40,7 @@ class CycleOutcomesTest {
     }
 
     @Test
-    fun `zerwane polaczenie zasluguje na ponowienie`() {
+    fun `a dropped connection deserves a retry`() {
         assertEquals(
             WorkerDecision.RETRY,
             CycleOutcomes.decide(done(SyncOutcome.Interrupted(InterruptReason.CONNECTION, 3, 120))),
@@ -48,17 +48,17 @@ class CycleOutcomesTest {
     }
 
     @Test
-    fun `nieudane uzgodnienie manifestu jest ponawiane`() {
+    fun `a failed manifest exchange is retried`() {
         assertEquals(
             WorkerDecision.RETRY,
-            CycleOutcomes.decide(done(SyncOutcome.Failed("serwer odrzucił manifest"))),
+            CycleOutcomes.decide(done(SyncOutcome.Failed("the server refused the manifest"))),
         )
     }
 
     @Test
-    fun `brak trasy jest ponawiany`() {
-        // Serwer bywa po prostu wyłączony. Wycofanie wykładnicze WorkManagera
-        // sprawia, że kolejne próby nie są kosztowne.
+    fun `no route is retried`() {
+        // The server is sometimes simply switched off. WorkManager's exponential
+        // backoff keeps the subsequent attempts cheap.
         assertEquals(
             WorkerDecision.RETRY,
             CycleOutcomes.decide(CycleResult.NoRoute(listOf("192.168.1.10:8765: brak odpowiedzi"))),
@@ -66,9 +66,9 @@ class CycleOutcomesTest {
     }
 
     @Test
-    fun `brak sparowania konczy prace niepowodzeniem`() {
-        // To jedyny przypadek, w którym ponawianie jest bezcelowe: potrzebna jest
-        // decyzja użytkownika, a nie kolejna próba.
+    fun `not being paired ends the work in failure`() {
+        // The one case where retrying is pointless: what is needed is a decision from
+        // the user, not another attempt.
         assertEquals(WorkerDecision.FAILURE, CycleOutcomes.decide(CycleResult.NotPaired()))
     }
 }

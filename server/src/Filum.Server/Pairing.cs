@@ -7,7 +7,7 @@ using Filum.Core;
 
 namespace Filum.Server;
 
-/// <summary>Ładunek kodu QR z §3.3 protokołu. Nazwy pól są jednoliterowe, żeby kod QR pozostał gęsty.</summary>
+/// <summary>The QR payload from protocol §3.3. Single-letter field names keep the code dense.</summary>
 public sealed record QrPayload(
     [property: JsonPropertyName("n")] string Name,
     [property: JsonPropertyName("k")] string Key,
@@ -17,10 +17,10 @@ public sealed record QrPayload(
     [property: JsonPropertyName("s")] string Service);
 
 /// <summary>
-/// Tokeny parowania: jednorazowe, wygasające po 10 minutach (§3.3).
+/// Pairing tokens: single-use, expiring after 10 minutes (§3.3).
 ///
-/// Token jest jedynym sekretem chroniącym moment parowania — po nim tożsamość
-/// przejmuje przypięty klucz klienta i token przestaje mieć znaczenie.
+/// The token is the only secret protecting the moment of pairing — after that the pinned
+/// client key takes over as the identity and the token stops mattering.
 /// </summary>
 public sealed class PairingService(TimeProvider time)
 {
@@ -36,7 +36,7 @@ public sealed class PairingService(TimeProvider time)
         return token;
     }
 
-    /// <summary>Zużywa token. Zwraca false, gdy nieznany, już użyty albo wygasły.</summary>
+    /// <summary>Consumes a token. Returns false when it is unknown, already used or expired.</summary>
     public bool TryConsume(string token)
     {
         if (!_tokens.TryRemove(token, out var expiresAt)) return false;
@@ -61,8 +61,9 @@ public sealed class PairingService(TimeProvider time)
     }
 
     /// <summary>
-    /// Buduje ciąg do zakodowania w kodzie QR. Zawiera odcisk klucza serwera, więc telefon
-    /// po zeskanowaniu wie, komu ufać — i od tej chwili adres przestaje być tożsamością (ADR-006).
+    /// Builds the string to encode in the QR code. It carries the server's key fingerprint,
+    /// so after scanning the phone knows whom to trust — and from then on the address stops
+    /// being an identity (ADR-006).
     /// </summary>
     public static string Encode(QrPayload payload)
     {
@@ -72,9 +73,9 @@ public sealed class PairingService(TimeProvider time)
 }
 
 /// <summary>
-/// Ograniczenie częstotliwości parowania: 5 prób na 15 minut z jednego adresu (§3.3).
-/// Bez tego token 32-bajtowy byłby wprawdzie nie do zgadnięcia, ale sam zasób nadawałby się
-/// do zasypania serwera żądaniami.
+/// Pairing rate limit: 5 attempts per 15 minutes from one address (§3.3).
+/// Without it a 32-byte token would still be unguessable, but the resource itself would be
+/// a convenient way to flood the server with requests.
 /// </summary>
 public sealed class PairingRateLimiter(TimeProvider time)
 {

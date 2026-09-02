@@ -5,10 +5,10 @@ import kotlinx.serialization.Serializable
 
 /**
  * Modele wymiany z serwerem. Lustro `Filum.Protocol.Dtos` po stronie .NET —
- * nazwy pól są normatywne i opisane w docs/PROTOCOL.md.
+ * the field names are normative and described in docs/PROTOCOL.md.
  */
 
-/** Nagłówki i stałe protokołu. Jedno miejsce, żeby literały nie rozjechały się po kodzie. */
+/** Protocol headers and constants. One place, so the literals cannot drift apart. */
 object FilumHeaders {
     const val PATH = "X-Filum-Path"
     const val SIZE = "X-Filum-Size"
@@ -25,8 +25,8 @@ object Protocol {
 // --- parowanie (§3.3) ---
 
 /**
- * Ładunek zakodowany w kodzie QR. Nazwy pól są jednoliterowe, żeby kod QR pozostał gęsty
- * i dał się zeskanować bez celowania.
+ * The payload encoded in the QR code. Single-letter field names keep the code dense and
+ * scannable without careful aiming.
  */
 @Serializable
 data class QrPayload(
@@ -96,31 +96,33 @@ data class PingResponse(
 // --- POST /manifest (§5.2) ---
 
 /**
- * Pozycja manifestu. Jednoliterowe nazwy nie są tu ozdobnikiem: przy 100 tys. plików
- * i partiach po 2000 narzut samych nazw pól w JSON przestaje być pomijalny.
+ * A manifest entry. The single-letter names are not decoration: across a hundred thousand
+ * files in batches of two thousand, the cost of the field names alone stops being
+ * negligible.
  */
 /**
  * Polityka wykrywania zmian (ADR-016).
  *
- * Mieszka w protokole, a nie w silniku, bo rozstrzyga o kształcie manifestu: w trybie
- * dokładnym pozycja niesie skrót, w szybkim nie. Ustawienie użytkownika i pole na
- * drucie muszą znaczyć to samo, więc jest to jeden typ, a nie dwa zsynchronizowane.
+ * It lives in the protocol rather than the engine, because it decides the manifest's
+ * shape: in thorough mode an entry carries a digest, in fast mode it does not. The user's
+ * setting and the field on the wire have to mean the same thing, so this is one type
+ * rather than two kept in step.
  *
- * Wybór należy do użytkownika, bo oba tryby są uzasadnione i różnią się ceną, nie
- * poprawnością. Koszt trybu dokładnego zależy od wielkości biblioteki i szybkości
- * pamięci urządzenia — czyli od rzeczy, których aplikacja nie zna z góry.
+ * The choice belongs to the user, because both modes are justified and differ in cost
+ * rather than correctness. What thorough mode costs depends on the library's size and the
+ * device's storage speed — things the application cannot know in advance.
  */
 enum class IntegrityPolicy {
 
     /**
-     * Tożsamość z pary (rozmiar, czas modyfikacji) — ADR-002. Skan nie czyta zawartości
-     * plików, więc jest szybki, ale podmiana zachowująca metadane zostaje niezauważona.
+     * Identity from the (size, modification time) pair — ADR-002. The scan does not read file
+     * contents, so it is fast, but a metadata-preserving substitution goes unnoticed.
      */
     FAST,
 
     /**
-     * Skrót każdego pliku przy każdym skanie, zestawiany z rejestrem serwera. Wykrywa
-     * podmianę zachowującą metadane; kosztuje odczyt całej biblioteki w każdym cyklu.
+     * A digest of every file on every scan, compared against the server's ledger. It detects a
+     * metadata-preserving substitution; it costs reading the whole library every cycle.
      */
     THOROUGH,
 }
@@ -131,8 +133,8 @@ data class ManifestEntry(
     @SerialName("s") val size: Long,
     @SerialName("m") val mtime: Long,
     /**
-     * Skrót zawartości — tylko w trybie dokładnym (§5.2, ADR-016). W trybie szybkim
-     * pole nie jest wysyłane, bo jego policzenie wymaga odczytania każdego pliku.
+     * The content digest — thorough mode only (§5.2, ADR-016). In fast mode the field is not
+     * sent, because computing it requires reading every file.
      */
     @SerialName("d") val digest: String? = null,
 )
@@ -146,7 +148,7 @@ data class ManifestRequest(
     @SerialName("files") val files: List<ManifestEntry>,
 ) {
     companion object {
-        /** Sesja obejmuje komplet plików urządzenia; tylko wtedy serwer liczy sieroty. */
+        /** The session covers the device's complete file set; only then does the server compute orphans. */
         const val MODE_FULL = "full"
 
         /** Przyrost od poprzedniego skanu. */
@@ -162,8 +164,8 @@ data class NeededFile(
 )
 
 /**
- * Ścieżka odrzucona już na etapie manifestu. Dzięki temu klient oznacza plik jako trwale
- * nieudany bez marnowania osobnego żądania PUT tylko po to, żeby dostać 422.
+ * A path rejected at the manifest stage. It lets the client mark a file as permanently
+ * failed without wasting a separate PUT request just to receive a 422.
  */
 @Serializable
 data class RejectedFile(
@@ -177,9 +179,9 @@ data class ManifestResponse(
     @SerialName("needed") val needed: List<NeededFile> = emptyList(),
     @SerialName("rejected") val rejected: List<RejectedFile> = emptyList(),
     /**
-     * Ścieżki, dla których skrót nie zgadza się z zapisanym w rejestrze serwera mimo
-     * niezmienionych metadanych. Serwer wpisuje je również do `needed`, więc kopia
-     * zostanie uzupełniona; ta lista istnieje po to, żeby dało się to **odnotować**.
+     * Paths whose digest disagrees with the one recorded in the server's ledger, despite
+     * unchanged metadata. The server also places them in `needed`, so the copy will be
+     * brought up to date; this list exists so the client can **record** the fact.
      */
     @SerialName("divergent") val divergent: List<String> = emptyList(),
 )
@@ -209,7 +211,7 @@ data class BundleResponse(
     @SerialName("results") val results: List<BundleFileResult> = emptyList(),
 )
 
-/** Typ zawartości paczki. Ramkowanie binarne, nie multipart (§5.4). */
+/** The bundle content type. Binary framing, not multipart (§5.4). */
 object BundleContentType {
     const val VALUE = "application/vnd.filum.bundle"
 }
@@ -234,7 +236,7 @@ data class VerifyResponse(
     @SerialName("missing") val missing: List<String> = emptyList(),
 )
 
-// --- błędy (§6) ---
+// --- errors (§6) ---
 
 @Serializable
 data class ErrorResponse(
@@ -244,9 +246,9 @@ data class ErrorResponse(
 )
 
 /**
- * Rozróżnienie błędów przejściowych od trwałych. Bez niego plik odrzucony przez 422
- * wracałby do kolejki w nieskończoność, a serwer chwilowo zajęty zostałby porzucony
- * na zawsze — obie pomyłki są kosztowne.
+ * Telling transient errors from permanent ones. Without it, a file rejected with 422 would
+ * return to the queue forever, while a momentarily busy server would be abandoned for
+ * good — both mistakes are expensive.
  */
 enum class FailureKind { TRANSIENT, PERMANENT }
 

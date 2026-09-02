@@ -4,17 +4,17 @@ import kotlinx.serialization.json.Json
 import java.util.Base64
 
 /**
- * Odczyt ładunku parowania z kodu QR albo z wklejonego ciągu (§3.3 protokołu).
+ * Parsing the pairing payload from a QR code or a pasted string (protocol §3.3).
  *
- * Ładunek niesie odcisk klucza serwera, więc od chwili sparowania adres przestaje być
- * tożsamością (ADR-006). To dlatego parowanie musi przejść dokładnie ten jeden raz —
- * potem telefon rozpoznaje serwer niezależnie od tego, którą trasą go zastanie.
+ * The payload carries the server's key fingerprint, so from the moment of pairing the
+ * address stops being an identity (ADR-006). That is why pairing has to succeed exactly
+ * this once — afterwards the phone recognises the server by whatever route it finds it.
  */
 object PairingCode {
 
     const val PREFIX = "filum1:"
 
-    /** Długość odcisku: base64url z SHA-256 bez dopełnienia. */
+    /** Fingerprint length: base64url of SHA-256 without padding. */
     private const val PIN_LENGTH = 43
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -28,19 +28,19 @@ object PairingCode {
         val trimmed = raw.trim()
 
         if (!trimmed.startsWith(PREFIX)) {
-            return Result.Invalid("Kod nie zaczyna się od \"$PREFIX\".")
+            return Result.Invalid("The code does not start with \"$PREFIX\".")
         }
 
         val decoded = try {
             String(decodeBase64Url(trimmed.removePrefix(PREFIX)), Charsets.UTF_8)
         } catch (e: IllegalArgumentException) {
-            return Result.Invalid("Uszkodzone kodowanie kodu parowania.")
+            return Result.Invalid("Broken encoding in the pairing code.")
         }
 
         val payload = try {
             json.decodeFromString<QrPayload>(decoded)
         } catch (e: Exception) {
-            return Result.Invalid("Kod parowania ma nieznaną strukturę.")
+            return Result.Invalid("The pairing code has an unrecognised structure.")
         }
 
         return validate(payload)
@@ -48,22 +48,22 @@ object PairingCode {
 
     private fun validate(payload: QrPayload): Result = when {
         payload.key.length != PIN_LENGTH ->
-            Result.Invalid("Odcisk klucza serwera ma ${payload.key.length} znaków zamiast $PIN_LENGTH.")
+            Result.Invalid("The server key fingerprint is ${payload.key.length} characters instead of $PIN_LENGTH.")
 
         payload.token.isBlank() ->
-            Result.Invalid("Brak tokenu parowania.")
+            Result.Invalid("No pairing token.")
 
         payload.port !in 1..65_535 ->
-            Result.Invalid("Port ${payload.port} jest poza zakresem.")
+            Result.Invalid("Port ${payload.port} is out of range.")
 
         payload.addresses.isEmpty() ->
-            Result.Invalid("Kod nie zawiera żadnego adresu serwera.")
+            Result.Invalid("The code contains no server address.")
 
         else -> Result.Ok(payload)
     }
 
     /**
-     * Dopełnienie dokładamy sami, bo protokół używa base64url bez niego, a dekoder
+     * We add the padding ourselves, because the protocol uses base64url without it and the decoder
      * z biblioteki standardowej bywa co do tego wybredny.
      */
     private fun decodeBase64Url(value: String): ByteArray {
@@ -71,7 +71,7 @@ object PairingCode {
             2 -> "$value=="
             3 -> "$value="
             0 -> value
-            else -> throw IllegalArgumentException("niepoprawna długość base64url")
+            else -> throw IllegalArgumentException("invalid base64url length")
         }
         return Base64.getUrlDecoder().decode(padded)
     }

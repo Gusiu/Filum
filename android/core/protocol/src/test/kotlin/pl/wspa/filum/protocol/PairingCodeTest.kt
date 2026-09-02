@@ -7,11 +7,11 @@ import org.junit.jupiter.api.Test
 import java.util.Base64
 
 /**
- * Odczyt kodu parowania (§3.3 protokołu).
+ * Parsing the pairing code (protocol §3.3).
  *
- * Kod QR jest jedynym momentem, w którym telefon dowiaduje się, komu ufać. Przyjęcie
- * uszkodzonego albo podmienionego ładunku oznaczałoby wysyłanie kopii zapasowej pod
- * cudzy adres, więc walidacja jest tu celowo restrykcyjna.
+ * The QR code is the one moment at which the phone learns whom to trust. Accepting a
+ * corrupted or substituted payload would mean uploading the backup to somebody else's
+ * address, so the validation here is deliberately strict.
  */
 class PairingCodeTest {
 
@@ -36,7 +36,7 @@ class PairingCodeTest {
     }
 
     @Test
-    fun `poprawny kod jest odczytany w calosci`() {
+    fun `a valid code is parsed in full`() {
         val result = PairingCode.parse(payload())
 
         val ok = assertInstanceOf(PairingCode.Result.Ok::class.java, result)
@@ -49,17 +49,17 @@ class PairingCodeTest {
     }
 
     @Test
-    fun `biale znaki wokol kodu sa tolerowane`() {
-        // Użytkownik wkleja ciąg ze schowka; nowa linia na końcu to norma, nie błąd.
+    fun `whitespace around the code is tolerated`() {
+        // The user pastes the string from the clipboard; a trailing newline is normal, not an error.
         val result = PairingCode.parse("  ${payload()}\n")
 
         assertInstanceOf(PairingCode.Result.Ok::class.java, result)
     }
 
     @Test
-    fun `nieznane pola nie psuja odczytu`() {
-        // Serwer w nowszej wersji może dołożyć pole; stary klient ma to przeżyć,
-        // bo inaczej aktualizacja serwera zerwałaby parowanie na wszystkich telefonach.
+    fun `unknown fields do not break parsing`() {
+        // A newer server may add a field; an older client has to survive that, or updating
+        // the server would break pairing on every phone at once.
         val withExtra = code(
             """{"n":"DESKTOP-PC","k":"$poprawnyPin","t":"T","p":8765,"a":["10.0.0.1:8765"],"s":"x","nowe":42}"""
         )
@@ -68,65 +68,65 @@ class PairingCodeTest {
     }
 
     @Test
-    fun `brak prefiksu jest odrzucany`() {
+    fun `a missing prefix is rejected`() {
         assertTrue(assertInvalid("https://example.com").contains("filum1:"))
     }
 
     @Test
-    fun `uszkodzone kodowanie jest odrzucane`() {
-        assertTrue(assertInvalid(PairingCode.PREFIX + "!!!nie-base64!!!").contains("kodowanie"))
+    fun `broken encoding is rejected`() {
+        assertTrue(assertInvalid(PairingCode.PREFIX + "!!!not-base64!!!").contains("encoding"))
     }
 
     @Test
-    fun `tresc niebedaca ladunkiem parowania jest odrzucana`() {
-        assertTrue(assertInvalid(code("""{"cos":"innego"}""")).contains("strukturę"))
+    fun `content that is not a pairing payload is rejected`() {
+        assertTrue(assertInvalid(code("""{"something":"else"}""")).contains("structure"))
     }
 
     @Test
-    fun `odcisk klucza o zlej dlugosci jest odrzucany`() {
-        // 43 znaki to base64url z SHA-256. Krótszy odcisk oznacza albo uszkodzony kod,
-        // albo próbę podstawienia słabszego identyfikatora.
-        assertTrue(assertInvalid(payload(key = "za-krotki")).contains("Odcisk"))
+    fun `a key fingerprint of the wrong length is rejected`() {
+        // 43 characters is base64url of SHA-256. A shorter fingerprint means either a
+        // damaged code or an attempt to substitute a weaker identifier.
+        assertTrue(assertInvalid(payload(key = "too-short")).contains("fingerprint"))
     }
 
     @Test
-    fun `pusty token jest odrzucany`() {
+    fun `an empty token is rejected`() {
         assertTrue(assertInvalid(payload(token = "")).contains("token"))
     }
 
     @Test
-    fun `port poza zakresem jest odrzucany`() {
+    fun `a port out of range is rejected`() {
         assertTrue(assertInvalid(payload(port = 0)).contains("Port"))
         assertTrue(assertInvalid(payload(port = 70_000)).contains("Port"))
     }
 
     @Test
-    fun `kod bez adresow jest odrzucany`() {
-        assertTrue(assertInvalid(payload(addresses = "[]")).contains("adresu"))
+    fun `a code with no addresses is rejected`() {
+        assertTrue(assertInvalid(payload(addresses = "[]")).contains("address"))
     }
 }
 
-/** Klasyfikacja błędów HTTP (§6 protokołu). */
+/** Classification of HTTP errors (protocol §6). */
 class HttpStatusTest {
 
     @Test
-    fun `bledy przejsciowe nadaja sie do ponowienia`() {
+    fun `transient errors are worth retrying`() {
         for (code in listOf(HttpStatus.TOO_MANY_REQUESTS, HttpStatus.SERVICE_UNAVAILABLE, 500, 502)) {
             assertEquals(FailureKind.TRANSIENT, HttpStatus.classify(code), "kod $code")
         }
     }
 
     @Test
-    fun `bledy trwale nie wracaja do kolejki`() {
-        // Plik odrzucony przez 422 wracałby w nieskończoność, gdyby nie to rozróżnienie.
+    fun `permanent errors do not return to the queue`() {
+        // A file rejected with 422 would return forever were it not for this distinction.
         for (code in listOf(HttpStatus.BAD_REQUEST, HttpStatus.UNPROCESSABLE, HttpStatus.FORBIDDEN)) {
             assertEquals(FailureKind.PERMANENT, HttpStatus.classify(code), "kod $code")
         }
     }
 
     @Test
-    fun `brak miejsca na serwerze jest przejsciowy`() {
-        // Użytkownik może zwolnić miejsce; to nie jest wada pliku.
+    fun `no space on the server is transient`() {
+        // The user can free up space; this is not a defect in the file.
         assertEquals(FailureKind.TRANSIENT, HttpStatus.classify(HttpStatus.INSUFFICIENT_STORAGE))
     }
 }

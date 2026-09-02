@@ -4,20 +4,20 @@ using System.Security.Cryptography.X509Certificates;
 namespace Filum.Core;
 
 /// <summary>
-/// Certyfikat serwera i wyliczanie odcisków kluczy (§3.1 protokołu, ADR-005).
+/// The server certificate and key fingerprint computation (protocol §3.1, ADR-005).
 ///
-/// Filum nie używa urzędu certyfikacji. Certyfikat samopodpisany jest tu wyłącznie
-/// pojemnikiem na klucz publiczny — uwierzytelnienie polega na porównaniu odcisku
-/// klucza z zapamiętanym, po obu stronach połączenia.
+/// Filum uses no certificate authority. A self-signed certificate is purely a container
+/// for a public key here — authentication is a comparison of the key's fingerprint
+/// against a remembered one, on both ends of the connection.
 /// </summary>
 public sealed class CertificateStore
 {
     private const string Subject = "CN=Filum Server";
 
     /// <summary>
-    /// Ważność jest celowo bardzo długa. Przy przypięciu klucza data wygaśnięcia nie
-    /// niesie żadnej informacji o zaufaniu, a wygasły certyfikat zerwałby działającą
-    /// instalację bez powodu.
+    /// The validity period is deliberately very long. Under key pinning an expiry date
+    /// carries no information about trust, and an expired certificate would break a
+    /// working installation for no reason.
     /// </summary>
     private static readonly TimeSpan Validity = TimeSpan.FromDays(365 * 50);
 
@@ -38,8 +38,8 @@ public sealed class CertificateStore
     /// <summary>
     /// Wczytuje certyfikat albo tworzy go przy pierwszym uruchomieniu.
     ///
-    /// Plik NIE leży w katalogu backupu — ten bywa kopiowany na inny dysk albo
-    /// odtwarzany z kopii, więc klucz prywatny wyciekłby razem z danymi.
+    /// The file does NOT live in the backup directory — that gets copied to another disk
+    /// or restored from a copy, so the private key would travel with the data.
     /// </summary>
     public static CertificateStore LoadOrCreate(string configDirectory)
     {
@@ -59,7 +59,7 @@ public sealed class CertificateStore
         return new CertificateStore(created, path);
     }
 
-    /// <summary>Certyfikat trzymany tylko w pamięci — do testów.</summary>
+    /// <summary>A certificate held only in memory — for tests.</summary>
     public static CertificateStore InMemory() => new(Create(), path: "");
 
     private static X509Certificate2 Create()
@@ -76,15 +76,15 @@ public sealed class CertificateStore
         var now = DateTimeOffset.UtcNow;
         var certificate = request.CreateSelfSigned(now.AddDays(-1), now.Add(Validity));
 
-        // Na Windows klucz prywatny musi dać się przenieść do magazynu Kestrela,
-        // dlatego przechodzimy przez PKCS#12 zamiast używać obiektu wprost.
+        // On Windows the private key has to be transferable into Kestrel's store, which
+        // is why we go through PKCS#12 rather than using the object directly.
         return X509CertificateLoader.LoadPkcs12(
             certificate.Export(X509ContentType.Pkcs12), password: null, X509KeyStorageFlags.Exportable);
     }
 
     /// <summary>
-    /// Odcisk liczony z SubjectPublicKeyInfo, a nie z całego certyfikatu. Dzięki temu
-    /// przypięcie przetrwa wymianę certyfikatu przy zachowaniu tej samej pary kluczy.
+    /// The fingerprint is computed over SubjectPublicKeyInfo rather than the whole
+    /// certificate, so a pin survives replacing the certificate while keeping the key pair.
     /// </summary>
     public static string ComputePin(X509Certificate2 certificate) =>
         ToBase64Url(SHA256.HashData(certificate.PublicKey.ExportSubjectPublicKeyInfo()));

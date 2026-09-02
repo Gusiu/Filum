@@ -23,25 +23,25 @@ import pl.wspa.filum.sync.SyncTransport
 import java.io.File
 
 /**
- * Adaptery spinające silnik z konkretnymi technologiami.
+ * The adapters joining the engine to concrete technologies.
  *
- * Silnik operuje na własnych interfejsach (`:core:sync`), a tutaj podstawiamy pod nie
- * Room i OkHttp. To jedyne miejsce, które zna oba światy naraz — dzięki temu wymiana
- * którejkolwiek strony nie dotyka logiki decyzyjnej.
+ * The engine works against its own interfaces (`:core:sync`), and here we plug Room and
+ * OkHttp into them. This is the only place that knows both worlds at once, which is why
+ * replacing either side never touches the decision logic.
  */
 
 /**
  * Kolejka oparta o Room.
  *
- * Ścieżka kanoniczna jest kluczem głównym, więc ponowne dodanie tego samego pliku
- * w nowej wersji nadpisuje wpis: to ten sam plik po zmianie, a nie drugi plik.
+ * The canonical path is the primary key, so adding the same file again
+ * in a new version overwrites the entry: that is the same file after a change, not a second one.
  */
 class RoomSyncQueue(
     private val dao: FileEntryDao,
     private val clock: () -> Long = System::currentTimeMillis,
 ) : SyncQueue {
 
-    /** Ścieżka bezwzględna nie jest w bazie: wynika ze skanu i zmienia się z wolumenem. */
+    /** The absolute path is not in the database: it follows from the scan and changes with the volume. */
     private val absolutePaths = HashMap<String, String>()
 
     override suspend fun enqueue(files: List<ScannedFile>) {
@@ -58,8 +58,8 @@ class RoomSyncQueue(
             if (unchanged) {
                 existing!!
             } else {
-                // Zmiana rozmiaru albo mtime unieważnia dotychczasowy postęp:
-                // wznowienie skleiłoby dwie różne wersje pliku.
+                // A change of size or mtime invalidates the progress so far:
+                // resuming would splice two different versions of the file.
                 FileEntryEntity(
                     path = file.canonicalPath,
                     size = file.size,
@@ -118,7 +118,7 @@ class RoomSyncQueue(
         dao.countByState(FileState.PENDING) + dao.countByState(FileState.FAILED_TRANSIENT)
 }
 
-/** Dziennik w bazie, przycinany do dwustu ostatnich zdarzeń. */
+/** The journal in the database, trimmed to the last two hundred events. */
 class RoomJournal(
     private val dao: LogEventDao,
     private val clock: () -> Long = System::currentTimeMillis,
@@ -141,7 +141,7 @@ class RoomJournal(
     }
 }
 
-/** Rozmowa z serwerem związana z konkretną, wygraną w wyścigu trasą. */
+/** The conversation with the server, bound to the specific route that won the race. */
 class ApiSyncTransport(
     private val api: FilumApiClient,
     private val endpoint: ServerEndpoint,

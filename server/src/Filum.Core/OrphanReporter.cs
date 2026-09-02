@@ -5,27 +5,28 @@ using Filum.Protocol;
 namespace Filum.Core;
 
 /// <summary>
-/// Raport sierot: pliki obecne na serwerze, a nieobecne już na telefonie (§5.6, ADR-015).
+/// The orphan report: files present on the server and no longer on the phone (§5.6,
+/// ADR-015).
 ///
-/// Skoro serwer nigdy nic nie kasuje, przenoszenie plików w telefonie mnoży kopie,
-/// a dysk rośnie w nieskończoność. Raport daje użytkownikowi podstawę do decyzji —
-/// ale **jest wyłącznie informacyjny**. Ani serwer, ani klient niczego na jego
-/// podstawie nie usuwa; to naruszałoby niezmiennik I1.
+/// Since the server never deletes anything, moving files around on the phone multiplies
+/// copies and the disk grows without end. The report gives the user a basis for a decision
+/// — but it is **informational only**. Neither the server nor the client deletes anything
+/// on its basis; that would violate invariant I1.
 ///
-/// Sieroty są produktem ubocznym rekoncyliacji: liczymy je tylko dla sesji, która
-/// zgłosiła komplet plików urządzenia (<c>mode: full</c>). Sesja przyrostowa nie
-/// wie nic o plikach, o których nie wspomniała, więc różnica nie miałaby sensu.
+/// Orphans are a by-product of reconciliation: we compute them only for a session that
+/// reported the device's complete file set (<c>mode: full</c>). An incremental session
+/// knows nothing about the files it did not mention, so the difference would be meaningless.
 /// </summary>
 public sealed class OrphanReporter(StoragePaths paths)
 {
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
 
     /// <summary>
-    /// Dopisuje ścieżki zgłoszone w partii manifestu.
+    /// Appends the paths reported in one manifest batch.
     ///
-    /// Zapisujemy na dysk, a nie do pamięci: sesja obejmująca sto tysięcy plików
-    /// to pięćdziesiąt żądań rozłożonych w czasie, a serwer nie ma powodu trzymać
-    /// stanu między nimi — zwłaszcza takiego, który przepadnie przy restarcie.
+    /// Written to disk rather than kept in memory: a session covering a hundred thousand
+    /// files is fifty requests spread over time, and the server has no reason to hold state
+    /// between them — least of all state that would vanish on restart.
     /// </summary>
     public void RecordBatch(string slug, string session, IEnumerable<string> canonicalPaths)
     {
@@ -39,7 +40,7 @@ public sealed class OrphanReporter(StoragePaths paths)
     }
 
     /// <summary>
-    /// Domyka sesję: porównuje zgłoszone ścieżki z zawartością dysku i zapisuje raport.
+    /// Closes the session: compares the reported paths against the disk and writes the report.
     /// </summary>
     public OrphanReport Complete(string slug, string session)
     {
@@ -56,8 +57,8 @@ public sealed class OrphanReporter(StoragePaths paths)
             {
                 var stored = Path.GetRelativePath(extendedRoot, absolute).Replace(Path.DirectorySeparatorChar, '/');
 
-                // Porównujemy w postaci kanonicznej, bo manifest operuje wyłącznie na niej;
-                // to, co leży na dysku, przeszło sanityzację i wygląda inaczej.
+                // We compare in canonical form, because that is all the manifest deals in;
+                // what lies on disk has been through sanitisation and looks different.
                 var canonical = PathRules.Decode(stored);
                 if (reported.Contains(canonical)) continue;
 
@@ -90,7 +91,7 @@ public sealed class OrphanReporter(StoragePaths paths)
         }
     }
 
-    /// <summary>Najnowszy raport, jeśli jakikolwiek istnieje. Używane przez panel.</summary>
+    /// <summary>The most recent report, if any exists. Used by the panel.</summary>
     public OrphanReport? Latest(string slug)
     {
         var directory = LongPath.Extended(paths.MetaRoot(slug));
@@ -112,7 +113,7 @@ public sealed class OrphanReporter(StoragePaths paths)
         }
     }
 
-    /// <summary>Porzuca niedokończoną sesję — wywoływane przy sesji przyrostowej.</summary>
+    /// <summary>Abandons an unfinished session — called for an incremental session.</summary>
     public void Discard(string slug, string session) => Cleanup(slug, session);
 
     private HashSet<string> ReadReported(string slug, string session)
@@ -145,8 +146,8 @@ public sealed class OrphanReporter(StoragePaths paths)
         Path.Combine(paths.MetaRoot(slug), $"orphans-{Sanitize(session)}.json");
 
     /// <summary>
-    /// Identyfikator sesji pochodzi od klienta i trafia do nazwy pliku, więc musi
-    /// przejść przez sito. Bez tego wystarczyłaby sesja o nazwie <c>../../coś</c>.
+    /// The session identifier comes from the client and ends up in a filename, so it has to
+    /// be filtered. Without this, a session named <c>../../something</c> would be enough.
     /// </summary>
     private static string Sanitize(string session)
     {

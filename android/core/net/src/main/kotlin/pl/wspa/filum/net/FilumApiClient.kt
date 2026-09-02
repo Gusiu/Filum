@@ -30,11 +30,11 @@ import java.io.IOException
 import java.util.Base64
 
 /**
- * Zasoby protokołu opakowane w wywołania typowane (§5 dokumentu PROTOCOL.md).
+ * The protocol's resources wrapped in typed calls (§5 of PROTOCOL.md).
  *
- * Klient nie zna „adresu serwera" — każde wywołanie dostaje konkretną trasę, bo
- * ta sama instancja może w ciągu jednej sesji rozmawiać przez sieć lokalną,
- * a po zmianie sieci przez nakładkową (ADR-006).
+ * The client knows no "server address" — every call is given a specific route, because the
+ * same instance may talk over the local network during one session and over the overlay
+ * after a network change (ADR-006).
  */
 class FilumApiClient(
     private val http: OkHttpClient,
@@ -78,11 +78,11 @@ class FilumApiClient(
     }
 
     /**
-     * Wysyła fragment pliku. Ciało jest strumieniowane wprost z dysku — wczytanie
-     * czterogigabajtowego nagrania do pamięci zabiłoby proces przy pierwszym filmie.
+     * Sends a chunk of a file. The body is streamed straight from disk — loading a
+     * four-gigabyte recording into memory would kill the process on the first video.
      *
-     * @param digest skrót całego pliku; podawany tylko gdy plik idzie w jednym
-     *   przebiegu, bo przy wznowieniu klient musiałby odczytać go od początku (§9).
+     * @param digest the digest of the whole file, sent with every chunk including on resume,
+     *   because the server requires one on every request (§9.1, ADR-016).
      */
     suspend fun putFile(
         endpoint: ServerEndpoint,
@@ -108,10 +108,10 @@ class FilumApiClient(
     }
 
     /**
-     * Wysyła paczkę małych plików (§5.4).
+     * Sends a bundle of small files (§5.4).
      *
-     * Żądanie może się powieść **częściowo**: odpowiedź niesie wynik dla każdego pliku
-     * z osobna, bo jedna odrzucona ścieżka nie unieważnia pozostałych stu.
+     * The request may succeed **partially**: the response carries a result per file, because
+     * one rejected path does not invalidate the other hundred.
      */
     suspend fun putBundle(
         endpoint: ServerEndpoint,
@@ -126,10 +126,10 @@ class FilumApiClient(
     }
 
     /**
-     * Prosi serwer o sprawdzenie skrótów swoich kopii (§5.5).
+     * Asks the server to check the digests of its own copies (§5.5).
      *
-     * Operacja jest po stronie serwera kosztowna — liczy skróty plików z dysku —
-     * więc wywołuje ją wyłącznie świadoma decyzja użytkownika, nigdy cykl automatyczny.
+     * The operation is expensive on the server — it hashes files from disk — so only a
+     * deliberate decision by the user invokes it, never an automatic cycle.
      */
     suspend fun verify(
         endpoint: ServerEndpoint,
@@ -164,9 +164,9 @@ class FilumApiClient(
         return try {
             ApiResult.Ok(parse(body))
         } catch (e: Exception) {
-            // Poprawny kod odpowiedzi, ale ciało nie do odczytania — najczęściej
-            // oznacza, że po drugiej stronie nie ma wcale Filum, tylko cudza usługa.
-            ApiResult.Unreachable(IOException("Odpowiedź serwera nie da się odczytać: ${e.message}", e))
+            // A valid response code but an unreadable body — most often this means
+            // there is no Filum at the other end at all, but somebody else's service.
+            ApiResult.Unreachable(IOException("The server response cannot be read: ${e.message}", e))
         }
     }
 
@@ -176,7 +176,7 @@ class FilumApiClient(
         null
     }
 
-    /** Ścieżka kanoniczna w nagłówku: base64url bez dopełnienia (§5.3). */
+    /** The canonical path in the header: base64url without padding (§5.3). */
     private fun encodePath(canonicalPath: String): String =
         Base64.getUrlEncoder().withoutPadding().encodeToString(canonicalPath.toByteArray(Charsets.UTF_8))
 
@@ -188,22 +188,22 @@ class FilumApiClient(
             encodeDefaults = true
             explicitNulls = false
 
-            // Jawny `null` w polu, które ma wartość domyślną, ma znaczyć to samo co brak
-            // pola. Bez tego odpowiedź `{"divergent":null}` wywracała **całe** parsowanie
-            // manifestu, choć chodziło o pole opcjonalne i puste — jedna strona pomijała
-            // pole, druga wypisywała null, i to wystarczyło, żeby synchronizacja stanęła.
-            // Nieznane klucze już ignorujemy; nie ma powodu, żeby znany klucz z nullem
-            // był traktowany surowiej.
+            // An explicit `null` in a field with a default is to mean the same as the field
+            // being absent. Without this, the response `{"divergent":null}` wrecked the
+            // **whole** manifest parse over an optional, empty field — one side omitted the
+            // field, the other wrote null, and that was enough to stop the sync.
+            // Unknown keys are already ignored; there is no reason for a known key holding
+            // null to be treated more harshly.
             coerceInputValues = true
         }
     }
 }
 
 /**
- * Fragment pliku jako ciało żądania, czytany strumieniowo od zadanego przesunięcia.
+ * A chunk of a file as a request body, streamed from a given offset.
  *
- * Nie dziedziczymy po gotowym `asRequestBody`, bo ono zawsze wysyła cały plik —
- * a wznawianie polega właśnie na wysłaniu wyłącznie brakującego kawałka.
+ * We do not build on the ready-made `asRequestBody`, because that always sends the whole
+ * file — and resuming is precisely about sending only the missing piece.
  */
 internal class FileChunkBody(
     private val file: File,
@@ -220,7 +220,7 @@ internal class FileChunkBody(
             var skipped = 0L
             while (skipped < offset) {
                 val step = stream.skip(offset - skipped)
-                if (step <= 0) throw IOException("Nie udało się przewinąć pliku do $offset: ${file.name}")
+                if (step <= 0) throw IOException("Could not seek the file to $offset: ${file.name}")
                 skipped += step
             }
 
@@ -228,7 +228,7 @@ internal class FileChunkBody(
                 var remaining = length
                 while (remaining > 0) {
                     val written = source.read(sink.buffer, minOf(remaining, SEGMENT))
-                    if (written == -1L) throw IOException("Plik skrócił się w trakcie wysyłki: ${file.name}")
+                    if (written == -1L) throw IOException("The file shrank during upload: ${file.name}")
                     remaining -= written
                     sink.flush()
                 }

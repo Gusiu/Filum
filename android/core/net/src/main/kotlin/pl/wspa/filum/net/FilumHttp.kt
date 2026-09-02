@@ -8,24 +8,24 @@ import java.util.concurrent.TimeUnit
 import javax.net.SocketFactory
 
 /**
- * Źródło fabryk gniazd dla tras lokalnych.
+ * The source of socket factories for local routes.
  *
- * Gdy na telefonie działa VPN, cały ruch aplikacji domyślnie wchodzi w tunel i adres
- * `192.168.x.x` przestaje być osiągalny (§4.3 protokołu). Rozwiązaniem jest przypięcie
+ * When a VPN is running, all of the application's traffic enters the tunnel by default and
+ * `192.168.x.x` stops being reachable (protocol §4.3). The fix is to bind the socket; the
  * gniazda do konkretnego obiektu `Network` z `ConnectivityManager`. Implementacja
- * androidowa mieszka w `:core:net`, ale interfejs pozwala testować wyścig bez systemu.
+ * Android implementation lives in `:core:net`, but the interface lets the race be tested without it.
  */
 fun interface LocalNetworkBinder {
-    /** Zwraca fabrykę gniazd związaną z Wi-Fi albo `null`, gdy trzeba użyć trasy domyślnej. */
+    /** Returns a Wi-Fi-bound socket factory, or `null` when the default route must be used. */
     fun wifiSocketFactory(): SocketFactory?
 }
 
 /**
- * Klienci HTTP dla poszczególnych rodzajów tras.
+ * HTTP clients for the individual route kinds.
  *
- * Klientów jest więcej niż jeden nie dla wygody, tylko z konieczności: trasa lokalna
- * musi iść przypiętym gniazdem, a nakładkowa właśnie tunelem. Jeden klient nie może
- * robić obu rzeczy naraz.
+ * There is more than one client out of necessity rather than convenience: a local route has
+ * to go over a bound socket and an overlay route over the tunnel. One client cannot do both
+ * at once.
  */
 class FilumHttpClients(
     private val tls: TlsBundle,
@@ -41,15 +41,15 @@ class FilumHttpClients(
     }
 
     /**
-     * Klient dla danej trasy. Dla tras lokalnych próbujemy przypiętego gniazda,
-     * a gdy VPN działa w trybie blokującym ruch poza tunelem i przypięcie zawiedzie,
-     * po cichu wracamy do trasy domyślnej — użytkownik nie ma o czym być informowany,
-     * bo i tak zaraz wygra trasa nakładkowa (§4.3).
+     * The client for a given route. For local routes we try a bound socket, and when the VPN
+     * blocks traffic outside the tunnel and the binding fails, we quietly fall back to the
+     * default route — there is nothing to inform the user about, since the overlay route is
+     * about to win anyway (§4.3).
      */
     fun forKind(kind: EndpointKind): OkHttpClient =
         if (kind.isLocal) localBound ?: base else base
 
-    /** Klient do sondowania w wyścigu: krótki limit czasu, bez ponawiania. */
+    /** The client used for probing in the race: a short timeout, no retries. */
     fun forProbe(kind: EndpointKind): OkHttpClient =
         forKind(kind).newBuilder()
             .callTimeout(EndpointRacer.DEFAULT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
@@ -59,15 +59,15 @@ class FilumHttpClients(
     private fun build(socketFactory: SocketFactory?): OkHttpClient {
         val builder = OkHttpClient.Builder()
             .sslSocketFactory(tls.socketFactory, tls.trustManager)
-            // Bezpieczne wyłącznie razem z przypięciem klucza — patrz PinnedHostnameVerifier.
+            // Safe only together with key pinning — see PinnedHostnameVerifier.
             .hostnameVerifier(PinnedHostnameVerifier)
-            // Serwer jest samopodpisany i nowoczesny; nie ma powodu dopuszczać
-            // uzgodnień z czasów, gdy trzeba było obsługiwać stare pośredniki.
+            // The server is self-signed and modern; there is no reason to allow
+            // negotiations from the days of supporting ancient middleboxes.
             .connectionSpecs(listOf(ConnectionSpec.RESTRICTED_TLS))
             .connectTimeout(connectTimeoutSeconds, TimeUnit.SECONDS)
             .callTimeout(callTimeoutSeconds, TimeUnit.SECONDS)
-            // Transfer wielogigabajtowego pliku bywa wolny; nie chcemy zrywać
-            // połączenia tylko dlatego, że pojedynczy zapis trwa.
+            // Transferring a multi-gigabyte file can be slow; we do not want to drop
+            // the connection merely because a single write is taking a while.
             .writeTimeout(WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
@@ -78,7 +78,7 @@ class FilumHttpClients(
     }
 
     companion object {
-        /** Cały transfer jednego fragmentu; 0 oznaczałoby brak limitu, co maskuje zawieszenia. */
+        /** The whole transfer of one chunk; 0 would mean no limit, which hides hangs. */
         const val DEFAULT_CALL_TIMEOUT_SECONDS = 15L * 60
         const val DEFAULT_CONNECT_TIMEOUT_SECONDS = 10L
         const val WRITE_TIMEOUT_SECONDS = 120L

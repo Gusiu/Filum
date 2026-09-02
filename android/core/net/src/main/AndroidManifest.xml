@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Potrzebne do przypięcia gniazd do sieci Wi-Fi z pominięciem tunelu VPN (§4.3). -->
+    <!-- Needed to bind sockets to the Wi-Fi network, bypassing the VPN tunnel (§4.3). -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.INTERNET" />
 

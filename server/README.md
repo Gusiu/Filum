@@ -84,7 +84,7 @@ https://127.0.0.1:8765/
 ```
 
 It shows server status, free space, and the paired phones with their file counts, sizes
-and ledger state. Under `/parowanie` it draws a QR code for pairing another device.
+and ledger state. Under `/pairing` it draws a QR code for pairing another device.
 
 The panel is reachable **from loopback only** — it issues pairing tokens and shows the
 contents of the backup, so exposing it on the network would let a stranger's device

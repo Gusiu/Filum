@@ -4,7 +4,7 @@ using Filum.Core;
 
 namespace Filum.Core.Tests;
 
-/// <summary>Katalog tymczasowy sprzątany po teście.</summary>
+/// <summary>A temporary directory cleaned up after the test.</summary>
 public sealed class TempRoot : IDisposable
 {
     public string Path { get; } = System.IO.Path.Combine(
@@ -20,12 +20,12 @@ public sealed class TempRoot : IDisposable
         }
         catch (IOException)
         {
-            // Katalog tymczasowy — nieudane sprzątanie nie jest powodem do wywalenia testu.
+            // A temp directory — a failed cleanup is no reason to fail the test.
         }
     }
 }
 
-/// <summary>Złożony silnik składowania na katalogu tymczasowym, gotowy do użycia w teście.</summary>
+/// <summary>The storage engine assembled over a temp directory, ready for use in a test.</summary>
 public sealed class Harness : IDisposable
 {
     public const string Slug = "telefon";
@@ -38,10 +38,10 @@ public sealed class Harness : IDisposable
         {
             Root = _root.Path,
 
-            // Testy mechaniki transferu — wznawiania, przesunięć, wersjonowania —
-            // sprawdzają co innego niż politykę integralności i podawanie w każdym
-            // z nich skrótu tylko zaciemniałoby intencję. Sam wymóg ma własne testy
-            // w IntegrityTests, gdzie jest włączany jawnie.
+            // The transfer mechanics tests — resuming, offsets, versioning — are checking
+            // something other than the integrity policy, and supplying a digest in every
+            // one of them would only obscure the intent. The requirement itself has its own
+            // tests in IntegrityTests, where it is turned on explicitly.
             RequireDigest = false,
         };
         configure?.Invoke(Options);
@@ -70,7 +70,7 @@ public sealed class Harness : IDisposable
         return absolute;
     }
 
-    /// <summary>Wysyła fragment i zwraca wynik; skrót liczony automatycznie, gdy zażądany.</summary>
+    /// <summary>Sends a chunk and returns the outcome; the digest is computed on request.</summary>
     public Task<ChunkOutcome> WriteAsync(
         string canonicalPath, byte[] content, long size, long mtime, long offset, string? digest = null)
     {
@@ -78,11 +78,11 @@ public sealed class Harness : IDisposable
         return Transfers.WriteAsync(Slug, request, new MemoryStream(content), CancellationToken.None);
     }
 
-    /// <summary>Wysyła cały plik w jednym kawałku.</summary>
+    /// <summary>Sends a whole file in one piece.</summary>
     public Task<ChunkOutcome> WriteWholeAsync(string canonicalPath, byte[] content, long mtime, bool withDigest = false)
         => WriteAsync(canonicalPath, content, content.Length, mtime, 0, withDigest ? Digest(content) : null);
 
-    /// <summary>Kładzie plik bezpośrednio na dysku, z pominięciem transferu — do przygotowania stanu.</summary>
+    /// <summary>Puts a file straight on disk, bypassing the transfer — for setting up state.</summary>
     public void Seed(string canonicalPath, byte[] content, long mtime)
     {
         var target = TargetOf(canonicalPath);

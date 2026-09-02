@@ -16,10 +16,10 @@ import java.io.File
 import java.io.IOException
 
 /**
- * Atrapa kolejki: pełna implementacja w pamięci.
+ * A fake queue: a complete in-memory implementation.
  *
- * Zachowuje się jak Room — zapisy są trwałe w obrębie testu — więc sprawdzamy
- * prawdziwe przejścia stanów, a nie to, czy silnik wywołał odpowiednią metodę.
+ * It behaves like Room — writes persist within the test — so we check real state
+ * transitions rather than whether the engine called the right method.
  */
 class FakeQueue : SyncQueue {
 
@@ -129,9 +129,9 @@ class FakeJournal : SyncJournal {
 }
 
 /**
- * Atrapa serwera przechowująca odebrane bajty. Odwzorowuje semantykę fragmentów
- * z §5.3 protokołu, łącznie z konfliktem przesunięcia — dzięki temu test wznawiania
- * sprawdza realny przebieg, a nie sekwencję zaprogramowanych odpowiedzi.
+ * A fake server that keeps the bytes it receives. It reproduces the chunk semantics of
+ * protocol §5.3, offset conflicts included, so the resume test exercises a real sequence
+ * rather than a scripted set of answers.
  */
 class FakeTransport : SyncTransport {
 
@@ -140,7 +140,7 @@ class FakeTransport : SyncTransport {
     val digestsSeen = linkedMapOf<String, String?>()
     val putCalls = mutableListOf<Triple<String, Long, Long>>()
 
-    /** Skrót z każdego osobnego żądania PUT — nie tylko z domykającego. */
+    /** The digest from every individual PUT request — not only the closing one. */
     val digestsPerCall = mutableListOf<String?>()
 
     var manifestResponder: (ManifestRequest) -> ApiResult<ManifestResponse> = { request ->
@@ -153,7 +153,7 @@ class FakeTransport : SyncTransport {
         )
     }
 
-    /** Podmieniana w testach, żeby wymusić konkretną odpowiedź na n-te żądanie PUT. */
+    /** Replaced in tests to force a specific answer to the nth PUT request. */
     var putInterceptor: ((call: Int, path: String, offset: Long) -> ApiResult<FileChunkResponse>?) =
         { _, _, _ -> null }
 
@@ -165,7 +165,7 @@ class FakeTransport : SyncTransport {
         return manifestResponder(request)
     }
 
-    /** Skróty zadeklarowane w manifeście — puste, dopóki klient jest w trybie szybkim. */
+    /** The digests declared in the manifest — empty while the client is in fast mode. */
     val manifestDigests = linkedMapOf<String, String?>()
 
     override suspend fun putFile(
@@ -188,7 +188,7 @@ class FakeTransport : SyncTransport {
         if (offset != buffer.length.toLong()) {
             return ApiResult.failure(
                 HttpStatus.CONFLICT,
-                ErrorResponse("offset_mismatch", "niezgodność", buffer.length.toLong()),
+                ErrorResponse("offset_mismatch", "mismatch", buffer.length.toLong()),
             )
         }
 
@@ -203,7 +203,7 @@ class FakeTransport : SyncTransport {
 
     val bundles = mutableListOf<List<String>>()
 
-    /** Podmieniana w testach, żeby wymusić odpowiedź serwera na paczkę. */
+    /** Replaced in tests to force the server's answer to a bundle. */
     var bundleResponder: ((List<BundleEntry>) -> ApiResult<BundleResponse>)? = null
 
     override suspend fun putBundle(entries: List<BundleEntry>): ApiResult<BundleResponse> {
@@ -232,10 +232,10 @@ class FakeTransport : SyncTransport {
 
     companion object {
         fun unreachable(): ApiResult<FileChunkResponse> =
-            ApiResult.Unreachable(IOException("zerwane połączenie"))
+            ApiResult.Unreachable(IOException("connection dropped"))
 
         fun rejected(): ApiResult<FileChunkResponse> = ApiResult.failure(
-            HttpStatus.UNPROCESSABLE, ErrorResponse("traversal", "ścieżka nie do przyjęcia"),
+            HttpStatus.UNPROCESSABLE, ErrorResponse("traversal", "unacceptable path"),
         )
 
         fun outOfSpace(): ApiResult<FileChunkResponse> = ApiResult.failure(

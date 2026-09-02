@@ -28,9 +28,9 @@ import java.util.Base64
 import javax.net.ssl.KeyManager
 
 /**
- * Klient zasobów na **prawdziwym TLS**. MockWebServer zestawia autentyczny uścisk dłoni,
- * więc test obejmuje także przypięcie klucza i przedstawienie certyfikatu klienta —
- * czyli dokładnie te rzeczy, których atrapa HTTP by nie sprawdziła.
+ * The resource client over **real TLS**. MockWebServer performs a genuine handshake, so the
+ * test also covers key pinning and presenting the client certificate — precisely the things
+ * an HTTP fake would not check.
  */
 class FilumApiClientTest {
 
@@ -52,7 +52,7 @@ class FilumApiClientTest {
 
         server = MockWebServer().apply {
             useHttps(handshake.sslSocketFactory(), false)
-            // Serwer Filum wymaga certyfikatu klienta na każdym zasobie poza /pair (§3.2).
+            // The Filum server requires a client certificate on every resource but /pair (§3.2).
             requireClientAuth()
             start()
         }
@@ -93,10 +93,10 @@ class FilumApiClientTest {
          "time":"2026-08-28T20:00:00Z"}
     """.trimIndent()
 
-    // --- TLS i tożsamość ---
+    // --- TLS and identity ---
 
     @Test
-    fun `ping po mTLS zwraca odpowiedz serwera`() = runTest {
+    fun `a ping over mTLS returns the server response`() = runTest {
         server.enqueue(json(pingBody))
 
         val result = api().ping(endpoint())
@@ -109,9 +109,9 @@ class FilumApiClientTest {
     }
 
     @Test
-    fun `certyfikat klienta jest faktycznie przedstawiany`() = runTest {
-        // Serwer ma requireClientAuth(), więc samo powodzenie żądania dowodzi,
-        // że FixedKeyManager wybrał certyfikat mimo braku listy urzędów od serwera.
+    fun `the client certificate is actually presented`() = runTest {
+        // The server has requireClientAuth(), so the request succeeding at all proves
+        // FixedKeyManager picked a certificate despite the server naming no authorities.
         server.enqueue(json(pingBody))
 
         api().ping(endpoint())
@@ -126,8 +126,8 @@ class FilumApiClientTest {
     }
 
     @Test
-    fun `serwer o innym kluczu jest odrzucany na poziomie TLS`() = runTest {
-        // Podstawiony serwer nie dostaje nawet szansy odpowiedzieć — to jest sens ADR-005.
+    fun `a server with a different key is rejected at the TLS level`() = runTest {
+        // A substituted server never even gets a chance to answer — that is the point of ADR-005.
         val obcyPin = KeyPin.of(HeldCertificate.Builder().commonName("Obcy").build().certificate)
         server.enqueue(json(pingBody))
 
@@ -137,7 +137,7 @@ class FilumApiClientTest {
     }
 
     @Test
-    fun `brak certyfikatu klienta konczy sie bledem polaczenia`() = runTest {
+    fun `a missing client certificate ends in a connection error`() = runTest {
         server.enqueue(json(pingBody))
 
         val result = api(keyManagers = null).ping(endpoint())
@@ -148,7 +148,7 @@ class FilumApiClientTest {
     // --- manifest ---
 
     @Test
-    fun `manifest wysyla partie i odczytuje odpowiedz`() = runTest {
+    fun `the manifest sends a batch and reads the answer`() = runTest {
         server.enqueue(
             json("""{"have":5,"needed":[{"p":"DCIM/a.jpg","offset":1024}],"rejected":[]}""")
         )
@@ -169,14 +169,14 @@ class FilumApiClientTest {
         val sent = server.takeRequest()
         assertEquals("/api/v1/manifest", sent.path)
         val body = sent.body.readUtf8()
-        // Jednoliterowe klucze są normatywne — ich zmiana zerwałaby zgodność z serwerem.
+        // The single-letter keys are normative — changing them would break server compatibility.
         assertTrue(body.contains("\"p\":\"DCIM/a.jpg\""), body)
         assertTrue(body.contains("\"s\":2048"), body)
         assertTrue(body.contains("\"m\":1756400000"), body)
     }
 
     @Test
-    fun `odrzucone sciezki sa odczytywane z odpowiedzi manifestu`() = runTest {
+    fun `rejected paths are read from the manifest response`() = runTest {
         server.enqueue(
             json("""{"have":0,"needed":[],"rejected":[{"p":"../uciekinier.txt","error":"traversal"}]}""")
         )
@@ -189,16 +189,16 @@ class FilumApiClientTest {
         assertEquals("traversal", result.expectOk().rejected.single().error)
     }
 
-    // --- wysyłka pliku ---
+    // --- uploading a file ---
 
     @Test
-    fun `put wysyla naglowki protokolu i cale cialo`(@TempDir dir: Path) = runTest {
+    fun `put sends the protocol headers and the whole body`(@TempDir dir: Path) = runTest {
         val file = File(dir.toFile(), "foto.jpg").apply { writeText("0123456789ABCDEF") }
         server.enqueue(json("""{"received":16,"offset":16,"complete":true,"versioned":null}"""))
 
         val result = api().putFile(
             endpoint = endpoint(),
-            canonicalPath = "DCIM/Camera/zdjęcie.jpg",
+            canonicalPath = "DCIM/Camera/zdjecie-lg.jpg",
             file = file,
             size = 16,
             mtime = 1_756_400_000,
@@ -216,19 +216,19 @@ class FilumApiClientTest {
         assertEquals("1756400000", sent.getHeader(FilumHeaders.MTIME))
         assertEquals("0", sent.getHeader(FilumHeaders.OFFSET))
         assertEquals("a".repeat(64), sent.getHeader(FilumHeaders.DIGEST))
-        assertPathHeader(sent, "DCIM/Camera/zdjęcie.jpg")
+        assertPathHeader(sent, "DCIM/Camera/zdjecie-lg.jpg")
     }
 
     @Test
-    fun `wznowienie wysyla wylacznie brakujacy fragment`(@TempDir dir: Path) = runTest {
-        // Bez tego wznawianie nie ma sensu: wysłalibyśmy plik od początku, tylko
-        // deklarując przesunięcie, a serwer skleiłby bajty w złej kolejności.
-        val file = File(dir.toFile(), "klip.mp4").apply { writeText("0123456789ABCDEF") }
+    fun `resuming sends only the missing part`(@TempDir dir: Path) = runTest {
+        // Without this, resuming is pointless: we would send the file from the start while
+        // merely declaring an offset, and the server would splice the bytes out of order.
+        val file = File(dir.toFile(), "clip.mp4").apply { writeText("0123456789ABCDEF") }
         server.enqueue(json("""{"received":6,"offset":16,"complete":true,"versioned":null}"""))
 
         api().putFile(
             endpoint = endpoint(),
-            canonicalPath = "Movies/klip.mp4",
+            canonicalPath = "Movies/clip.mp4",
             file = file,
             size = 16,
             mtime = 1_756_400_000,
@@ -240,33 +240,33 @@ class FilumApiClientTest {
         assertEquals("ABCDEF", sent.body.readUtf8())
         assertEquals("10", sent.getHeader(FilumHeaders.OFFSET))
         assertEquals("6", sent.getHeader("Content-Length"))
-        assertNull(sent.getHeader(FilumHeaders.DIGEST), "przy wznowieniu skrótu nie liczymy (§9)")
+        assertNull(sent.getHeader(FilumHeaders.DIGEST), "no digest argument means no digest header")
     }
 
     @Test
-    fun `sciezka jedzie w naglowku jako base64url bez dopelnienia`(@TempDir dir: Path) = runTest {
+    fun `the path travels in the header as base64url without padding`(@TempDir dir: Path) = runTest {
         val file = File(dir.toFile(), "a").apply { writeText("x") }
         server.enqueue(json("""{"received":1,"offset":1,"complete":true}"""))
 
         api().putFile(endpoint(), "Documents/raport:v2.txt", file, 1, 1, 0, 1)
 
         val header = server.takeRequest().getHeader(FilumHeaders.PATH)!!
-        assertTrue(!header.contains('='), "dopełnienie musi zniknąć")
-        assertTrue(!header.contains('+') && !header.contains('/'), "wariant URL, nie zwykły base64")
+        assertTrue(!header.contains('='), "the padding has to be gone")
+        assertTrue(!header.contains('+') && !header.contains('/'), "the URL variant, not plain base64")
         assertEquals(
             "Documents/raport:v2.txt",
             String(Base64.getUrlDecoder().decode(header), Charsets.UTF_8),
         )
     }
 
-    // --- mapowanie błędów (§6) ---
+    // --- error mapping (§6) ---
 
     @Test
-    fun `konflikt przesuniecia niesie oczekiwana wartosc`() = runTest {
+    fun `an offset conflict carries the expected value`() = runTest {
         server.enqueue(
             MockResponse().setResponseCode(409)
                 .setHeader("Content-Type", "application/json")
-                .setBody("""{"error":"offset_mismatch","message":"niezgodność","expectedOffset":4}""")
+                .setBody("""{"error":"offset_mismatch","message":"mismatch","expectedOffset":4}""")
         )
 
         val file = File.createTempFile("filum", null).apply { writeText("xyz"); deleteOnExit() }
@@ -279,11 +279,11 @@ class FilumApiClientTest {
     }
 
     @Test
-    fun `odrzucona sciezka to blad trwaly`() = runTest {
+    fun `a rejected path is a permanent error`() = runTest {
         server.enqueue(
             MockResponse().setResponseCode(422)
                 .setHeader("Content-Type", "application/json")
-                .setBody("""{"error":"traversal","message":"nie do przyjęcia"}""")
+                .setBody("""{"error":"traversal","message":"unacceptable"}""")
         )
 
         val file = File.createTempFile("filum", null).apply { writeText("x"); deleteOnExit() }
@@ -294,7 +294,7 @@ class FilumApiClientTest {
     }
 
     @Test
-    fun `brak miejsca na serwerze to blad przejsciowy`() = runTest {
+    fun `no space on the server is a transient error`() = runTest {
         server.enqueue(MockResponse().setResponseCode(507).setBody("""{"error":"insufficient_storage"}"""))
 
         val file = File.createTempFile("filum", null).apply { writeText("x"); deleteOnExit() }
@@ -304,8 +304,8 @@ class FilumApiClientTest {
     }
 
     @Test
-    fun `blad bez czytelnego ciala nadal ma kod`() = runTest {
-        server.enqueue(MockResponse().setResponseCode(503).setBody("<html>przeciążenie</html>"))
+    fun `an error with an unreadable body still has a code`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(503).setBody("<html>overloaded</html>"))
 
         val result = api().ping(endpoint())
 
@@ -315,9 +315,9 @@ class FilumApiClientTest {
     }
 
     @Test
-    fun `odpowiedz nie bedaca protokolem Filum jest traktowana jak brak serwera`() = runTest {
-        // Trafiliśmy na cudzą usługę pod tym adresem. To nie jest błąd protokołu,
-        // tylko dowód, że tą trasą serwera nie ma — wyścig ma jej nie wybrać.
+    fun `a response that is not the Filum protocol is treated as no server`() = runTest {
+        // We reached somebody else's service at this address. That is not a protocol error
+        // but evidence that the server is not on this route — the race must not pick it.
         server.enqueue(json("<html>witaj na routerze</html>"))
 
         val result = api().ping(endpoint())
@@ -328,7 +328,7 @@ class FilumApiClientTest {
     // --- parowanie ---
 
     @Test
-    fun `parowanie wysyla certyfikat i token`() = runTest {
+    fun `pairing sends the certificate and the token`() = runTest {
         server.enqueue(json("""{"deviceKey":"PIN-TELEFONU","serverInstanceId":"abc","protocol":1}"""))
 
         val der = clientCertificate.certificate.encoded
@@ -350,9 +350,8 @@ class FilumApiClientTest {
 }
 
 /**
- * Wyciąga wartość z [ApiResult.Ok] zachowując typ. `assertInstanceOf` zwraca typ
- * z projekcją gwiazdkową, więc bez tego pomocnika każde odwołanie do pola kończy się
- * na `Any?`.
+ * Extracts the value from [ApiResult.Ok] preserving its type. `assertInstanceOf` returns a type
+ * with a star projection, so without this helper every field access would land on `Any?`.
  */
 private fun <T> ApiResult<T>.expectOk(): T {
     assertInstanceOf(ApiResult.Ok::class.java, this)

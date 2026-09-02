@@ -1,11 +1,11 @@
 package pl.wspa.filum.scan
 
 /**
- * Które ścieżki pomijamy w skanie (§3.3 architektury).
+ * Which paths the scan skips (architecture §3.3).
  *
- * Reguły są prefiksami katalogów albo wzorcami nazw. Świadomie proste: użytkownik
- * ma je rozumieć na ekranie „Foldery", a wyrażenia regularne w interfejsie
- * kończą się pytaniami, na które nikt nie zna odpowiedzi.
+ * The rules are directory prefixes or name patterns. Deliberately simple: the user has to
+ * understand them on the Folders screen, and regular expressions in a user interface end
+ * in questions nobody knows the answer to.
  */
 class ExclusionRules(
     userPrefixes: List<String> = emptyList(),
@@ -25,14 +25,14 @@ class ExclusionRules(
 
         val segments = path.split('/')
 
-        // Katalog gdziekolwiek w drzewie, nie tylko na początku ścieżki.
+        // A directory anywhere in the tree, not only at the start of the path.
         if (segments.dropLast(1).any { it in EXCLUDED_DIRECTORY_NAMES }) return true
 
         val name = segments.last()
         return EXCLUDED_NAME_PREFIXES.any { name.startsWith(it) }
     }
 
-    /** Czy warto w ogóle wchodzić do katalogu — pozwala uciąć całe poddrzewo. */
+    /** Whether entering the directory is worth it at all — this prunes a whole subtree. */
     fun isExcludedDirectory(canonicalDirectoryPath: String): Boolean {
         val path = canonicalDirectoryPath.trimStart('/').trimEnd('/')
         if (path.isEmpty()) return false
@@ -47,22 +47,22 @@ class ExclusionRules(
     companion object {
 
         /**
-         * Wykluczenia domyślne.
+         * The default exclusions.
          *
-         * `Android/data` i `Android/obb` są **niedostępne** od Androida 11 nawet przy
-         * MANAGE_EXTERNAL_STORAGE i nie próbujemy tego obchodzić (ADR-013). Reszta to
-         * dane odtwarzalne: miniatury, kosze, pamięci podręczne aplikacji.
+         * `Android/data` and `Android/obb` are **inaccessible** since Android 11 even with
+         * MANAGE_EXTERNAL_STORAGE, and we do not try to work around that (ADR-013). The rest is
+         * reproducible data: thumbnails, trash, application caches.
          *
-         * `Android/media` celowo **nie jest** wykluczony — jest dostępny i mieszka tam
-         * między innymi WhatsApp, czyli dokładnie te dane, których użytkownik nie chce
-         * stracić.
+         * `Android/media` is deliberately **not** excluded — it is accessible and home to
+         * WhatsApp among others, which is exactly the data a user does not want to lose.
+         *
          */
         val DEFAULT_PREFIXES = listOf(
             "Android/data",
             "Android/obb",
         )
 
-        /** Nazwy katalogów pomijane na dowolnej głębokości. */
+        /** Directory names skipped at any depth. */
         val EXCLUDED_DIRECTORY_NAMES = setOf(
             ".thumbnails",
             ".cache",
@@ -72,10 +72,10 @@ class ExclusionRules(
         )
 
         /**
-         * Przedrostki nazw plików tworzonych przez system.
+         * Prefixes of filenames created by the system.
          *
-         * `.trashed-` i `.pending-` to pliki w koszu MediaStore i pliki w trakcie
-         * zapisu — jedne zaraz znikną, drugie nie są jeszcze kompletne.
+         * `.trashed-` i `.pending-` to files w koszu MediaStore i files w trakcie
+         * being written — the first will vanish shortly, the second are not complete yet.
          */
         val EXCLUDED_NAME_PREFIXES = listOf(
             ".trashed-",
@@ -83,10 +83,10 @@ class ExclusionRules(
         )
 
         /**
-         * Katalogi, które warto pokazać użytkownikowi jako kandydatów do wykluczenia.
+         * Directories worth showing the user as candidates for exclusion.
          *
-         * Nie są wykluczone domyślnie — decyzja należy do użytkownika. Ale to właśnie
-         * one najczęściej zawierają dane odtwarzalne albo bardzo duże: pobrane
+         * They are not excluded by default — the decision is the user's. But these are the ones
+         * that most often hold reproducible or very large data: downloads
          * instalatory, filmy z gier, podcasty.
          */
         val SUGGESTED_FOR_EXCLUSION = setOf(
@@ -97,9 +97,9 @@ class ExclusionRules(
         )
 
         /**
-         * Okno spokoju: pliki zmodyfikowane w ciągu ostatniej minuty pomijamy,
-         * bo mogą być właśnie zapisywane (§5.3 protokołu). Wysłanie połowy nagrania
-         * dałoby na serwerze plik, który wygląda na kompletny, a nie jest.
+         * The quiet window: files modified within the last minute are skipped, because they
+         * may be in the middle of being written (protocol §5.3). Sending half a recording would
+         * leave a file on the server that looks complete and is not.
          */
         const val QUIESCENCE_SECONDS = 60L
     }

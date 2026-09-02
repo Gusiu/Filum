@@ -7,8 +7,8 @@ namespace Filum.Tray;
 /// <summary>
 /// Ikona Filum w zasobniku systemowym.
 ///
-/// Daje aplikacji fizyczną obecność w systemie: użytkownik widzi jednym rzutem oka,
-/// czy serwer działa, i ma pod prawym przyciskiem to, po co inaczej musiałby szukać
+/// Gives the application a physical presence in the system: at a glance the user can see
+/// whether the server is running, and right-click reaches what would otherwise need hunting
 /// okna — panel i katalog kopii.
 /// </summary>
 internal static class Program
@@ -38,8 +38,8 @@ internal static class Program
         {
             _link = new ServerLink(ConfigDirectory(), Port());
 
-            _statusItem = new ToolStripMenuItem("Sprawdzam…") { Enabled = false };
-            _folderItem = new ToolStripMenuItem("Otwórz katalog kopii", null, (_, _) => OpenBackupFolder())
+            _statusItem = new ToolStripMenuItem("Checking…") { Enabled = false };
+            _folderItem = new ToolStripMenuItem("Open the backup folder", null, (_, _) => OpenBackupFolder())
             {
                 Enabled = false,
             };
@@ -47,11 +47,11 @@ internal static class Program
             var menu = new ContextMenuStrip();
             menu.Items.Add(_statusItem);
             menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add(new ToolStripMenuItem("Otwórz panel", null, (_, _) => Open(_link.PanelUrl)));
-            menu.Items.Add(new ToolStripMenuItem("Sparuj telefon", null, (_, _) => Open(_link.PairingUrl)));
+            menu.Items.Add(new ToolStripMenuItem("Open the panel", null, (_, _) => Open(_link.PanelUrl)));
+            menu.Items.Add(new ToolStripMenuItem("Pair a phone", null, (_, _) => Open(_link.PairingUrl)));
             menu.Items.Add(_folderItem);
             menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add(new ToolStripMenuItem("Zamknij ikonę", null, (_, _) => Quit()));
+            menu.Items.Add(new ToolStripMenuItem("Close the tray icon", null, (_, _) => Quit()));
 
             _icon = new NotifyIcon
             {
@@ -75,10 +75,10 @@ internal static class Program
 
             if (_status is null)
             {
-                _statusItem.Text = "Serwer nie działa";
+                _statusItem.Text = "The server is not running";
                 _folderItem.Enabled = false;
-                // Tekst ikony ma twardy limit 63 znaków; dłuższy jest po cichu ucinany.
-                _icon.Text = "Filum — serwer nie działa";
+                // The icon's tooltip has a hard 63-character limit; anything longer is silently cut.
+                _icon.Text = "Filum — the server is not running";
                 return;
             }
 
@@ -86,11 +86,11 @@ internal static class Program
             var files = _status.Devices.Sum(d => d.FileCount);
 
             _statusItem.Text = devices == 0
-                ? "Brak sparowanych telefonów"
-                : $"{devices} {Devices(devices)}, {files} plików";
+                ? "No phones paired"
+                : $"{devices} {Devices(devices)}, {files} files";
 
             _folderItem.Enabled = Directory.Exists(_status.BackupRoot);
-            _icon.Text = Truncate($"Filum — wolne {Bytes(_status.FreeBytes)}");
+            _icon.Text = Truncate($"Filum — {Bytes(_status.FreeBytes)} free");
         }
 
         private void OpenBackupFolder()
@@ -107,7 +107,7 @@ internal static class Program
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Nie udało się otworzyć:\n{target}\n\n{ex.Message}",
+                MessageBox.Show($"Could not open:\n{target}\n\n{ex.Message}",
                                 "Filum", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
@@ -130,7 +130,7 @@ internal static class Program
             base.Dispose(disposing);
         }
 
-        private static string Devices(int count) => count == 1 ? "telefon" : "telefony";
+        private static string Devices(int count) => count == 1 ? "phone" : "phones";
 
         private static string Truncate(string text) => text.Length <= 63 ? text : text[..63];
     }

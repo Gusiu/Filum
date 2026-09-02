@@ -3,19 +3,19 @@ using Filum.Protocol;
 namespace Filum.Core.Tests;
 
 /// <summary>
-/// Cykl życia transferu (§5.3 i §8.2 protokołu). To jest miejsce, w którym błąd
-/// oznacza uszkodzony albo utracony plik użytkownika, więc testy celują przede
-/// wszystkim w ścieżki błędne, nie w scenariusz szczęśliwy.
+/// The transfer lifecycle (protocol §5.3 and §8.2). This is where a mistake means a
+/// corrupted or lost file belonging to the user, so the tests aim mostly at the failure
+/// paths rather than the happy one.
 /// </summary>
 public class TransferStoreTests
 {
     private const long Mtime = 1_756_400_000;
 
     [Fact]
-    public async Task Wysylka_JednymKawalkiem_LadujeWFiles()
+    public async Task AnUpload_InOnePiece_LandsInFiles()
     {
         using var h = new Harness();
-        var content = Harness.Bytes("zawartość zdjęcia");
+        var content = Harness.Bytes("photo content");
 
         var outcome = await h.WriteWholeAsync("DCIM/Camera/IMG_0001.JPG", content, Mtime);
 
@@ -26,66 +26,66 @@ public class TransferStoreTests
     }
 
     [Fact]
-    public async Task WTrakcieTransferu_PlikNiePojawiaSieWFiles()
+    public async Task DuringATransfer_TheFileNeverAppearsInFiles()
     {
-        // Niezmiennik I3: użytkownik ma w każdej chwili oglądać spójne drzewo,
-        // więc fragmenty nie mogą być widoczne w katalogu files/.
+        // Invariant I3: the user is to see a consistent tree at any moment, so partial
+        // files must never be visible inside files/.
         using var h = new Harness();
         var content = Harness.Bytes("0123456789");
 
-        var outcome = await h.WriteAsync("Movies/klip.mp4", content[..4], content.Length, Mtime, 0);
+        var outcome = await h.WriteAsync("Movies/clip.mp4", content[..4], content.Length, Mtime, 0);
 
         Assert.Equal(ChunkStatus.Ok, outcome.Status);
         Assert.False(outcome.Complete);
-        Assert.False(h.StoredExists("Movies/klip.mp4"));
-        Assert.Equal(4, h.PartLength("Movies/klip.mp4"));
+        Assert.False(h.StoredExists("Movies/clip.mp4"));
+        Assert.Equal(4, h.PartLength("Movies/clip.mp4"));
     }
 
     [Fact]
-    public async Task Wznowienie_SklejaPlikPoprawnie()
+    public async Task Resuming_ReassemblesTheFileCorrectly()
     {
         using var h = new Harness();
         var content = Harness.Bytes("0123456789ABCDEF");
 
-        await h.WriteAsync("Movies/klip.mp4", content[..6], content.Length, Mtime, 0);
-        var outcome = await h.WriteAsync("Movies/klip.mp4", content[6..], content.Length, Mtime, 6);
+        await h.WriteAsync("Movies/clip.mp4", content[..6], content.Length, Mtime, 0);
+        var outcome = await h.WriteAsync("Movies/clip.mp4", content[6..], content.Length, Mtime, 6);
 
         Assert.Equal(ChunkStatus.Ok, outcome.Status);
         Assert.True(outcome.Complete);
-        Assert.Equal(content, h.ReadStored("Movies/klip.mp4"));
+        Assert.Equal(content, h.ReadStored("Movies/clip.mp4"));
     }
 
     [Fact]
-    public async Task Wznowienie_ZeZlymPrzesunieciem_PodajeOczekiwane()
+    public async Task Resuming_AtAWrongOffset_ReportsTheExpectedOne()
     {
         using var h = new Harness();
         var content = Harness.Bytes("0123456789");
 
-        await h.WriteAsync("Movies/klip.mp4", content[..4], content.Length, Mtime, 0);
-        var outcome = await h.WriteAsync("Movies/klip.mp4", content[7..], content.Length, Mtime, 7);
+        await h.WriteAsync("Movies/clip.mp4", content[..4], content.Length, Mtime, 0);
+        var outcome = await h.WriteAsync("Movies/clip.mp4", content[7..], content.Length, Mtime, 7);
 
         Assert.Equal(ChunkStatus.OffsetMismatch, outcome.Status);
         Assert.Equal(4, outcome.ExpectedOffset);
     }
 
     [Fact]
-    public async Task Wznowienie_GdyPlikSieZmienil_KazeZaczacOdZera()
+    public async Task Resuming_WhenTheFileChanged_ForcesAStartFromZero()
     {
-        // Scenariusz z życia: nagranie wideo było jeszcze zapisywane przy poprzedniej
-        // próbie. Sklejenie starego fragmentu z nowymi bajtami dałoby plik, który
-        // nigdy nie istniał — gorzej niż brak pliku, bo wygląda na poprawny.
+        // A real-life scenario: a video recording was still being written on the previous
+        // attempt. Splicing the old part onto new bytes would produce a file that never
+        // existed — worse than no file, because it looks correct.
         using var h = new Harness();
         var first = Harness.Bytes("0123456789");
 
-        await h.WriteAsync("Movies/klip.mp4", first[..4], first.Length, Mtime, 0);
-        var outcome = await h.WriteAsync("Movies/klip.mp4", first[4..], 20, Mtime + 5, 4);
+        await h.WriteAsync("Movies/clip.mp4", first[..4], first.Length, Mtime, 0);
+        var outcome = await h.WriteAsync("Movies/clip.mp4", first[4..], 20, Mtime + 5, 4);
 
         Assert.Equal(ChunkStatus.OffsetMismatch, outcome.Status);
         Assert.Equal(0, outcome.ExpectedOffset);
     }
 
     [Fact]
-    public async Task Domkniecie_ZePoprawnymSkrotem_Przechodzi()
+    public async Task Commit_WithACorrectDigest_Succeeds()
     {
         using var h = new Harness();
         var content = Harness.Bytes("dane do sprawdzenia");
@@ -97,11 +97,11 @@ public class TransferStoreTests
     }
 
     [Fact]
-    public async Task Domkniecie_ZeZlymSkrotem_OdrzucaFragmentINieTworzyPliku()
+    public async Task Commit_WithAWrongDigest_DropsThePartAndCreatesNoFile()
     {
         using var h = new Harness();
         var content = Harness.Bytes("dane do sprawdzenia");
-        var wrongDigest = Harness.Digest(Harness.Bytes("coś zupełnie innego"));
+        var wrongDigest = Harness.Digest(Harness.Bytes("something else entirely"));
 
         var outcome = await h.WriteAsync("Documents/plik.txt", content, content.Length, Mtime, 0, wrongDigest);
 
@@ -111,12 +111,12 @@ public class TransferStoreTests
     }
 
     [Fact]
-    public async Task NadmiarBajtow_JestZglaszany_ANieCichoObcinany()
+    public async Task ExcessBytes_AreReported_NotSilentlyTruncated()
     {
         using var h = new Harness();
         var content = Harness.Bytes("0123456789");
 
-        // deklarujemy 5 bajtów, wysyłamy 10
+        // declare 5 bytes, send 10
         var outcome = await h.WriteAsync("Documents/plik.txt", content, 5, Mtime, 0);
 
         Assert.Equal(ChunkStatus.TooMuchData, outcome.Status);
@@ -126,75 +126,75 @@ public class TransferStoreTests
     // --- niezmiennik I2: nigdy nie nadpisujemy ---
 
     [Fact]
-    public async Task NowaWersja_OdkladaStaraKopieDoVersions()
+    public async Task ANewVersion_FilesTheOldCopyIntoVersions()
     {
         using var h = new Harness();
-        var stara = Harness.Bytes("wersja pierwsza");
-        var nowa = Harness.Bytes("wersja druga, dłuższa");
+        var oldContent = Harness.Bytes("wersja pierwsza");
+        var updated = Harness.Bytes("second version, longer");
 
-        h.Seed("Documents/notatka.txt", stara, Mtime);
-        var outcome = await h.WriteWholeAsync("Documents/notatka.txt", nowa, Mtime + 3600);
+        h.Seed("Documents/note.txt", oldContent, Mtime);
+        var outcome = await h.WriteWholeAsync("Documents/note.txt", updated, Mtime + 3600);
 
         Assert.Equal(ChunkStatus.Ok, outcome.Status);
         Assert.NotNull(outcome.VersionedPath);
-        Assert.Equal(nowa, h.ReadStored("Documents/notatka.txt"));
+        Assert.Equal(updated, h.ReadStored("Documents/note.txt"));
 
         var archived = h.VersionFiles();
         Assert.Single(archived);
 
         var versionAbsolute = Path.Combine(h.Paths.DeviceRoot(Harness.Slug),
                                            outcome.VersionedPath!.Replace('/', Path.DirectorySeparatorChar));
-        Assert.Equal(stara, File.ReadAllBytes(LongPath.Extended(versionAbsolute)));
+        Assert.Equal(oldContent, File.ReadAllBytes(LongPath.Extended(versionAbsolute)));
     }
 
     [Fact]
-    public async Task NazwaWersji_PochodziZMtimeStarejKopii_NieZChwiliWysylki()
+    public async Task VersionName_ComesFromTheOldCopysMtime_NotFromUploadTime()
     {
         using var h = new Harness();
         // 2025-01-15 10:30:00 UTC
-        const long staryMtime = 1_736_937_000;
+        const long oldMtime = 1_736_937_000;
 
-        h.Seed("Documents/notatka.txt", Harness.Bytes("stara"), staryMtime);
-        await h.WriteWholeAsync("Documents/notatka.txt", Harness.Bytes("nowa"), Mtime);
+        h.Seed("Documents/note.txt", Harness.Bytes("oldContent"), oldMtime);
+        await h.WriteWholeAsync("Documents/note.txt", Harness.Bytes("updated"), Mtime);
 
-        var expected = DateTimeOffset.FromUnixTimeSeconds(staryMtime).UtcDateTime.ToString("yyyyMMdd'T'HHmmss'Z'");
-        Assert.Equal($"notatka.{expected}.txt", h.VersionFiles().Single());
+        var expected = DateTimeOffset.FromUnixTimeSeconds(oldMtime).UtcDateTime.ToString("yyyyMMdd'T'HHmmss'Z'");
+        Assert.Equal($"note.{expected}.txt", h.VersionFiles().Single());
     }
 
     [Fact]
-    public async Task DwieKolejneWersje_ObieSaZachowane()
+    public async Task TwoSuccessiveVersions_AreBothKept()
     {
         using var h = new Harness();
 
-        h.Seed("Documents/notatka.txt", Harness.Bytes("pierwsza"), Mtime);
-        await h.WriteWholeAsync("Documents/notatka.txt", Harness.Bytes("druga"), Mtime + 100);
-        await h.WriteWholeAsync("Documents/notatka.txt", Harness.Bytes("trzecia"), Mtime + 200);
+        h.Seed("Documents/note.txt", Harness.Bytes("pierwsza"), Mtime);
+        await h.WriteWholeAsync("Documents/note.txt", Harness.Bytes("druga"), Mtime + 100);
+        await h.WriteWholeAsync("Documents/note.txt", Harness.Bytes("trzecia"), Mtime + 200);
 
         Assert.Equal(2, h.VersionFiles().Count);
-        Assert.Equal(Harness.Bytes("trzecia"), h.ReadStored("Documents/notatka.txt"));
+        Assert.Equal(Harness.Bytes("trzecia"), h.ReadStored("Documents/note.txt"));
     }
 
     [Fact]
-    public async Task PowtorzonaWysylkaTejSamejWersji_NieNadpisujeArchiwum()
+    public async Task ReUploadingTheSameVersion_DoesNotOverwriteTheArchive()
     {
-        // Ta sama para (rozmiar, mtime) trafia do archiwum dwa razy, więc nazwa wersji
-        // się powtarza. Nadpisanie byłoby cichą utratą danych.
+        // The same (size, mtime) pair is archived twice, so the version name repeats.
+        // Overwriting would be silent data loss.
         using var h = new Harness();
 
-        h.Seed("Documents/notatka.txt", Harness.Bytes("aaaa"), Mtime);
-        await h.WriteWholeAsync("Documents/notatka.txt", Harness.Bytes("bbbb"), Mtime + 1);
-        h.Seed("Documents/notatka.txt", Harness.Bytes("cccc"), Mtime);
-        await h.WriteWholeAsync("Documents/notatka.txt", Harness.Bytes("dddd"), Mtime + 2);
+        h.Seed("Documents/note.txt", Harness.Bytes("aaaa"), Mtime);
+        await h.WriteWholeAsync("Documents/note.txt", Harness.Bytes("bbbb"), Mtime + 1);
+        h.Seed("Documents/note.txt", Harness.Bytes("cccc"), Mtime);
+        await h.WriteWholeAsync("Documents/note.txt", Harness.Bytes("dddd"), Mtime + 2);
 
         var archived = h.VersionFiles();
         Assert.Equal(2, archived.Count);
         Assert.Contains(archived, name => name.Contains("-2", StringComparison.Ordinal));
     }
 
-    // --- ścieżki i miejsce na dysku ---
+    // --- paths and disk space ---
 
     [Fact]
-    public async Task SciezkaWychodzacaPozaKatalog_JestOdrzucana()
+    public async Task APathEscapingTheDirectory_IsRejected()
     {
         using var h = new Harness();
 
@@ -205,7 +205,7 @@ public class TransferStoreTests
     }
 
     [Fact]
-    public async Task BrakMiejscaNaDysku_ZatrzymujeZapis()
+    public async Task NoDiskSpace_StopsTheWrite()
     {
         using var h = new Harness(o => o.MinFreeBytes = long.MaxValue / 2);
 
@@ -216,18 +216,18 @@ public class TransferStoreTests
     }
 
     [Fact]
-    public async Task RownolegleTransferyRoznychPlikow_NieKoliduja()
+    public async Task ConcurrentTransfersOfDifferentFiles_DoNotCollide()
     {
         using var h = new Harness();
 
         var tasks = Enumerable.Range(0, 16).Select(i =>
-            h.WriteWholeAsync($"DCIM/Camera/IMG_{i:D4}.JPG", Harness.Bytes($"zawartość {i}"), Mtime + i));
+            h.WriteWholeAsync($"DCIM/Camera/IMG_{i:D4}.JPG", Harness.Bytes($"content {i}"), Mtime + i));
 
         var outcomes = await Task.WhenAll(tasks);
 
         Assert.All(outcomes, o => Assert.Equal(ChunkStatus.Ok, o.Status));
         Assert.All(outcomes, o => Assert.True(o.Complete));
         for (var i = 0; i < 16; i++)
-            Assert.Equal(Harness.Bytes($"zawartość {i}"), h.ReadStored($"DCIM/Camera/IMG_{i:D4}.JPG"));
+            Assert.Equal(Harness.Bytes($"content {i}"), h.ReadStored($"DCIM/Camera/IMG_{i:D4}.JPG"));
     }
 }

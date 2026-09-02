@@ -24,20 +24,20 @@ import java.nio.file.Path
 import javax.net.ssl.KeyManager
 
 /**
- * Test zgodności między implementacjami: **prawdziwy klient kotlinowy przeciwko
+ * A conformance test between the implementations: **the real Kotlin client against the
  * prawdziwemu serwerowi w C#**, po prawdziwym mTLS.
  *
- * Serwer i klient są pisane niezależnie i pogodzone wyłącznie przez docs/PROTOCOL.md.
- * Testy jednostkowe po obu stronach sprawdzają, czy każda z nich robi to, co jej autor
- * zamierzył — dopiero ten test sprawdza, czy **zamierzenia się pokrywają**. To jest
- * jedyne miejsce, w którym wychodzi rozjazd w kodowaniu nagłówka, w jednostkach mtime
+ * Server and client are written independently and reconciled solely by docs/PROTOCOL.md.
+ * The unit tests on each side check that each does what its author intended — only this
+ * test checks that **the intentions agree**. It is the one place where a divergence in
+ * header encoding, in mtime units
  * albo w semantyce wznawiania.
  *
- * Uruchamiany warunkowo, bo wymaga działającego serwera. Skrypt uruchamiający ustawia
- * zmienne środowiskowe; bez nich test jest pomijany i nie psuje zwykłej kompilacji.
+ * Run conditionally, because it needs a running server. The launching command sets the
+ * environment variables; without them the test is skipped and does not break a normal build.
  *
- * Android Keystore nie jest tu potrzebny — tożsamość budujemy z pary kluczy JVM przez
- * ten sam [FixedKeyManager], którego używa produkcja.
+ * The Android Keystore is not needed here — the identity is built from a JVM key pair
+ * through the same [FixedKeyManager] production uses.
  */
 @EnabledIfEnvironmentVariable(named = "FILUM_HOST", matches = ".+")
 class EndToEndTest {
@@ -63,10 +63,10 @@ class EndToEndTest {
     }
 
     @Test
-    fun `pelny cykl przeciwko serwerowi w C#`(@TempDir dir: Path) = runBlocking {
+    fun `a full cycle against the C# server`(@TempDir dir: Path) = runBlocking {
         val root = dir.toFile()
 
-        // --- parowanie: bez certyfikatu klienta, zaufanie z odcisku klucza (§3.3) ---
+        // --- pairing: no client certificate, trust from the key fingerprint (§3.3) ---
 
         val paired = api(withIdentity = false).pair(
             endpoint = endpoint,
@@ -75,45 +75,45 @@ class EndToEndTest {
             label = "Klient testowy",
         )
         val pairResponse = assertInstanceOf(ApiResult.Ok::class.java, paired)
-        println("sparowano, deviceKey=${(pairResponse.value as pl.wspa.filum.protocol.PairResponse).deviceKey}")
+        println("paired, deviceKey=${(pairResponse.value as pl.wspa.filum.protocol.PairResponse).deviceKey}")
 
         val client = api(withIdentity = true)
 
-        // --- ping: od teraz każdy zasób wymaga mTLS ---
+        // --- ping: from here on every resource requires mTLS ---
 
         val ping = client.ping(endpoint)
         val pingOk = assertInstanceOf(ApiResult.Ok::class.java, ping)
         val limits = (pingOk.value as pl.wspa.filum.protocol.PingResponse).limits
-        println("serwer odpowiedział, manifestBatch=${limits.manifestBatch}")
+        println("server answered, manifestBatch=${limits.manifestBatch}")
 
-        // --- przygotowanie plików, w tym takich, które łamią reguły NTFS ---
+        // --- preparing files, including ones that break the NTFS rules ---
 
         write(root, "DCIM/Camera/IMG_0001.JPG", "zawartosc zdjecia")
-        write(root, "Documents/zdjęcie-łąka.txt", "polskie znaki")
-        write(root, "Movies/duzy.bin", "x".repeat(200_000))
+        write(root, "Documents/zdjęcie-łąka.txt", "non-ascii name")
+        write(root, "Movies/large.bin", "x".repeat(200_000))
 
         val scanned = FilesystemScanner(
             root, ExclusionRules(includeDefaults = false), nowSeconds = { Long.MAX_VALUE / 2 },
         ).walk().toList().toMutableList()
-        assertEquals(3, scanned.size, "skaner powinien znaleźć wszystkie trzy pliki z dysku")
+        assertEquals(3, scanned.size, "the scanner should find all three files on disk")
 
-        // Nazwa z dwukropkiem jest na Androidzie zupełnie zwyczajna, a pod NTFS zabroniona —
-        // to główny powód istnienia reguł z PATH-RULES. Test biegnie jednak na Windows,
-        // gdzie takiego pliku nie da się utworzyć, więc podajemy tę ścieżkę jako kanoniczną
-        // nad plikiem o bezpiecznej nazwie. Serwer i tak dostaje dokładnie to, co dostałby
-        // z telefonu, więc sanityzacja jest sprawdzona naprawdę.
+        // A name with a colon is entirely ordinary on Android and forbidden under NTFS —
+        // the main reason the PATH-RULES rules exist. The test runs on Windows, though,
+        // where such a file cannot be created, so we supply that path as the canonical one
+        // over a safely named file. The server still receives exactly what it would get from
+        // a phone, so the sanitisation really is exercised.
         val zDwukropkiem = File(root, "Documents/raport-v2.txt").apply {
             writeText("dwukropek w nazwie")
             setLastModified(1_756_400_000_000)
         }
         scanned += pl.wspa.filum.scan.ScannedFile(
-            canonicalPath = "Documents/raport:v2.txt",
+            canonicalPath = "Documents/report:v2.txt",
             absolutePath = zDwukropkiem.absolutePath,
             size = zDwukropkiem.length(),
             mtimeSeconds = 1_756_400_000,
         )
 
-        // --- pełny cykl silnika ---
+        // --- a full engine cycle ---
 
         val queue = FakeQueue()
         val journal = FakeJournal()
@@ -136,14 +136,14 @@ class EndToEndTest {
 
         val outcome = engine.run("e2e-1", ManifestRequest.MODE_FULL, scanned.asSequence(), Deadline { false })
 
-        // Powód trafia do komunikatu: test zgodności, który mówi tylko „zły typ",
-        // każe zgadywać, po której stronie leży rozjazd — a to jest jedyna informacja,
-        // po którą się tu przychodzi.
+        // The reason goes into the message: a conformance test that says only "wrong type"
+        // leaves you guessing which side diverged — and that is the one piece of
+        // information you come here for.
         val completed = assertInstanceOf(SyncOutcome.Completed::class.java, outcome, outcome.toString())
-        println("wysłano ${completed.filesSent} plików, ${completed.bytesSent} B")
+        println("sent ${completed.filesSent} files, ${completed.bytesSent} B")
         assertEquals(4, completed.filesSent)
 
-        // --- drugi przebieg: serwer musi rozpoznać, że już wszystko ma ---
+        // --- second pass: the server has to recognise it already holds everything ---
 
         val second = client.manifest(
             endpoint,
@@ -158,14 +158,14 @@ class EndToEndTest {
         val manifest = assertInstanceOf(ApiResult.Ok::class.java, second)
         val response = manifest.value as pl.wspa.filum.protocol.ManifestResponse
 
-        // To jest sedno: serwer rozpoznaje pliki po trójce (ścieżka, rozmiar, mtime)
-        // wyliczonej przez klienta. Rozjazd w jednostkach czasu albo w normalizacji
-        // nazw ujawniłby się właśnie tutaj - jako ponowna prośba o te same pliki.
-        assertEquals(4, response.have, "serwer powinien mieć komplet po pierwszym cyklu")
-        assertTrue(response.needed.isEmpty(), "nic nie powinno być potrzebne: ${response.needed}")
-        assertTrue(response.rejected.isEmpty(), "żadna ścieżka nie powinna zostać odrzucona")
+        // This is the crux: the server recognises files by the (path, size, mtime) triple
+        // the client computed. A divergence in time units or in the normalisation
+        // of names would surface right here - as a repeated request for the same files.
+        assertEquals(4, response.have, "the server should hold everything after the first cycle")
+        assertTrue(response.needed.isEmpty(), "nothing should be needed: ${response.needed}")
+        assertTrue(response.rejected.isEmpty(), "no path should have been rejected")
 
-        println("dziennik: ${journal.codes()}")
+        println("journal: ${journal.codes()}")
     }
 
     private fun write(root: File, path: String, content: String) {

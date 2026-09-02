@@ -4,14 +4,14 @@ import java.io.File
 import java.util.ArrayDeque
 
 /**
- * Pełny obchód drzewa katalogów (§3.3 architektury, ścieżka wolna).
+ * A full walk of the directory tree (architecture §3.3, the slow path).
  *
- * Używany przy pierwszym skanie, po wykryciu resetu licznika MediaStore i okresowo
- * jako rekoncyliacja. Zwraca [Sequence], a nie listę: przy stu tysiącach plików
- * zebranie wszystkiego do pamięci naraz jest niepotrzebnym ryzykiem, a i tak
+ * Used on the first scan, after a detected MediaStore counter reset, and periodically as
+ * reconciliation. It returns a [Sequence] rather than a list: across a hundred thousand
+ * files, collecting everything into memory at once is a needless risk, and the consumer
  * przetwarzamy je partiami po 2000.
  *
- * Obchód jest iteracyjny, nie rekurencyjny — głębokie drzewa nie mogą przepełnić stosu.
+ * The walk is iterative, not recursive — deep trees must not overflow the stack.
  */
 class FilesystemScanner(
     private val root: File,
@@ -28,8 +28,8 @@ class FilesystemScanner(
         while (pending.isNotEmpty()) {
             val directory = pending.pop()
 
-            // listFiles zwraca null przy braku uprawnień albo znikniętym katalogu.
-            // Jedno takie miejsce nie może przerwać całego skanu.
+            // listFiles returns null on a permission failure or a vanished directory.
+            // One such spot must not abort the entire scan.
             val children = directory.listFiles() ?: continue
 
             for (child in children) {
@@ -46,10 +46,10 @@ class FilesystemScanner(
 
                 val mtime = Mtime.fromMillis(child.lastModified())
 
-                // Okno spokoju: plik zapisywany w tej chwili trafiłby na serwer
-                // w połowie i wyglądałby tam na kompletny.
+                // The quiet window: a file being written right now would reach the server
+                // half-formed and would look complete there.
                 if (nowSeconds() - mtime < ExclusionRules.QUIESCENCE_SECONDS) {
-                    onSkipped(canonical, "zmodyfikowany przed chwilą")
+                    onSkipped(canonical, "modified moments ago")
                     continue
                 }
 

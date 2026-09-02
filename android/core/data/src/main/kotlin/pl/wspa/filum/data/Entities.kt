@@ -7,22 +7,22 @@ import androidx.room.PrimaryKey
 /**
  * Model danych klienta (§3.2 architektury).
  *
- * Baza po stronie telefonu trzyma **kolejkę i historię**, a nie prawdę o zawartości
- * kopii zapasowej. Źródłem prawdy o tym, co serwer ma, pozostaje dysk serwera (ADR-003) —
- * tutaj przechowujemy tylko to, co pozwala wznowić pracę po zabiciu procesu.
+ * The database on the phone holds **the queue and the history**, not the truth about what
+ * the backup contains. The source of truth about what the server has is the server's disk
+ * (ADR-003) — here we keep only what allows work to resume after the process is killed.
  */
 
 /**
- * Sparowany serwer. W tej wersji obsługujemy jeden, ale klucz główny jest jawny,
- * żeby dołożenie drugiego nie wymagało migracji rozbijającej istniejące instalacje.
+ * A paired server. This version supports one, but the primary key is explicit so that
+ * adding a second would not need a migration that breaks existing installations.
  */
 @Entity(tableName = "paired_server")
 data class PairedServerEntity(
     @PrimaryKey val id: Long = SINGLETON_ID,
     val label: String,
-    /** Odcisk klucza publicznego serwera — jego tożsamość (ADR-006). */
+    /** The server's public key fingerprint — its identity (ADR-006). */
     val serverPin: String,
-    /** Alias klucza tego telefonu w Android Keystore. */
+    /** This phone's key alias in the Android Keystore. */
     val keyAlias: String,
     val serverInstanceId: String,
     val pairedAt: Long,
@@ -33,15 +33,15 @@ data class PairedServerEntity(
 }
 
 /**
- * Jedna trasa do serwera. Zbiór tras zastępuje pojedynczy „adres serwera" (ADR-006)
- * i aktualizuje się sam z odpowiedzi na ping (§4.4 protokołu).
+ * One route to the server. The route set replaces a single "server address" (ADR-006)
+ * and updates itself from the ping response (protocol §4.4).
  */
 @Entity(tableName = "endpoint", primaryKeys = ["host", "port"])
 data class EndpointEntity(
     val host: String,
     val port: Int,
     val kind: String,
-    /** Kiedy ostatnio zadziałała. Nowsze i szybsze próbujemy pierwsze. */
+    /** When it last worked. More recent and faster ones are tried first. */
     val lastOkAt: Long? = null,
     val lastRttMillis: Long? = null,
     val lastFailureAt: Long? = null,
@@ -52,22 +52,22 @@ enum class FileState {
     IN_PROGRESS,
     DONE,
 
-    /** Sieć, przeciążenie, brak miejsca — wróci do kolejki. */
+    /** Network, overload, no space — it returns to the queue. */
     FAILED_TRANSIENT,
 
-    /** Odrzucone przez serwer (422) albo nieczytelne — nie ponawiamy. */
+    /** Refused by the server (422) or unreadable — we do not retry. */
     FAILED_PERMANENT,
 
-    /** Pominięte świadomie: wykluczony katalog albo plik zmieniany w tej chwili. */
+    /** Skipped deliberately: an excluded directory, or a file being changed right now. */
     SKIPPED,
 }
 
 /**
- * Pozycja kolejki. Tożsamość pliku to trójka (ścieżka, rozmiar, mtime) — bez skrótu
- * zawartości (I5, ADR-002).
+ * A queue entry. A file's identity is the triple (path, size, mtime) — with no content
+ * digest (I5, ADR-002).
  *
- * Kluczem jest sama ścieżka, więc zmiana rozmiaru albo mtime nadpisuje wpis: to ten
- * sam plik w nowej wersji, a nie drugi plik.
+ * The key is the path alone, so a change of size or mtime overwrites the entry: that is
+ * the same file in a new version, not a second file.
  */
 @Entity(
     tableName = "file_entry",
@@ -78,7 +78,7 @@ data class FileEntryEntity(
     val size: Long,
     val mtime: Long,
     val state: FileState,
-    /** Ile bajtów serwer już potwierdził — punkt wznowienia (§5.3 protokołu). */
+    /** How many bytes the server has confirmed — the resume point (protocol §5.3). */
     val bytesSent: Long = 0,
     val attempts: Int = 0,
     val lastError: String? = null,
@@ -88,7 +88,7 @@ data class FileEntryEntity(
 @Entity(tableName = "sync_session")
 data class SyncSessionEntity(
     @PrimaryKey val id: String,
-    /** "full" albo "delta" — tryb manifestu (§5.2 protokołu). */
+    /** "full" or "delta" — the manifest mode (protocol §5.2). */
     val mode: String,
     val startedAt: Long,
     val endedAt: Long? = null,
@@ -100,9 +100,9 @@ data class SyncSessionEntity(
 )
 
 /**
- * Postęp skanowania. `lastGeneration` to licznik z MediaStore: pozwala zapytać
- * „co się zmieniło od poprzedniego razu" jednym zapytaniem, zamiast obchodzić
- * sto tysięcy plików (§3.3 architektury).
+ * Scan progress. `lastGeneration` is the MediaStore counter: it allows asking what has
+ * changed since last time in a single query, rather than walking a hundred thousand
+ * files (architecture §3.3).
  */
 @Entity(tableName = "scan_state")
 data class ScanStateEntity(
@@ -118,10 +118,10 @@ data class ExclusionEntity(
 )
 
 /**
- * Zużycie budżetu usługi pierwszoplanowej, w kubełkach godzinowych.
+ * Foreground service budget usage, in hourly buckets.
  *
- * Android 15 daje typowi `dataSync` sześć godzin na dobę w oknie kroczącym.
- * Kubełki godzinowe pozwalają policzyć to okno bez trzymania pełnej historii.
+ * Android 15 grants the `dataSync` type six hours a day over a rolling window.
+ * Hourly buckets make that window computable without keeping a full history.
  */
 @Entity(tableName = "budget_window")
 data class BudgetWindowEntity(
@@ -132,8 +132,8 @@ data class BudgetWindowEntity(
 enum class LogLevel { INFO, WARN, ERROR }
 
 /**
- * Dziennik zdarzeń widoczny w aplikacji. Bez niego nie da się zdiagnozować niczego,
- * co poszło nie tak w nocy — a właśnie wtedy aplikacja pracuje.
+ * The event journal shown in the application. Without it nothing that went wrong
+ * overnight can be diagnosed — and overnight is when the application works.
  */
 @Entity(tableName = "log_event", indices = [Index("at")])
 data class LogEventEntity(

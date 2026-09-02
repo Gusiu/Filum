@@ -7,8 +7,8 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
- * Atrapa DAO. Room udostępnia DAO jako interfejsy, więc logikę budżetu da się
- * przetestować bez bazy, bez emulatora i bez Robolectrica.
+ * A fake DAO. Room exposes DAOs as interfaces, so the budget logic can be tested
+ * without a database, without an emulator and without Robolectric.
  */
 private class FakeBudgetDao : BudgetDao {
 
@@ -27,22 +27,22 @@ private class FakeBudgetDao : BudgetDao {
 }
 
 /**
- * Budżet usługi pierwszoplanowej (§3.5 architektury).
+ * The foreground service budget (architecture §3.5).
  *
- * Błąd tutaj kończy się tym, że system ubija transfer w losowym momencie zamiast
- * pozwolić go zamknąć — dlatego liczymy sami i z zapasem.
+ * A mistake here ends with the system killing the transfer at a random moment instead
+ * of letting it close — which is why we count ourselves, and with a margin.
  */
 class BudgetTrackerTest {
 
     private val hour = BudgetTracker.BUCKET_MILLIS
 
-    /** Równa godzina, żeby przeliczenia na kubełki były czytelne w asercjach. */
+    /** A whole hour, so that bucket arithmetic reads clearly in the assertions. */
     private val poczatek = 1_756_400_000_000L / hour * hour
 
     private fun tracker(dao: BudgetDao, now: Long = poczatek) = BudgetTracker(dao) { now }
 
     @Test
-    fun `swiezy budzet pozwala na pelne pieciogodzinne okno`() = runTest {
+    fun `a fresh budget allows the full five-hour window`() = runTest {
         val dao = FakeBudgetDao()
 
         assertEquals(BudgetTracker.SAFE_LIMIT_SECONDS, tracker(dao).remainingSeconds())
@@ -50,15 +50,15 @@ class BudgetTrackerTest {
     }
 
     @Test
-    fun `limit wlasny jest nizszy od systemowego`() {
-        // Margines istnieje po to, żeby zdążyć zamknąć transfer, zanim system
-        // wywoła onTimeout i ubije pracę w nieokreślonym miejscu.
+    fun `our own limit sits below the system one`() {
+        // The margin exists so there is time to close the transfer before the system
+        // calls onTimeout and kills the work at an arbitrary point.
         assertTrue(BudgetTracker.SAFE_LIMIT_SECONDS < BudgetTracker.SYSTEM_LIMIT_SECONDS)
         assertEquals(3600, BudgetTracker.SYSTEM_LIMIT_SECONDS - BudgetTracker.SAFE_LIMIT_SECONDS)
     }
 
     @Test
-    fun `zuzyty czas pomniejsza pozostaly budzet`() = runTest {
+    fun `time spent reduces the remaining budget`() = runTest {
         val dao = FakeBudgetDao()
         val start = poczatek
 
@@ -69,9 +69,9 @@ class BudgetTrackerTest {
     }
 
     @Test
-    fun `praca przez polnoc rozklada sie na kubelki godzinowe`() = runTest {
-        // Cykl nocny trwa od 23:40 do 01:20. Wrzucenie całości do jednego kubełka
-        // zepsułoby przesuwanie się okna kroczącego.
+    fun `work spanning midnight spreads across hourly buckets`() = runTest {
+        // A night cycle runs from 23:40 to 01:20. Dropping all of it into one bucket
+        // would break the way the rolling window advances.
         val dao = FakeBudgetDao()
         val start = poczatek + 40 * 60_000
         val end = start + 100 * 60_000
@@ -86,11 +86,11 @@ class BudgetTrackerTest {
     }
 
     @Test
-    fun `okno jest kroczace, a nie dobowe`() = runTest {
-        // Cztery godziny pracy od 00:00 do 04:00. O 25:00 wypadły z okna dopiero
-        // dwie pierwsze — pozostałe dwie wciąż się liczą. To jest różnica między
-        // oknem kroczącym a resetem o północy i decyduje o tym, czy nocny cykl
-        // ruszy, czy zostanie ubity w połowie.
+    fun `the window rolls, it is not a calendar day`() = runTest {
+        // Four hours of work from 00:00 to 04:00. By 25:00 only the first two have
+        // fallen out of the window — the other two still count. That is the difference
+        // between a rolling window and a reset at midnight, and it decides whether the
+        // night cycle starts at all or gets killed halfway.
         val dao = FakeBudgetDao()
         val wczoraj = poczatek
 
@@ -100,19 +100,19 @@ class BudgetTrackerTest {
     }
 
     @Test
-    fun `zuzycie starsze niz cale okno przestaje sie liczyc`() = runTest {
+    fun `usage older than the whole window stops counting`() = runTest {
         val dao = FakeBudgetDao()
         val wczoraj = poczatek
 
         tracker(dao, wczoraj).record(wczoraj, wczoraj + 4 * hour)
 
-        val teraz = wczoraj + 30 * hour
-        assertEquals(0, tracker(dao, teraz).usedSeconds())
-        assertEquals(BudgetTracker.SAFE_LIMIT_SECONDS, tracker(dao, teraz).remainingSeconds())
+        val now = wczoraj + 30 * hour
+        assertEquals(0, tracker(dao, now).usedSeconds())
+        assertEquals(BudgetTracker.SAFE_LIMIT_SECONDS, tracker(dao, now).remainingSeconds())
     }
 
     @Test
-    fun `wyczerpany budzet nie schodzi ponizej zera`() = runTest {
+    fun `an exhausted budget does not go below zero`() = runTest {
         val dao = FakeBudgetDao()
         val start = poczatek
 
@@ -124,7 +124,7 @@ class BudgetTrackerTest {
     }
 
     @Test
-    fun `resztka ponizej minuty nie uzasadnia podniesienia uslugi`() = runTest {
+    fun `a remainder under a minute does not justify raising the service`() = runTest {
         val dao = FakeBudgetDao()
         val start = poczatek
         val prawieCaly = BudgetTracker.SAFE_LIMIT_SECONDS - 30
@@ -137,7 +137,7 @@ class BudgetTrackerTest {
     }
 
     @Test
-    fun `sprzatanie usuwa kubelki spoza okna`() = runTest {
+    fun `cleanup removes buckets outside the window`() = runTest {
         val dao = FakeBudgetDao()
         val stary = poczatek
         dao.add(BudgetTracker.bucketOf(stary), 600)
@@ -149,7 +149,7 @@ class BudgetTrackerTest {
     }
 
     @Test
-    fun `zapis pustego albo cofnietego przedzialu jest pomijany`() = runTest {
+    fun `recording an empty or backwards interval is skipped`() = runTest {
         val dao = FakeBudgetDao()
 
         tracker(dao).record(poczatek, poczatek)
@@ -159,9 +159,9 @@ class BudgetTrackerTest {
     }
 
     @Test
-    fun `kubelki sa ciagle takze przed epoka`() {
-        // floorDiv, nie dzielenie całkowite: przy ujemnych znacznikach czasu zwykłe
-        // dzielenie zaokrągla ku zeru i tworzy zdublowany kubełek wokół epoki.
+    fun `the buckets stay continuous before the epoch too`() {
+        // floorDiv, not integer division: with negative timestamps ordinary division
+        // rounds towards zero and creates a duplicated bucket around the epoch.
         assertEquals(-1, BudgetTracker.bucketOf(-1))
         assertEquals(0, BudgetTracker.bucketOf(0))
         assertEquals(-1, BudgetTracker.bucketOf(-hour))

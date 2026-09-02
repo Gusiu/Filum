@@ -4,12 +4,12 @@ using Filum.Protocol;
 
 namespace Filum.Core;
 
-/// <summary>Konfiguracja serwera. Wartości domyślne odpowiadają limitom z §5.1 protokołu.</summary>
+/// <summary>Server configuration. The defaults match the limits from protocol §5.1.</summary>
 public sealed class FilumOptions
 {
     public const string SectionName = "Filum";
 
-    /// <summary>Katalog główny backupu. Ustawiany w konfiguracji, bez wartości domyślnej.</summary>
+    /// <summary>The backup root directory. Set in configuration, with no default.</summary>
     public string Root { get; set; } = "";
 
     /// <summary>
@@ -19,8 +19,8 @@ public sealed class FilumOptions
     public string ConfigDirectory { get; set; } = "";
 
     /// <summary>
-    /// Adres nasłuchu. Od etapu 4 obowiązuje mTLS, więc wystawienie na sieć jest
-    /// bezpieczne — bez sparowanego klucza żaden zasób poza /pair nie odpowiada.
+    /// The listen address. mTLS has applied since stage 4, so exposure to the network is
+    /// safe — without a paired key no resource other than /pair answers at all.
     /// </summary>
     public string Bind { get; set; } = "0.0.0.0";
 
@@ -34,34 +34,34 @@ public sealed class FilumOptions
     public int Port { get; set; } = 8765;
 
     /// <summary>
-    /// Czy skrót przy przyjęciu pliku jest obowiązkowy (ADR-016).
+    /// Whether a digest is mandatory when a file is accepted (ADR-016).
     ///
-    /// Domyślnie tak: bez skrótu nie ma czego wpisać do rejestru integralności,
-    /// a kopia bez zapisu przyjęcia ma ograniczoną wartość dowodową. Wyłączenie
-    /// przywraca zachowanie sprzed ADR-016 i jest przewidziane dla instalacji,
-    /// w których liczy się wyłącznie odtworzenie danych.
+    /// On by default: without a digest there is nothing to record in the integrity ledger,
+    /// and a copy with no record of acceptance has limited evidentiary value. Turning it
+    /// off restores the pre-ADR-016 behaviour and is intended for installations where only
+    /// recovering the data matters.
     /// </summary>
     public bool RequireDigest { get; set; } = true;
 
     /// <summary>
-    /// Rozgłaszanie usługi przez mDNS (§4.1 protokołu).
+    /// Advertising the service over mDNS (protocol §4.1).
     ///
-    /// Da się wyłączyć, bo w sieciach firmowych multicast bywa zablokowany, a wtedy
-    /// rozgłaszanie tylko generuje ruch bez efektu. Telefon i tak znajdzie serwer
-    /// po zapisanych adresach.
+    /// It can be turned off, because corporate networks often block multicast, in which
+    /// case advertising only generates traffic to no effect. The phone will find the
+    /// server through its stored addresses anyway.
     /// </summary>
     public bool EnableMdns { get; set; } = true;
 
-    /// <summary>Dolny próg wolnego miejsca (§8.4): max(5 GiB, 2% pojemności wolumenu).</summary>
+    /// <summary>The free-space floor (§8.4): max(5 GiB, 2% of the volume's capacity).</summary>
     public long MinFreeBytes { get; set; } = 5L * 1024 * 1024 * 1024;
 
     public double MinFreeFraction { get; set; } = 0.02;
 }
 
 /// <summary>
-/// Prefiks \\?\ omijający limit 260 znaków na ścieżkę w Windows.
-/// Ścieżka musi być wcześniej w pełni rozwinięta — postać rozszerzona nie podlega
-/// normalizacji, więc segmenty '.' i '..' nie zostałyby w niej rozwiązane.
+/// The \\?\ prefix that bypasses the Windows 260-character path limit.
+/// The path must be fully expanded beforehand — the extended form is not normalised,
+/// so '.' and '..' segments inside it would never be resolved.
 /// </summary>
 public static class LongPath
 {
@@ -75,10 +75,10 @@ public static class LongPath
     }
 }
 
-/// <summary>Tożsamość pliku według I5: rozmiar i czas modyfikacji, bez skrótu zawartości.</summary>
+/// <summary>File identity per I5: size and modification time, with no content digest.</summary>
 public readonly record struct FileIdentity(long Size, long Mtime)
 {
-    /// <summary>Zwraca null, gdy pliku nie ma. mtime jest zaokrąglany do pełnych sekund (§2).</summary>
+    /// <summary>Returns null when the file is absent. mtime is truncated to whole seconds (§2).</summary>
     public static FileIdentity? Read(string absolutePath)
     {
         var info = new FileInfo(LongPath.Extended(absolutePath));
@@ -88,8 +88,8 @@ public readonly record struct FileIdentity(long Size, long Mtime)
 }
 
 /// <summary>
-/// Rozwiązywanie ścieżek fizycznych dla urządzenia. Układ katalogów opisuje §8.1 protokołu.
-/// Klasa jest jedynym miejscem, które łączy dane od klienta ze ścieżką na dysku — dlatego
+/// Resolves physical paths for a device. The directory layout is described in protocol §8.1.
+/// This class is the only place that joins client-supplied data with a path on disk, which
 /// tutaj mieszka kontrola zawierania.
 /// </summary>
 public sealed class StoragePaths(string root)
@@ -111,15 +111,15 @@ public sealed class StoragePaths(string root)
         Path.Combine(IncomingRoot(slug), PartId(canonicalPath) + ".meta");
 
     /// <summary>
-    /// Identyfikator transferu wyprowadzony ze ścieżki kanonicznej. Deterministyczny,
-    /// więc wznowienie po restarcie serwera trafia w ten sam plik bez żadnej bazy danych.
+    /// A transfer identifier derived from the canonical path. Deterministic, so resuming
+    /// after a server restart finds the same file with no database involved.
     /// </summary>
     public static string PartId(string canonicalPath) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonicalPath)));
 
     /// <summary>
-    /// Zamienia ścieżkę kanoniczną na bezwzględną ścieżkę docelową.
-    /// Zwraca false wraz z powodem, gdy ścieżka nie nadaje się do składowania.
+    /// Turns a canonical path into an absolute destination path.
+    /// Returns false, with the reason, when the path is unfit for storage.
     /// </summary>
     public bool TryResolveFile(
         string slug,
@@ -146,8 +146,9 @@ public sealed class StoragePaths(string root)
         var relative = storedRelativePath.Replace('/', Path.DirectorySeparatorChar);
         var candidate = Path.GetFullPath(Path.Combine(filesRoot, relative));
 
-        // Druga warstwa obrony. Sanityzacja powinna już wykluczyć wyjście poza katalog,
-        // ale koszt pomyłki to zapis dowolnego pliku na dysku, więc sprawdzamy wynik.
+        // A second layer of defence. Sanitisation should already have ruled out escaping
+        // the directory, but the cost of a mistake is writing an arbitrary file anywhere
+        // on the disk, so we check the result.
         if (!IsInside(filesRoot, candidate))
         {
             rejection = PathRejection.Traversal;
@@ -167,8 +168,8 @@ public sealed class StoragePaths(string root)
 }
 
 /// <summary>
-/// Próg wolnego miejsca z §8.4. Urządzenie, które z definicji nigdy niczego nie kasuje,
-/// zapchałoby dysk systemowy, gdyby nie ten limit.
+/// The free-space threshold from §8.4. A device that by definition never deletes anything
+/// would fill the system disk if not for this limit.
 /// </summary>
 public sealed class SpacePolicy(FilumOptions options)
 {

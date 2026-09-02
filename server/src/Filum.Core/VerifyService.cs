@@ -4,15 +4,15 @@ using Filum.Protocol;
 namespace Filum.Core;
 
 /// <summary>
-/// Kontrola integralności przechowywanych kopii (§5.5 protokołu).
+/// Integrity checking of the stored copies (protocol §5.5).
 ///
-/// To jest **jedyne** miejsce, w którym serwer liczy skróty istniejących plików.
-/// Wykrywanie zmian opiera się na trójce (ścieżka, rozmiar, mtime) i tak zostaje
-/// (I5, ADR-002) — weryfikacja odpowiada na inne pytanie: czy to, co leży na dysku,
-/// jest nadal tym, co przyszło z telefonu. Nośnik potrafi po cichu przekłamać bajt,
-/// a kopia zapasowa, która o tym nie wie, jest kopią złudzenia.
+/// This is the **only** place where the server hashes existing files. Change detection
+/// rests on the triple (path, size, mtime) and stays that way by default (I5, ADR-002) —
+/// verification answers a different question: is what lies on the disk still what arrived
+/// from the phone. Storage media can silently corrupt a byte, and a backup that does not
+/// know it is a backup of an illusion.
 ///
-/// Operacja jest kosztowna i uruchamiana świadomie przez użytkownika, nigdy w cyklu
+/// The operation is expensive and started deliberately by the user, never in an automatic
 /// automatycznym.
 /// </summary>
 public sealed class VerifyService(StoragePaths paths, FilumOptions options)
@@ -33,7 +33,7 @@ public sealed class VerifyService(StoragePaths paths, FilumOptions options)
             if (!paths.TryResolveFile(slug, entry.Path, options.MaxPathBytes,
                                       out var absolute, out _, out _))
             {
-                // Ścieżka nie do przyjęcia nigdy nie mogła trafić na dysk, więc
+                // An unacceptable path could never have reached the disk, so
                 // z punktu widzenia telefonu jest po prostu nieobecna.
                 missing.Add(entry.Path);
                 continue;

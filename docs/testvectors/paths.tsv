@@ -1,40 +1,40 @@
-# Filum - wektory testowe sanityzacji sciezek (PATH-RULES.md)
-# Format: input <TAB> expected <TAB> komentarz
-# Escape w kolumnach input/expected: \xHH = bajt o kodzie HH, \\ = literalny backslash
-# expected: sciezka wynikowa z separatorem / albo REJECT:<powod>
-# Obie implementacje musza przechodzic caly zestaw.
-DCIM/Camera/IMG_0001.JPG	DCIM/Camera/IMG_0001.JPG	przejscie bez zmian
-Pictures/wakacje 2025/zdjęcie.jpg	Pictures/wakacje 2025/zdjęcie.jpg	spacje i diakrytyki sa dozwolone
-Documents/raport:v2.docx	Documents/raport%3Av2.docx	dwukropek
-Documents/a<b>c.txt	Documents/a%3Cb%3Ec.txt	nawiasy ostre
-Documents/100% pewne.txt	Documents/100%25 pewne.txt	procent kodowany jako pierwszy - warunek roznowartosciowosci
-Documents/juz%3Azakodowane.txt	Documents/juz%253Azakodowane.txt	tekst wygladajacy na kodowanie tez sie koduje
-Download/plik?.bin	Download/plik%3F.bin	znak zapytania
-Download/a"b.txt	Download/a%22b.txt	cudzyslow
-Download/a|b.txt	Download/a%7Cb.txt	pionowa kreska
-Download/a*b.txt	Download/a%2Ab.txt	gwiazdka
-Download/back\\slash.txt	Download/back%5Cslash.txt	backslash jest legalny w nazwie na Androidzie
-Download/a\x01b.txt	Download/a%01b.txt	kod sterujacy
-Download/a\x1Fb.txt	Download/a%1Fb.txt	gorna granica kodow sterujacych
-Notes/koniec.	Notes/koniec%2E	koncowa kropka
-Notes/koniec\x20	Notes/koniec%20	koncowa spacja
-Notes/...	Notes/..%2E	kodowany tylko ostatni znak
-Notes/a. .	Notes/a. %2E	kropka i spacja w srodku zostaja nietkniete
-Notes/w.srodku.kropki.txt	Notes/w.srodku.kropki.txt	kropki wewnetrzne sa legalne
-System/CON	System/%43ON	nazwa zastrzezona DOS
-System/con.txt	System/%63on.txt	zastrzezona z rozszerzeniem, wielkosc liter zachowana
-System/COM1.log	System/%43OM1.log	port szeregowy
-System/LPT9	System/%4CPT9	port rownolegly
-System/NUL	System/%4EUL	urzadzenie puste
-System/aux	System/%61ux	nazwa zastrzezona malymi literami
-System/prn.dat	System/%70rn.dat	drukarka
-System/CONSOLE.txt	System/CONSOLE.txt	nie jest nazwa zastrzezona - dopasowanie jest dokladne
-System/COM10.log	System/COM10.log	zastrzezone sa tylko COM1..COM9
-Mixed/a<b:c.\x20\x20	Mixed/a%3Cb%3Ac.\x20%20	kilka regul naraz; kodowany tylko ostatni znak, przedostatnia spacja przestaje byc koncowa
-/etc/passwd	REJECT:absolute	sciezka bezwzgledna
-../sekret.txt	REJECT:traversal	wyjscie poza katalog
-a/../b.txt	REJECT:traversal	wyjscie w srodku sciezki
-a/./b.txt	REJECT:dot_segment	segment kropkowy
-a//b.txt	REJECT:empty_segment	pusty segment
-a/b\x00c.txt	REJECT:nul	bajt zerowy
-C:/Windows/x.txt	C%3A/Windows/x.txt	litera dysku to zwykly tekst - kodowanie ja neutralizuje
+# Filum - path sanitisation test vectors (PATH-RULES.md)
+# Format: input <TAB> expected <TAB> comment
+# Escapes in the input/expected columns: \xHH = byte with code HH, \ = literal backslash
+# expected: resulting path with / as the separator, or REJECT:<reason>
+# Both implementations must pass the whole set.
+DCIM/Camera/IMG_0001.JPG	DCIM/Camera/IMG_0001.JPG	passes through unchanged
+Pictures/holiday 2025/zdjęcie-łąka.jpg	Pictures/holiday 2025/zdjęcie-łąka.jpg	spaces and diacritics are allowed; deliberately non-ASCII, NFC handling depends on it
+Documents/report:v2.docx	Documents/report%3Av2.docx	colon
+Documents/a<b>c.txt	Documents/a%3Cb%3Ec.txt	angle brackets
+Documents/100% sure.txt	Documents/100%25 sure.txt	percent encoded first - the condition for injectivity
+Documents/already%3Aencoded.txt	Documents/already%253Aencoded.txt	text that looks like an encoding gets encoded too
+Download/file?.bin	Download/file%3F.bin	question mark
+Download/a"b.txt	Download/a%22b.txt	double quote
+Download/a|b.txt	Download/a%7Cb.txt	pipe
+Download/a*b.txt	Download/a%2Ab.txt	asterisk
+Download/back\slash.txt	Download/back%5Cslash.txt	a backslash is legal in an Android filename
+Download/a\x01b.txt	Download/a%01b.txt	control code
+Download/a\x1Fb.txt	Download/a%1Fb.txt	upper bound of the control codes
+Notes/trailing.	Notes/trailing%2E	trailing dot
+Notes/trailing\x20	Notes/trailing%20	trailing space
+Notes/...	Notes/..%2E	only the last character is encoded
+Notes/a. .	Notes/a. %2E	a dot and a space in the middle are left untouched
+Notes/dots.inside.name.txt	Notes/dots.inside.name.txt	interior dots are legal
+System/CON	System/%43ON	DOS reserved name
+System/con.txt	System/%63on.txt	reserved with an extension, case preserved
+System/COM1.log	System/%43OM1.log	serial port
+System/LPT9	System/%4CPT9	parallel port
+System/NUL	System/%4EUL	null device
+System/aux	System/%61ux	reserved name in lowercase
+System/prn.dat	System/%70rn.dat	printer
+System/CONSOLE.txt	System/CONSOLE.txt	not a reserved name - the match is exact
+System/COM10.log	System/COM10.log	only COM1..COM9 are reserved
+Mixed/a<b:c.\x20\x20	Mixed/a%3Cb%3Ac.\x20%20	several rules at once; only the last character is encoded, so the space before it stops being trailing
+/etc/passwd	REJECT:absolute	absolute path
+../secret.txt	REJECT:traversal	escaping the directory
+a/../b.txt	REJECT:traversal	escaping mid-path
+a/./b.txt	REJECT:dot_segment	dot segment
+a//b.txt	REJECT:empty_segment	empty segment
+a/b\x00c.txt	REJECT:nul	nul byte
+C:/Windows/x.txt	C%3A/Windows/x.txt	a drive letter is ordinary text - encoding neutralises it

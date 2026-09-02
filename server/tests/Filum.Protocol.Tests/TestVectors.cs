@@ -3,7 +3,7 @@ using System.Text;
 
 namespace Filum.Protocol.Tests;
 
-/// <summary>Jeden wiersz z docs/testvectors/paths.tsv, po odwróceniu sekwencji ucieczki.</summary>
+/// <summary>One line from docs/testvectors/paths.tsv, with its escapes decoded.</summary>
 public sealed record PathVector(string Input, string Expected, string Note)
 {
     public bool IsRejection => Expected.StartsWith("REJECT:", StringComparison.Ordinal);
@@ -16,10 +16,10 @@ public sealed record PathVector(string Input, string Expected, string Note)
         "empty_segment" => PathRejection.EmptySegment,
         "nul"           => PathRejection.Nul,
         "path_too_long" => PathRejection.PathTooLong,
-        var other       => throw new InvalidOperationException($"nieznany powód odrzucenia: {other}")
+        var other       => throw new InvalidOperationException($"unknown rejection reason: {other}")
     };
 
-    // Widoczne w nazwie przypadku testowego; znaki niedrukowalne trzeba pokazać.
+    // Shown in the test case name; non-printing characters have to be made visible.
     public override string ToString() => Escape(Input) + " -> " + Escape(Expected);
 
     private static string Escape(string value)
@@ -28,7 +28,7 @@ public sealed record PathVector(string Input, string Expected, string Note)
         foreach (var c in value)
         {
             if (c < 0x20) builder.Append(CultureInfo.InvariantCulture, $"\\x{(int)c:X2}");
-            else if (c == ' ') builder.Append('␣'); // ␣ — spacja musi być widoczna
+            else if (c == ' ') builder.Append('␣'); // a space has to be visible
             else builder.Append(c);
         }
         return builder.ToString();
@@ -39,7 +39,7 @@ public static class TestVectors
 {
     private const string RelativePath = "docs/testvectors/paths.tsv";
 
-    /// <summary>Źródło danych dla [Theory]. Ładowane raz, wektory są niezmienne.</summary>
+    /// <summary>The data source for [Theory]. Loaded once; the vectors are immutable.</summary>
     public static IEnumerable<object[]> All() => Load().Select(v => new object[] { v });
 
     public static IReadOnlyList<PathVector> Load()
@@ -60,14 +60,15 @@ public static class TestVectors
         }
 
         if (vectors.Count == 0)
-            throw new InvalidOperationException($"{RelativePath} nie zawiera żadnych wektorów");
+            throw new InvalidOperationException($"{RelativePath} contains no vectors");
 
         return vectors;
     }
 
     /// <summary>
-    /// Odwraca sekwencje ucieczki z nagłówka pliku: \xHH oznacza bajt, \\ literalny backslash.
-    /// Bez tego znaki niedrukowalne i końcowe spacje nie przetrwałyby w pliku tekstowym.
+    /// Decodes the escapes described in the file's header: \xHH is a byte, \\ a literal
+    /// backslash. Without them, non-printing characters and trailing spaces would not
+    /// survive in a text file.
     /// </summary>
     public static string Unescape(string value)
     {
@@ -96,8 +97,8 @@ public static class TestVectors
     }
 
     /// <summary>
-    /// Szuka pliku wektorów, idąc w górę od katalogu binariów. Dzięki temu ta sama
-    /// logika działa niezależnie od konfiguracji kompilacji i od tego, skąd uruchomiono testy.
+    /// Looks for the vector file by walking up from the binary directory. That way the same
+    /// logic works regardless of build configuration and of where the tests were started.
     /// </summary>
     private static string Locate()
     {
@@ -109,6 +110,6 @@ public static class TestVectors
             directory = directory.Parent;
         }
         throw new FileNotFoundException(
-            $"Nie znaleziono {RelativePath} w żadnym katalogu nadrzędnym względem {AppContext.BaseDirectory}");
+            $"{RelativePath} was not found in any directory above {AppContext.BaseDirectory}");
     }
 }

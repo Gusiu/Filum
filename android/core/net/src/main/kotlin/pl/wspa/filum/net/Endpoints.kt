@@ -1,34 +1,34 @@
 package pl.wspa.filum.net
 
 /**
- * Skąd wzięliśmy tę trasę. Rodzaj decyduje o dwóch rzeczach: czy gniazdo trzeba
- * przypiąć do konkretnej sieci (§4.3 protokołu) i jaka polityka transferu obowiązuje
+ * Where this route came from. The kind decides two things: whether the socket has to be
+ * bound to a specific network (protocol §4.3) and which transfer policy applies
  * po jej wygraniu (§3.6 architektury).
  */
 enum class EndpointKind {
-    /** Znaleziona przez mDNS w bieżącej sieci lokalnej. */
+    /** Found over mDNS on the current local network. */
     MDNS,
 
-    /** Ostatni skuteczny adres w sieci lokalnej, z pamięci podręcznej. */
+    /** The last working local network address, from cache. */
     LAN,
 
-    /** Sieć nakładkowa: Meshnet, Tailscale, WireGuard. Działa spoza domu. */
+    /** An overlay network: Meshnet, Tailscale, WireGuard. Works from outside the home. */
     OVERLAY,
 
-    /** Wpisana ręcznie albo pochodząca z kodu parowania, zanim poznamy jej naturę. */
+    /** Entered by hand or taken from the pairing code, before we know what it is. */
     MANUAL;
 
     /**
-     * Czy trasa prowadzi przez sieć lokalną. Takie gniazda przypinamy do konkretnego
-     * obiektu `Network`, żeby działały mimo aktywnego VPN — inaczej pakiet wszedłby
-     * w tunel i adres 192.168.x.x stałby się nieosiągalny.
+     * Whether the route goes over the local network. Such sockets are bound to a specific
+     * `Network` object so they work despite an active VPN — otherwise the packet would
+     * enter the tunnel and 192.168.x.x would become unreachable.
      */
     val isLocal: Boolean get() = this == MDNS || this == LAN
 }
 
 /**
- * Jeden kandydat na dotarcie do serwera. Klient nie przechowuje „adresu serwera",
- * tylko zbiór takich kandydatów (ADR-006) — tożsamością jest odcisk klucza, nie adres.
+ * One candidate route to the server. The client stores no "server address",
+ * only a set of such candidates (ADR-006) — the identity is the key fingerprint, not an address.
  */
 data class ServerEndpoint(
     val host: String,
@@ -44,8 +44,8 @@ data class ServerEndpoint(
     companion object {
         /**
          * Rozbiera zapis `host:port` albo `[ipv6]:port` z odpowiedzi na ping (§4.4) lub
-         * z kodu parowania. Zwraca null zamiast rzucać, bo lista adresów pochodzi
-         * z sieci i jeden zepsuty wpis nie może wywrócić całego odświeżenia tras.
+         * from the pairing code. It returns null rather than throwing, because the address list
+         * comes off the network and one broken entry must not wreck the whole route refresh.
          */
         fun parse(raw: String, kind: EndpointKind, defaultPort: Int = 8765): ServerEndpoint? {
             val trimmed = raw.trim()
@@ -59,9 +59,9 @@ data class ServerEndpoint(
                 return if (host.isNotEmpty() && port in 1..65_535) ServerEndpoint(host, port, kind) else null
             }
 
-            // Więcej niż jeden dwukropek bez nawiasów to goły adres IPv6. RFC 3986
-            // wymaga nawiasów, gdy po adresie IPv6 następuje port — bez tej reguły
-            // ostatni człon "fe80::1" wyglądałby jak numer portu.
+            // More than one colon without brackets means a bare IPv6 address. RFC 3986
+            // requires brackets when a port follows an IPv6 address — without this rule
+            // the last group of "fe80::1" would look like a port number.
             if (trimmed.count { it == ':' } > 1) {
                 return ServerEndpoint(trimmed, defaultPort, kind)
             }

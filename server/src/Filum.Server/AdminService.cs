@@ -10,9 +10,9 @@ public sealed record PairingCode(string Payload, string QrSvg, int ExpiresInSeco
 /// <summary>
 /// Dane i operacje panelu.
 ///
-/// Wszystko, co tu jest, wymaga połączenia z pętli zwrotnej — panel wydaje tokeny
-/// parowania i pokazuje zawartość kopii, więc osoba przy komputerze jest jedynym
-/// uprawnionym odbiorcą (patrz <see cref="DeviceAuthenticationMiddleware"/>).
+/// Everything here requires a loopback connection — the panel issues pairing tokens and
+/// shows the contents of the backup, so the person at the computer is the only entitled
+/// audience (see <see cref="DeviceAuthenticationMiddleware"/>).
 /// </summary>
 public sealed class AdminService(
     FilumOptions options,
@@ -68,25 +68,25 @@ public sealed class AdminService(
 
     public bool SetEnabled(string pin, bool enabled) => registry.SetEnabled(pin, enabled);
 
-    /// <summary>Najnowszy raport sierot urządzenia; null, gdy pełna rekoncyliacja jeszcze nie przeszła.</summary>
+    /// <summary>The device's latest orphan report; null when no full reconciliation has run yet.</summary>
     public OrphanReport? Orphans(string slug) => orphans.Latest(slug);
 
     /// <summary>
-    /// Odbiera urządzeniu dostęp, ale **nie usuwa jego plików**.
+    /// Revokes a device's access but **does not delete its files**.
     ///
-    /// Niezmiennik I1 obowiązuje także tutaj: rozparowanie telefonu nie może kasować
-    /// kopii, bo najczęstszy powód rozparowania to zgubiony albo wymieniony telefon,
-    /// czyli dokładnie ta chwila, w której kopia jest najbardziej potrzebna.
+    /// Invariant I1 holds here too: unpairing a phone must not erase the copy, because the
+    /// most common reason to unpair is a lost or replaced phone — exactly the moment the
+    /// backup matters most.
     /// </summary>
     public bool Forget(string pin) => registry.Forget(pin);
 
     /// <summary>
-    /// Stan rejestru urządzenia.
+    /// The device's ledger state.
     ///
-    /// Weryfikacja przechodzi cały rejestr, więc przy stu tysiącach wpisów kosztuje
-    /// odczyt kilkunastu megabajtów tekstu. To odczyt sekwencyjny raz na wejście
-    /// do panelu, a nie na żądanie telefonu — a bez tego panel pokazywałby liczbę
-    /// wpisów bez informacji, czy cokolwiek z nich jest jeszcze wiarygodne.
+    /// Verification walks the entire ledger, so across a hundred thousand entries it costs
+    /// reading a dozen or so megabytes of text. That is one sequential read per visit to
+    /// the panel, not per request from a phone — and without it the panel would show an
+    /// entry count with no indication of whether any of it is still trustworthy.
     /// </summary>
     private AdminLedger? LedgerOf(string slug)
     {
@@ -96,7 +96,7 @@ public sealed class AdminService(
         return new AdminLedger(result.Entries, result.Intact, result.BrokenAtSequence, result.Problem);
     }
 
-    /// <summary>Kiedy do katalogu urządzenia trafiło coś ostatnio.</summary>
+    /// <summary>When something last arrived in the device's directory.</summary>
     private DateTimeOffset? LastActivity(string slug)
     {
         var directory = LongPath.Extended(paths.FilesRoot(slug));
@@ -106,8 +106,8 @@ public sealed class AdminService(
     }
 
     /// <summary>
-    /// Kod QR jako SVG, nie PNG: skaluje się bez rozmycia, a przy skanowaniu telefonem
-    /// ostrość krawędzi ma znaczenie.
+    /// The QR code as SVG rather than PNG: it scales without blurring, and edge sharpness
+    /// matters when a phone is doing the scanning.
     /// </summary>
     private static string RenderQr(string payload)
     {

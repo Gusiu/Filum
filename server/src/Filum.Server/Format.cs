@@ -2,7 +2,7 @@ using System.Globalization;
 
 namespace Filum.Server;
 
-/// <summary>Formatowanie wartości na potrzeby panelu.</summary>
+/// <summary>Value formatting for the panel.</summary>
 public static class Format
 {
     private static readonly string[] Units = ["B", "kB", "MB", "GB", "TB", "PB"];
@@ -24,8 +24,8 @@ public static class Format
     }
 
     /// <summary>
-    /// Czas względny. Panel odświeża się rzadko, a „12 minut temu" niesie więcej
-    /// informacji niż data z sekundami, którą trzeba w głowie odjąć od teraz.
+    /// Relative time. The panel refreshes rarely, and "12 minutes ago" carries more
+    /// information than a timestamp to the second that has to be subtracted mentally.
     /// </summary>
     public static string Moment(DateTimeOffset? moment)
     {
@@ -35,7 +35,7 @@ public static class Format
 
         return elapsed switch
         {
-            { TotalMinutes: < 1 } => "przed chwilą",
+            { TotalMinutes: < 1 } => "just now",
             { TotalMinutes: < 60 } => $"{(int)elapsed.TotalMinutes} min temu",
             { TotalHours: < 24 } => $"{(int)elapsed.TotalHours} godz. temu",
             { TotalDays: < 30 } => $"{(int)elapsed.TotalDays} dni temu",

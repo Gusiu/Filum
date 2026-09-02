@@ -28,9 +28,9 @@ interface PairedServerDao {
 interface EndpointDao {
 
     /**
-     * Trasy w kolejności do sondowania: najpierw te, które ostatnio zadziałały,
-     * a wśród nich najszybsze. Wyścig i tak sprawdza wszystkie równolegle (§4.2),
-     * ale kolejność decyduje przy remisie i wygląda sensownie w dzienniku.
+     * Routes in probing order: the ones that worked most recently first, and among those
+     * the fastest. The race checks all of them in parallel anyway (§4.2), but the order
+     * decides a tie and reads sensibly in the journal.
      */
     @Query(
         """
@@ -66,8 +66,8 @@ interface FileEntryDao {
     suspend fun get(path: String): FileEntryEntity?
 
     /**
-     * Kolejna porcja do wysłania. Najstarsze wpisy pierwsze, żeby plik, który
-     * raz przegrał wyścig o miejsce w porcji, nie czekał w nieskończoność.
+     * The next batch to send. Oldest entries first, so that a file which once lost its
+     * place in a batch does not wait forever.
      */
     @Query(
         """
@@ -101,10 +101,10 @@ interface FileEntryDao {
     suspend fun markFailed(path: String, state: FileState, error: String, at: Long)
 
     /**
-     * Sprząta wpisy zakończone powodzeniem starsze niż podany moment.
+     * Cleans up successfully finished entries older than the given moment.
      *
-     * Kolejka nie jest archiwum — historia mieszka w dzienniku i w sesjach.
-     * Bez tego tabela rosłaby o każdy z około stu tysięcy plików i nigdy nie malała.
+     * The queue is not an archive — the history lives in the journal and in the sessions.
+     * Without it the table would grow by every one of a hundred thousand files and never shrink.
      */
     @Query("DELETE FROM file_entry WHERE state = 'DONE' AND updatedAt < :before")
     suspend fun pruneCompleted(before: Long): Int
@@ -192,9 +192,9 @@ interface LogEventDao {
     suspend fun recent(limit: Int = LogEventDao.RETENTION): List<LogEventEntity>
 
     /**
-     * Przycina dziennik do ostatnich [RETENTION] zdarzeń. Ekran logu i tak pokazuje
-     * tyle samo, a nieograniczony dziennik przy stu tysiącach plików urósłby szybciej
-     * niż same dane.
+     * Trims the journal to the last [RETENTION] events. The log screen shows that many
+     * anyway, and across a hundred thousand files an unbounded journal would grow faster
+     * than the data itself.
      */
     @Query(
         """

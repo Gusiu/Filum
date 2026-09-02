@@ -3,26 +3,26 @@ using System.Globalization;
 namespace Filum.Core;
 
 /// <summary>
-/// Odkładanie poprzedniej zawartości pliku (§8.3 protokołu, ADR-007).
+/// Filing away a file's previous content (protocol §8.3, ADR-007).
 ///
-/// Nadpisanie jest formą utraty danych, więc sprzeczne z niezmiennikiem I1.
-/// Wersje trzymamy poza katalogiem files/, żeby żywe drzewo pozostało czystym
-/// lustrem obecnego stanu telefonu i dało się przeglądać w Eksploratorze.
+/// Overwriting is a form of data loss, and so contradicts invariant I1. Versions live
+/// outside the files/ directory so the live tree stays a clean mirror of the phone's
+/// current state and remains browsable in Explorer.
 /// </summary>
 public sealed class VersionStore(StoragePaths paths)
 {
     /// <summary>
-    /// Przenosi istniejący plik docelowy do .filum/versions/. Znacznik czasu w nazwie
-    /// pochodzi z mtime **starej kopii**, nie z chwili wykonania operacji — dzięki temu
-    /// nazwa mówi, z kiedy pochodzi zawartość, a nie kiedy przypadkiem doszło do wysyłki.
+    /// Moves the existing destination file into .filum/versions/. The timestamp in the
+    /// name comes from the **old copy's** mtime, not from the moment of the operation —
+    /// so the name says when the content is from, not when the upload happened to run.
     /// </summary>
-    /// <returns>Ścieżka wersji względem katalogu urządzenia, do zwrócenia klientowi.</returns>
+    /// <returns>The version's path relative to the device directory, to return to the client.</returns>
     public string Archive(string slug, string storedRelativePath, string absoluteTarget)
     {
         var extended = LongPath.Extended(absoluteTarget);
         var info = new FileInfo(extended);
         if (!info.Exists)
-            throw new InvalidOperationException($"Nie ma czego wersjonować: {absoluteTarget}");
+            throw new InvalidOperationException($"Nothing to version: {absoluteTarget}");
 
         var timestamp = info.LastWriteTimeUtc.ToString("yyyyMMdd'T'HHmmss'Z'", CultureInfo.InvariantCulture);
 
@@ -37,8 +37,8 @@ public sealed class VersionStore(StoragePaths paths)
 
         var candidate = Path.Combine(targetDirectory, $"{stem}.{timestamp}{extension}");
 
-        // Kolizja oznacza, że mamy już odłożoną wersję o dokładnie tym mtime. Nie wolno
-        // jej nadpisać, bo to znowu byłaby utrata danych — dokładamy licznik.
+        // A collision means a version with exactly this mtime is already filed away.
+        // Overwriting it would be data loss again, so we append a counter.
         var counter = 2;
         while (File.Exists(LongPath.Extended(candidate)))
         {

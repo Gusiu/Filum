@@ -7,11 +7,11 @@ using Filum.Protocol;
 namespace Filum.Tray;
 
 /// <summary>
-/// Połączenie ikony w zasobniku z serwerem.
+/// The tray icon's connection to the server.
 ///
-/// Ikona jest osobnym procesem, bo usługa Windows działa w sesji 0 i nie może
-/// wyświetlać interfejsu (ADR-010). Rozmawia z serwerem przez to samo lokalne API,
-/// z którego korzysta panel — nie ma między nimi żadnego kanału specjalnego.
+/// The icon is a separate process, because a Windows service runs in session 0 and cannot
+/// display an interface (ADR-010). It talks to the server over the same local API the
+/// panel uses — there is no special channel between them.
 /// </summary>
 public sealed class ServerLink : IDisposable
 {
@@ -25,9 +25,9 @@ public sealed class ServerLink : IDisposable
 
         var handler = new HttpClientHandler
         {
-            // Certyfikat serwera jest samopodpisany z definicji (ADR-005), więc
-            // łańcucha zaufania nie ma czego sprawdzać. Sprawdzamy odcisk klucza —
-            // ten sam mechanizm, którego używa telefon, tylko po stronie pulpitu.
+            // The server certificate is self-signed by definition (ADR-005), so there is
+            // no trust chain to check. We check the key fingerprint instead — the same
+            // mechanism the phone uses, only on the desktop side.
             ServerCertificateCustomValidationCallback = ValidatePin,
         };
 
@@ -38,12 +38,12 @@ public sealed class ServerLink : IDisposable
         };
     }
 
-    /// <summary>Odcisk klucza serwera odczytany z jego certyfikatu; null, gdy serwer nigdy nie wystartował.</summary>
+    /// <summary>The server's key fingerprint read from its certificate; null if the server never started.</summary>
     public string? ExpectedPin { get; }
 
     public string PanelUrl => _baseUrl + "/";
 
-    public string PairingUrl => _baseUrl + "/parowanie";
+    public string PairingUrl => _baseUrl + "/pairing";
 
     public async Task<AdminStatus?> StatusAsync(CancellationToken ct = default)
     {
@@ -53,8 +53,8 @@ public sealed class ServerLink : IDisposable
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
-            // Serwer wyłączony albo jeszcze nie wstał. Dla ikony to normalny stan,
-            // nie awaria — pokazuje wtedy po prostu, że nie działa.
+            // The server is stopped or has not come up yet. For the icon that is a normal
+            // state, not a failure — it simply shows that nothing is running.
             return null;
         }
     }
@@ -70,11 +70,11 @@ public sealed class ServerLink : IDisposable
     }
 
     /// <summary>
-    /// Odczytuje klucz publiczny serwera z jego certyfikatu.
+    /// Reads the server's public key from its certificate.
     ///
-    /// Ikona działa na tym samym koncie użytkownika co serwer, więc plik jest dla niej
-    /// czytelny. Dzięki temu nie musimy ufać czemukolwiek na porcie 8765 — nawet
-    /// lokalnie, gdzie inny proces mógłby zdążyć zająć port pierwszy.
+    /// The icon runs under the same user account as the server, so the file is readable to
+    /// it. That way we do not have to trust whatever is on port 8765 — not even locally,
+    /// where another process could have claimed the port first.
     /// </summary>
     private static string? ReadServerPin(string configDirectory)
     {

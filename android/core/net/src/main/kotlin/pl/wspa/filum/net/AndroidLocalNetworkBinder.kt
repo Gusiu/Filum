@@ -10,16 +10,16 @@ import java.io.Closeable
 import javax.net.SocketFactory
 
 /**
- * Przypięcie gniazd do sieci Wi-Fi z pominięciem tunelu VPN (§4.3 protokołu).
+ * Binding sockets to the Wi-Fi network, bypassing the VPN tunnel (protocol §4.3).
  *
- * Gdy na telefonie działa VPN, system domyślnie wpycha cały ruch aplikacji do tunelu.
- * Adres nakładkowy wtedy zadziała, ale `192.168.1.10` już nie — pakiet poleci do tunelu
- * zamiast do sieci lokalnej. Rozwiązaniem jest poproszenie o konkretny obiekt
- * [Network] i użycie jego fabryki gniazd.
+ * When a VPN is running, the system pushes all of an application's traffic into the tunnel
+ * by default. An overlay address then works, but `192.168.1.10` does not — the packet goes
+ * to the tunnel instead of the local network. The fix is to ask for a specific [Network]
+ * object and use its socket factory.
  *
- * Zastrzeżenie do sprawdzenia na urządzeniu docelowym: jeżeli VPN działa w trybie
- * blokującym ruch poza tunelem, przypięcie i tak zawiedzie. Wtedy trasa lokalna po
- * prostu przepada w wyścigu, a wygrywa nakładkowa — użytkownik nie widzi błędu,
+ * A caveat to verify on the target device: if the VPN blocks traffic outside the tunnel,
+ * the binding will fail anyway. The local route then simply loses the race and the overlay
+ * one wins — the user sees no error,
  * tylko wolniejszy transfer w domu.
  *
  * Wymaga uprawnienia `ACCESS_NETWORK_STATE`.
@@ -35,20 +35,20 @@ class AndroidLocalNetworkBinder(context: Context) : LocalNetworkBinder, Closeabl
     private val callback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
             wifi = network
-            Log.d(TAG, "Sieć Wi-Fi dostępna do przypięcia gniazd")
+            Log.d(TAG, "A Wi-Fi network is available for socket binding")
         }
 
         override fun onLost(network: Network) {
             if (wifi == network) {
                 wifi = null
-                Log.d(TAG, "Utracono sieć Wi-Fi; trasy lokalne pójdą trasą domyślną")
+                Log.d(TAG, "Lost the Wi-Fi network; local routes will use the default route")
             }
         }
     }
 
     init {
-        // Żądanie obejmuje wyłącznie TRANSPORT_WIFI, a sieci VPN mają własny transport,
-        // więc trafiamy w fizyczne Wi-Fi także wtedy, gdy tunel jest aktywny.
+        // The request covers TRANSPORT_WIFI only, and VPN networks have their own transport,
+        // so we reach the physical Wi-Fi even while the tunnel is up.
         val request = NetworkRequest.Builder()
             .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
@@ -57,7 +57,7 @@ class AndroidLocalNetworkBinder(context: Context) : LocalNetworkBinder, Closeabl
         try {
             connectivity?.registerNetworkCallback(request, callback)
         } catch (e: SecurityException) {
-            Log.w(TAG, "Brak uprawnienia ACCESS_NETWORK_STATE; trasy lokalne bez przypięcia", e)
+            Log.w(TAG, "No ACCESS_NETWORK_STATE permission; local routes will go unbound", e)
         }
     }
 
@@ -67,7 +67,7 @@ class AndroidLocalNetworkBinder(context: Context) : LocalNetworkBinder, Closeabl
         try {
             connectivity?.unregisterNetworkCallback(callback)
         } catch (e: IllegalArgumentException) {
-            // Wyrejestrowany już wcześniej — nie ma czego sprzątać.
+            // Already unregistered — there is nothing to clean up.
         }
     }
 

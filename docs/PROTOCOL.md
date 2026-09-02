@@ -1,89 +1,87 @@
-# Filum — specyfikacja protokołu
+# Filum — protocol specification
 
-Wersja protokołu: **1**
-Status: projekt (draft), przed pierwszą implementacją.
+Protocol version: **1**
+Status: draft, ahead of the first implementation.
 
-Dokument jest normatywny dla obu implementacji: serwera (.NET) i klienta (Android).
-Celem jest, żeby każdą ze stron dało się napisać od zera, wyłącznie na podstawie
-tego dokumentu i [PATH-RULES.md](PATH-RULES.md).
+This document is normative for both implementations: the server (.NET) and the client
+(Android). The goal is that either side can be written from scratch using only this
+document and [PATH-RULES.md](PATH-RULES.md).
 
-Słowa **MUSI**, **NIE WOLNO**, **POWINIEN**, **MOŻE** mają znaczenie normatywne.
+The words **MUST**, **MUST NOT**, **SHOULD** and **MAY** carry their RFC 2119 meaning.
 
 ---
 
 ## 1. Model
 
-Filum realizuje **jednokierunkowy, przyrostowy backup** z urządzenia mobilnego
-na komputer osobisty. Kierunek jest wyłącznie telefon → PC.
+Filum performs a **one-way, incremental backup** from a mobile device to a personal
+computer. The direction is phone → PC and nothing else.
 
-Niezmienniki, na których opiera się cała reszta specyfikacji:
+The invariants the rest of this specification rests on:
 
-- **I1 — monotoniczność.** Zbiór plików przechowywanych przez serwer może wyłącznie
-  rosnąć. Usunięcie pliku na telefonie nie wpływa na kopię. Serwer nie udostępnia
-  żadnej operacji usuwania.
-- **I2 — brak nadpisywania.** Jeżeli pod znaną ścieżką pojawia się inna zawartość,
-  poprzednia wersja MUSI zostać zachowana (§8.3). Nadpisanie jest formą utraty danych.
-- **I3 — przezroczystość składowania.** Dane na serwerze leżą jako zwykłe drzewo
-  katalogów w systemie plików. Odtworzenie nie może wymagać tej aplikacji.
-- **I4 — tożsamość przez klucz.** Strony rozpoznają się po kluczu publicznym,
-  nigdy po adresie sieciowym (§3).
-- **I5 — tożsamość pliku zależy od polityki.** Domyślnie plik identyfikuje trójka
-  `(ścieżka, rozmiar, mtime)`; w trybie dokładnym częścią tożsamości jest skrót
-  zawartości (§9.3, ADR-016). Wybór należy do klienta i jest widoczny w manifeście.
-- **I6 — przyjęcie jest rejestrowane.** Każdy przyjęty plik trafia do dopisywanego
-  rejestru integralności spiętego łańcuchem skrótów. Rejestr pozwala wykazać, co
-  i kiedy serwer przyjął, a wsteczna edycja samego rejestru jest wykrywalna (§9.2).
+- **I1 — monotonicity.** The set of files the server holds may only grow. Deleting a
+  file on the phone does not affect the copy. The server exposes no delete operation.
+- **I2 — no overwriting.** If different content appears under a known path, the previous
+  version MUST be preserved (§8.3). Overwriting is a form of data loss.
+- **I3 — transparent storage.** Data on the server sits as an ordinary directory tree in
+  the filesystem. Restoring MUST NOT require this application.
+- **I4 — identity by key.** The parties recognise each other by public key, never by
+  network address (§3).
+- **I5 — file identity depends on policy.** By default a file is identified by the triple
+  `(path, size, mtime)`; in thorough mode a content digest is part of its identity
+  (§9.3, ADR-016). The choice belongs to the client and is visible in the manifest.
+- **I6 — acceptance is recorded.** Every accepted file is appended to an integrity ledger
+  chained by digests. The ledger makes it possible to show what the server accepted and
+  when, and retroactive edits to the ledger itself are detectable (§9.2).
 
-## 2. Warstwa transportowa
+## 2. Transport layer
 
-- HTTP/1.1 nad TLS 1.3 (TLS 1.2 dopuszczalne jako zapas).
-- Serwer MUSI nasłuchiwać na `0.0.0.0` — nigdy na wybranym pojedynczym adresie.
-  Wymóg wynika z §4: ten sam proces musi być osiągalny przez LAN, przez sieć
-  nakładkową i przez `localhost`.
-- Port domyślny: **8765/tcp**, konfigurowalny.
-- Prefiks wszystkich zasobów: `/api/v1`.
-- Kodowanie tekstu: UTF-8, bez BOM.
-- Znaczniki czasu w ciałach JSON: ISO 8601 w UTC.
-- Znaczniki `mtime`: **liczba całkowita sekund od epoki Uniksa, UTC**.
-  Klient MUSI znormalizować mtime do sekund w jednym miejscu, na granicy odczytu
-  z systemu plików (ADR-011 — `MediaStore` podaje sekundy, `File.lastModified()`
-  milisekundy; pomieszanie jednostek powoduje widmowe różnice i ponowne wysyłki).
+- HTTP/1.1 over TLS 1.3 (TLS 1.2 acceptable as a fallback).
+- The server MUST listen on `0.0.0.0` — never on a single chosen address. This follows
+  from §4: the same process has to be reachable over the LAN, over an overlay network,
+  and over `localhost`.
+- Default port: **8765/tcp**, configurable.
+- Prefix for all resources: `/api/v1`.
+- Text encoding: UTF-8, no BOM.
+- Timestamps in JSON bodies: ISO 8601 in UTC.
+- `mtime` values: **integer seconds since the Unix epoch, UTC**. The client MUST
+  normalise mtime to seconds in one place, at the boundary where it reads the filesystem
+  (ADR-011 — `MediaStore` reports seconds, `File.lastModified()` milliseconds; mixing the
+  units produces phantom differences and endless re-uploads).
 
-## 3. Tożsamość i uwierzytelnianie
+## 3. Identity and authentication
 
-### 3.1 Wzajemne przypięcie kluczy
+### 3.1 Mutual key pinning
 
-Filum **nie używa urzędu certyfikacji**. Obie strony posługują się certyfikatami
-samopodpisanymi, traktowanymi wyłącznie jako pojemnik na klucz publiczny.
-Uwierzytelnienie polega na porównaniu odcisku klucza z zapamiętanym.
+Filum uses **no certificate authority**. Both parties use self-signed certificates,
+treated purely as a container for a public key. Authentication is a comparison of the
+key's fingerprint against a remembered one.
 
-- Serwer generuje przy pierwszym uruchomieniu parę kluczy EC P-256 i certyfikat
-  samopodpisany. Para jest stała przez cały czas życia instalacji.
-- Klient przy parowaniu generuje własną parę kluczy. Klucz prywatny MUSI powstać
-  w Android Keystore ze wsparciem sprzętowym (StrongBox, jeśli dostępny) i nie może
-  opuścić elementu bezpiecznego.
-- **Pin** to `base64url(SHA-256(SubjectPublicKeyInfo))` bez dopełnienia — 43 znaki.
+- On first start the server generates an EC P-256 key pair and a self-signed certificate.
+  The pair is fixed for the lifetime of the installation.
+- At pairing time the client generates its own key pair. The private key MUST be created
+  in the Android Keystore with hardware backing (StrongBox where available) and MUST NOT
+  leave the secure element.
+- The **pin** is `base64url(SHA-256(SubjectPublicKeyInfo))` without padding — 43 characters.
 
-Klient weryfikuje serwer po pinie i **nie weryfikuje nazwy hosta**. Jest to
-bezpieczne wyłącznie dlatego, że pin całkowicie zastępuje weryfikację nazwy;
-pominięcie obu byłoby luką. Konsekwencją jest, że jeden certyfikat obsługuje
-wszystkie trasy z §4 bez pól SAN.
+The client verifies the server by pin and **does not verify the hostname**. This is safe
+only because the pin fully replaces name verification; skipping both would be a hole. The
+consequence is that one certificate serves every route in §4 with no SAN entries.
 
-Serwer weryfikuje klienta przez mTLS: akceptuje wyłącznie certyfikaty, których pin
-znajduje się na liście sparowanych urządzeń.
+The server verifies the client over mTLS: it accepts only certificates whose pin appears
+in the list of paired devices.
 
-### 3.2 Tożsamość urządzenia
+### 3.2 Device identity
 
-Urządzenie identyfikuje **pin jego certyfikatu klienta**. Protokół nie zawiera
-nagłówka z identyfikatorem urządzenia — byłby zbędny i podatny na podszycie.
-Serwer wyprowadza tożsamość z warstwy TLS.
+A device is identified by the **pin of its client certificate**. The protocol carries no
+device-identifier header — it would be redundant and forgeable. The server derives
+identity from the TLS layer.
 
-Etykieta urządzenia (`label`, np. „Galaxy S24 Ultra") jest wyłącznie prezentacyjna
-i może być zmieniana bez wpływu na tożsamość.
+The device label (`label`, e.g. "Galaxy S24 Ultra") is presentational only and may be
+changed without affecting identity.
 
-### 3.3 Parowanie
+### 3.3 Pairing
 
-Ładunek kodu QR generowanego przez panel serwera:
+The QR payload generated by the server panel:
 
 ```
 filum1:<base64url(JSON)>
@@ -91,118 +89,116 @@ filum1:<base64url(JSON)>
 
 ```jsonc
 {
-  "n": "DESKTOP-ABC",              // nazwa serwera, prezentacyjna
-  "k": "<pin serwera, 43 znaki>",  // §3.1
-  "t": "<token parowania>",        // 32 bajty losowe, base64url
+  "n": "DESKTOP-ABC",              // server name, presentational
+  "k": "<server pin, 43 chars>",   // §3.1
+  "t": "<pairing token>",          // 32 random bytes, base64url
   "p": 8765,                       // port
-  "a": ["192.168.1.10", "100.64.10.20"],  // znane adresy
-  "s": "filum-a3f2"                // nazwa instancji usługi mDNS (§4.1)
+  "a": ["192.168.1.10", "100.64.10.20"],  // known addresses
+  "s": "filum-a3f2"                // mDNS service instance name (§4.1)
 }
 ```
 
-Token parowania MUSI być jednorazowy i wygasać po **10 minutach**.
+The pairing token MUST be single-use and MUST expire after **10 minutes**.
 
 ```
 POST /api/v1/pair
-Authorization: Bearer <token parowania>
+Authorization: Bearer <pairing token>
 Content-Type: application/json
 ```
 ```jsonc
-{ "cert": "<certyfikat klienta, DER, base64>", "label": "Galaxy S24 Ultra" }
+{ "cert": "<client certificate, DER, base64>", "label": "Galaxy S24 Ultra" }
 ```
 
-Połączenie odbywa się nad TLS zweryfikowanym pinem z kodu QR, ale **bez**
-certyfikatu klienta — to jedyny zasób dostępny bez mTLS.
+The connection runs over TLS verified by the pin from the QR code, but **without** a
+client certificate — this is the only resource reachable without mTLS.
 
-Odpowiedź `200`:
+Response `200`:
 ```jsonc
-{ "deviceKey": "<pin klienta>", "serverInstanceId": "<uuid>", "protocol": 1 }
+{ "deviceKey": "<client pin>", "serverInstanceId": "<uuid>", "protocol": 1 }
 ```
 
-Po udanym parowaniu serwer MUSI unieważnić token. Każdy inny zasób wywołany bez
-ważnego certyfikatu klienta MUSI zwrócić `401`.
+After a successful pairing the server MUST invalidate the token. Any other resource
+called without a valid client certificate MUST return `401`.
 
-Serwer MUSI ograniczyć próby parowania do **5 na 15 minut** z jednego adresu źródłowego.
+The server MUST limit pairing attempts to **5 per 15 minutes** from one source address.
 
-### 3.4 Wydawanie tokenu
+### 3.4 Issuing a token
 
 ```
 GET /api/v1/pair/new
 ```
 
-Zasób pomocniczy, **nieużywany przez klienta mobilnego**. Wydaje token i zwraca
-gotowy ładunek kodu QR na potrzeby interfejsu serwera.
+A helper resource, **not used by the mobile client**. It issues a token and returns a
+ready QR payload for the server's own interface.
 
-Serwer MUSI go udostępniać wyłącznie połączeniom z pętli zwrotnej. Jest to jedyny
-zasób wydający sekret, a osoba siedząca przy komputerze jest z definicji uprawniona
-do sparowania telefonu — udostępnienie go w sieci pozwalałoby obcemu urządzeniu
-wygenerować sobie token parowania.
-
----
-
-## 4. Wykrywanie i wybór trasy
-
-Klient nie przechowuje „adresu serwera". Przechowuje **zbiór kandydatów** — tras,
-którymi można dotrzeć do serwera o znanym pinie.
-
-### 4.1 Rozgłaszanie w sieci lokalnej
-
-Serwer MUSI rozgłaszać usługę mDNS/DNS-SD:
-
-- typ: `_filum._tcp.local`
-- instancja: `filum-<8 znaków pinu>`
-- TXT: `v=1`, `k=<pin serwera>`, `n=<nazwa serwera>`
-
-Klient MUSI przy skanowaniu mDNS przytrzymać `MulticastLock` — bez tego na wielu
-urządzeniach odpowiedzi nie docierają do aplikacji.
-
-### 4.2 Wyścig tras
-
-Przy nawiązywaniu połączenia klient POWINIEN wysłać `GET /ping` **równolegle** do
-wszystkich kandydatów, z limitem czasu **2000 ms**, i użyć pierwszej odpowiedzi,
-której pin serwera się zgadza. Pozostałe połączenia porzuca.
-
-Kandydaci, w kolejności preferencji przy zbliżonym czasie odpowiedzi:
-
-1. instancja znaleziona przez mDNS w bieżącej sieci,
-2. ostatni skuteczny adres LAN (z pamięci podręcznej),
-3. adres sieci nakładkowej (Meshnet / Tailscale / WireGuard),
-4. nazwa DDNS lub przekaźnik, jeśli skonfigurowane.
-
-Klient POWINIEN zapamiętać zwycięzcę i próbować go pierwszego, nie rezygnując
-z równoległego sprawdzania pozostałych.
-
-### 4.3 Trasy lokalne przy aktywnym VPN
-
-Gdy na telefonie działa VPN, ruch domyślnie wchodzi w tunel i adresy z §4.2 pkt 1–2
-przestają być osiągalne. Klient POWINIEN dla tras lokalnych przypiąć gniazdo do
-konkretnego obiektu `Network` uzyskanego przez `ConnectivityManager` z
-`TRANSPORT_WIFI`, zamiast korzystać z trasy domyślnej.
-
-Jeżeli VPN działa w trybie blokującym ruch poza tunelem, przypięcie zawiedzie —
-klient MUSI wtedy po cichu zdegradować się do tras z §4.2 pkt 3–4, bez zgłaszania
-błędu użytkownikowi.
-
-### 4.4 Samoaktualizacja zbioru tras
-
-Odpowiedź `GET /ping` zawiera listę adresów, pod którymi serwer sam siebie widzi
-(§5.1). Klient MUSI scalić ją ze swoim zbiorem kandydatów.
-
-Dzięki temu pojedyncze udane połączenie **dowolną** trasą odświeża wszystkie
-pozostałe. Zmiana routera w domu nie wymaga żadnej interakcji użytkownika: telefon
-pozna nowy adres LAN przy najbliższym połączeniu przez sieć nakładkową.
+The server MUST expose it to loopback connections only. It is the one resource that hands
+out a secret, and the person sitting at the computer is by definition entitled to pair a
+phone — exposing it on the network would let a stranger's device mint itself a pairing
+token.
 
 ---
 
-## 5. Zasoby
+## 4. Discovery and route selection
+
+The client does not store "the server's address". It stores a **candidate set** — routes
+by which a server with a known pin can be reached.
+
+### 4.1 Local network advertising
+
+The server MUST advertise an mDNS/DNS-SD service:
+
+- type: `_filum._tcp.local`
+- instance: `filum-<first 8 chars of pin>`
+- TXT: `v=1`, `k=<server pin>`, `n=<server name>`
+
+While scanning over mDNS the client MUST hold a `MulticastLock` — without it, responses
+never reach the application on many devices.
+
+### 4.2 Route racing
+
+When establishing a connection the client SHOULD send `GET /ping` to all candidates **in
+parallel**, with a **2000 ms** timeout, and use the first response whose server pin
+matches. It abandons the remaining connections.
+
+Candidates, in order of preference when response times are comparable:
+
+1. an instance found over mDNS on the current network,
+2. the last working LAN address (from cache),
+3. an overlay-network address (Meshnet / Tailscale / WireGuard),
+4. a DDNS name or a relay, if configured.
+
+The client SHOULD remember the winner and try it first, without giving up on checking the
+others in parallel.
+
+### 4.3 Local routes with an active VPN
+
+When a VPN is running on the phone, traffic enters the tunnel by default and the addresses
+in §4.2 items 1–2 stop being reachable. For local routes the client SHOULD bind its socket
+to a specific `Network` object obtained from `ConnectivityManager` with `TRANSPORT_WIFI`,
+rather than using the default route.
+
+If the VPN blocks traffic outside the tunnel, binding will fail — the client MUST then
+degrade silently to routes 3–4 from §4.2, without reporting an error to the user.
+
+### 4.4 Self-updating the route set
+
+The `GET /ping` response contains the list of addresses the server sees itself under
+(§5.1). The client MUST merge it into its candidate set.
+
+This way a single successful connection over **any** route refreshes all the others.
+Changing the home router requires no user interaction: the phone learns the new LAN
+address on its next connection over the overlay network.
+
+---
+
+## 5. Resources
 
 ### 5.1 `GET /api/v1/ping`
 
-Kontrola dostępności, negocjacja limitów i odświeżenie tras. Tani — używany
-w wyścigu z §4.2, więc serwer nie powinien wykonywać przy nim operacji dyskowych
-cięższych niż odczyt wolnego miejsca.
+Availability check, limit negotiation and route refresh. Cheap — it is used in the race
+from §4.2, so the server should perform no disk work heavier than reading free space.
 
-Odpowiedź `200`:
+Response `200`:
 ```jsonc
 {
   "protocol": 1,
@@ -221,106 +217,105 @@ Odpowiedź `200`:
 }
 ```
 
-Klient MUSI odrzucić serwer o nieobsługiwanym `protocol` i pokazać czytelny komunikat.
-Klient MUSI stosować się do `limits` — nie wolno mu zakładać wartości domyślnych,
-jeśli serwer podał inne.
+The client MUST reject a server with an unsupported `protocol` and show a legible message.
+The client MUST honour `limits` — it MUST NOT assume defaults when the server has stated
+otherwise.
 
 ### 5.2 `POST /api/v1/manifest`
 
-Klient zgłasza, co ma; serwer odpowiada, czego mu brakuje.
+The client reports what it has; the server answers with what it is missing.
 
 ```jsonc
 {
-  "session": "<uuid>",     // spina partie w jedną operację
+  "session": "<uuid>",     // ties batches into one operation
   "mode": "full",          // "full" | "delta"
-  "batch": 3,              // numer partii, od 0
-  "final": false,          // true w ostatniej partii sesji
+  "batch": 3,              // batch number, from 0
+  "final": false,          // true in the session's last batch
   "files": [
     { "p": "DCIM/Camera/IMG_0001.JPG", "s": 4812233, "m": 1756400000 },
-    { "p": "Documents/umowa.pdf", "s": 20481, "m": 1756400000, "d": "9f86d0…" }
+    { "p": "Documents/contract.pdf", "s": 20481, "m": 1756400000, "d": "9f86d0…" }
   ]
 }
 ```
 
-- Liczba pozycji w `files` nie może przekroczyć `limits.manifestBatch`.
-- `mode: "full"` oznacza, że sesja obejmuje **komplet** plików na urządzeniu.
-  Tylko wtedy serwer wylicza raport sierot (§5.6).
-- `mode: "delta"` oznacza przyrost od poprzedniego skanu i nie powoduje
-  wyliczania sierot.
-- `d` jest opcjonalne i występuje wyłącznie w trybie dokładnym (§9.3). Klient,
-  który go nie podaje, dostaje odpowiedź wyznaczoną wyłącznie z metadanych.
+- The number of entries in `files` MUST NOT exceed `limits.manifestBatch`.
+- `mode: "full"` means the session covers **every** file on the device. Only then does the
+  server compute the orphan report (§5.6).
+- `mode: "delta"` means an increment since the previous scan and does not trigger orphan
+  computation.
+- `d` is optional and appears only in thorough mode (§9.3). A client that omits it gets an
+  answer derived from metadata alone.
 
-Odpowiedź `200`:
+Response `200`:
 ```jsonc
 {
   "have": 1834,
   "needed": [
     { "p": "DCIM/Camera/IMG_0002.JPG", "offset": 0 },
-    { "p": "Movies/klip.mp4",          "offset": 5242880 },
-    { "p": "Documents/notatka.txt",    "offset": 0, "versioned": true }
+    { "p": "Movies/clip.mp4",          "offset": 5242880 },
+    { "p": "Documents/note.txt",       "offset": 0, "versioned": true }
   ],
   "rejected": [
-    { "p": "dziwna/../ścieżka.txt", "error": "traversal" }
+    { "p": "odd/../path.txt", "error": "traversal" }
   ],
-  "divergent": ["Documents/umowa.pdf"]
+  "divergent": ["Documents/contract.pdf"]
 }
 ```
 
-- `offset > 0` oznacza, że na serwerze leży niedokończony transfer i klient
-  POWINIEN wznowić od tego miejsca.
-- `versioned: true` sygnalizuje, że ścieżka jest już zajęta przez inną zawartość
-  i po zakończeniu transferu poprzednia wersja zostanie odłożona (§8.3).
-  Pole jest informacyjne — służy prezentacji w interfejsie.
-- `rejected` zawiera ścieżki nienadające się do składowania (§7), z wartością
-  `error` z tabeli w §4 dokumentu PATH-RULES. Pojedyncza zła ścieżka **nie może**
-  unieważniać całej partii. Klient MUSI oznaczyć takie pozycje jako trwale nieudane
-  i nigdy nie próbować ich wysyłać.
+- `offset > 0` means an unfinished transfer is sitting on the server and the client SHOULD
+  resume from that point.
+- `versioned: true` signals that the path is already occupied by different content and
+  that the previous version will be filed away once the transfer completes (§8.3). The
+  field is informational — it exists for presentation in the interface.
+- `rejected` carries paths unfit for storage (§7), with an `error` value from the table in
+  §4 of PATH-RULES. A single bad path **MUST NOT** invalidate the whole batch. The client
+  MUST mark such entries as permanently failed and never attempt to send them.
 
-  Bez tego pola klient dowiedziałby się o odrzuceniu dopiero z odpowiedzi `422`
-  na `PUT`, czyli po jednym zmarnowanym żądaniu na każdy taki plik — a przy
-  wysyłce po sieci komórkowej to realny koszt.
+  Without this field the client would learn about the rejection only from a `422` response
+  to a `PUT`, i.e. after one wasted request per such file — which is a real cost when
+  uploading over a cellular network.
 
-- `divergent` wymienia ścieżki, dla których klient podał `d` inne niż zapisane
-  w rejestrze przy przyjęciu, **mimo zgodnego rozmiaru i czasu modyfikacji** (§9.3).
-  Serwer umieszcza je również w `needed`, więc kopia zostanie uzupełniona; osobna
-  lista istnieje po to, żeby klient mógł to odnotować jako zdarzenie, a nie jako
-  zwykłą aktualizację. Pole jest pomijane, gdy lista jest pusta.
+- `divergent` lists paths for which the client supplied a `d` different from the one
+  recorded in the ledger at acceptance time, **despite matching size and modification
+  time** (§9.3). The server also places them in `needed`, so the copy will be brought up to
+  date; the separate list exists so the client can record this as an event rather than an
+  ordinary update. The field is omitted when the list is empty.
 
-  Brak wpisu w rejestrze **nie jest** przesłanką rozbieżności: plik mógł trafić do
-  kopii przed uruchomieniem rejestru albo zostać do niej wstawiony ręcznie.
+  The absence of a ledger entry is **not** evidence of divergence: the file may predate the
+  ledger or have been placed into the copy by hand.
 
-Serwer wyznacza `have`/`needed` przez porównanie `(rozmiar, mtime)` z systemem
-plików. Serwer **nie utrzymuje własnego indeksu zawartości** (ADR-003) — rejestr
-z §9.2 jest zapisem przyjęć, a nie indeksem: źródłem prawdy o zawartości kopii
-pozostaje dysk.
+The server derives `have`/`needed` by comparing `(size, mtime)` against the filesystem. The
+server **keeps no content index of its own** (ADR-003) — the ledger from §9.2 is a record
+of acceptances, not an index: the source of truth about the copy's contents remains the
+disk.
 
-Tolerancja mtime: **0 sekund**. Wyjątkiem jest tryb adopcji (§10).
+mtime tolerance: **0 seconds**. Adoption mode is the exception (§10).
 
 ### 5.3 `PUT /api/v1/file`
 
-Przesłanie fragmentu pliku. Ciało żądania to **surowe bajty**, bez opakowania.
+Uploads a chunk of a file. The request body is **raw bytes**, with no wrapper.
 
-| Nagłówek | Wymagany | Znaczenie |
+| Header | Required | Meaning |
 |---|---|---|
-| `X-Filum-Path`   | tak | ścieżka względna, `base64url` bez dopełnienia |
-| `X-Filum-Size`   | tak | całkowity rozmiar pliku w bajtach |
-| `X-Filum-Mtime`  | tak | mtime pliku, sekundy od epoki, UTC |
-| `X-Filum-Offset` | tak | przesunięcie, od którego zaczyna się ciało |
-| `X-Filum-Digest` | nie | `sha256` całego pliku, hex; patrz §9 |
+| `X-Filum-Path`   | yes | relative path, `base64url` without padding |
+| `X-Filum-Size`   | yes | total file size in bytes |
+| `X-Filum-Mtime`  | yes | file mtime, seconds since the epoch, UTC |
+| `X-Filum-Offset` | yes | offset at which the body starts |
+| `X-Filum-Digest` | see §9.1 | `sha256` of the whole file, hex |
 
-Semantyka:
+Semantics:
 
-- `X-Filum-Offset: 0` rozpoczyna nowy transfer i porzuca ewentualny wcześniejszy fragment.
-- Jeżeli `X-Filum-Offset` nie równa się aktualnej długości fragmentu na serwerze,
-  serwer MUSI odpowiedzieć `409` z `{"expectedOffset": N}`.
-- Jeżeli zapisany fragment powstał dla innej pary `(rozmiar, mtime)` niż podana
-  w nagłówkach, serwer MUSI odrzucić wznowienie przez `409` z `{"expectedOffset": 0}`.
-  Chroni to przed sklejeniem dwóch różnych wersji pliku — np. gdy nagranie wideo
-  było jeszcze w trakcie zapisu.
-- Transfer jest kompletny, gdy `offset + długość_ciała == X-Filum-Size`. Wtedy
-  serwer wykonuje domknięcie (§8.2).
+- `X-Filum-Offset: 0` starts a new transfer and discards any earlier partial file.
+- If `X-Filum-Offset` does not equal the current length of the partial file on the server,
+  the server MUST answer `409` with `{"expectedOffset": N}`.
+- If the stored partial file was created for a different `(size, mtime)` pair than the one
+  in the headers, the server MUST refuse the resume with `409` and `{"expectedOffset": 0}`.
+  This guards against splicing two different versions of a file together — for instance
+  when a video recording was still being written.
+- The transfer is complete when `offset + body_length == X-Filum-Size`. The server then
+  performs the commit (§8.2).
 
-Odpowiedź `200`:
+Response `200`:
 ```jsonc
 { "received": 5242880, "offset": 10485760, "complete": false }
 ```
@@ -328,32 +323,32 @@ Odpowiedź `200`:
 { "received": 1204112, "offset": 4812233, "complete": true, "versioned": null }
 ```
 
-Klient POWINIEN pomijać pliki zmodyfikowane w ciągu ostatnich **60 sekund** —
-mogą być właśnie zapisywane.
+The client SHOULD skip files modified within the last **60 seconds** — they may still be
+being written.
 
 ### 5.4 `POST /api/v1/bundle`
 
-Agregacja małych plików. Przy dziesiątkach tysięcy plików poniżej
-`limits.smallFileThreshold` narzut pojedynczego żądania HTTP zaczyna dominować
-nad transferem (ADR-008).
+Aggregation of small files. With tens of thousands of files below
+`limits.smallFileThreshold`, the overhead of an individual HTTP request starts to dominate
+the transfer itself (ADR-008).
 
 `Content-Type: application/vnd.filum.bundle`
 
-Ramkowanie binarne, powtarzane `N` razy, bez wyrównania:
+Binary framing, repeated `N` times, with no alignment:
 
 ```
 u32be  metaLen
-bytes  meta        // JSON UTF-8: {"p":"<ścieżka>","s":123,"m":1756400000,"d":"<sha256 hex>"}
-bytes  payload     // dokładnie s bajtów
+bytes  meta        // JSON UTF-8: {"p":"<path>","s":123,"m":1756400000,"d":"<sha256 hex>"}
+bytes  payload     // exactly s bytes
 ```
 
-- Suma rozmiarów nie może przekroczyć `limits.bundleMaxBytes`.
-- Liczba plików nie może przekroczyć `limits.bundleMaxCount`.
-- Paczka nie obsługuje wznawiania. Pliki są małe — w razie błędu klient ponawia
-  całość albo przenosi pozycje do `PUT /file`.
-- Pole `d` jest **wymagane** w paczce; koszt liczenia skrótu małego pliku jest pomijalny.
+- The sum of sizes MUST NOT exceed `limits.bundleMaxBytes`.
+- The number of files MUST NOT exceed `limits.bundleMaxCount`.
+- Bundles do not support resuming. The files are small — on error the client retries the
+  whole bundle or moves the entries to `PUT /file`.
+- The `d` field is **required** in a bundle; the cost of hashing a small file is negligible.
 
-Odpowiedź `200` — wynik per plik, żądanie może się powieść częściowo:
+Response `200` — one result per file, since a request may succeed partially:
 ```jsonc
 { "results": [
   { "p": "Pictures/a.jpg", "ok": true,  "versioned": null },
@@ -363,27 +358,27 @@ Odpowiedź `200` — wynik per plik, żądanie może się powieść częściowo:
 
 ### 5.5 `POST /api/v1/verify`
 
-Tryb weryfikacji integralności — operacja **jawnie uruchamiana przez użytkownika**,
-nigdy część cyklu automatycznego (I5).
+Integrity verification — an operation **explicitly started by the user**, never part of an
+automatic cycle.
 
 ```jsonc
 { "files": [ { "p": "DCIM/Camera/IMG_0001.JPG", "d": "<sha256 hex>" } ] }
 ```
 
-Odpowiedź `200`:
+Response `200`:
 ```jsonc
 { "ok": ["..."], "mismatch": ["..."], "missing": ["..."] }
 ```
 
-Serwer liczy skrót swoich kopii, więc zasób jest kosztowny. Serwer MUSI go
-ograniczać przepustowościowo i POWINIEN odrzucać żądania większe niż 256 pozycji.
+The server hashes its own copies, so the resource is expensive. The server MUST rate-limit
+it and SHOULD reject requests larger than 256 entries.
 
 ### 5.6 `GET /api/v1/orphans?session=<uuid>`
 
-Raport sierot: ścieżki obecne na serwerze, których **nie było** w kompletnym
-manifeście danej sesji — czyli pliki usunięte lub przeniesione na telefonie.
+Orphan report: paths present on the server that were **absent** from a complete manifest
+for that session — that is, files deleted or moved on the phone.
 
-Zasób jest dostępny wyłącznie dla sesji zamkniętej z `mode: "full"` i `final: true`.
+The resource is available only for a session closed with `mode: "full"` and `final: true`.
 
 ```jsonc
 {
@@ -395,209 +390,206 @@ Zasób jest dostępny wyłącznie dla sesji zamkniętej z `mode: "full"` i `fina
 }
 ```
 
-Raport jest **wyłącznie informacyjny**. Ani serwer, ani klient nie usuwa niczego
-na jego podstawie (I1). Decyzja należy do użytkownika i zapada ręcznie w panelu.
+The report is **informational only**. Neither the server nor the client deletes anything on
+its basis (I1). The decision belongs to the user and is made by hand in the panel.
 
 ---
 
-## 6. Kody błędów
+## 6. Error codes
 
-| Kod | Znaczenie | Reakcja klienta |
+| Code | Meaning | Client reaction |
 |---|---|---|
-| `400` | błędne nagłówki lub ciało | błąd trwały, do dziennika, nie ponawiać |
-| `401` | brak lub nieznany certyfikat klienta | zatrzymać cykl, wymagać ponownego parowania |
-| `403` | urządzenie wyłączone w panelu | zatrzymać cykl, komunikat dla użytkownika |
-| `409` | niezgodne przesunięcie fragmentu | wznowić od `expectedOffset` |
-| `413` | ciało przekracza limit | zmniejszyć paczkę lub przejść na `PUT /file` |
-| `422` | ścieżka nie do przyjęcia (§7) | błąd trwały dla tego pliku, pominąć i zgłosić |
-| `429` | ograniczenie częstotliwości | wycofanie wykładnicze, uszanować `Retry-After` |
-| `503` | serwer wstrzymany lub zajęty | wycofanie wykładnicze |
-| `507` | za mało miejsca na dysku | przerwać cykl, powiadomić użytkownika |
+| `400` | malformed headers or body | permanent error, journal it, do not retry |
+| `401` | missing or unknown client certificate | stop the cycle, require re-pairing |
+| `403` | device disabled in the panel | stop the cycle, message for the user |
+| `409` | chunk offset mismatch | resume from `expectedOffset` |
+| `413` | body exceeds the limit | shrink the bundle or fall back to `PUT /file` |
+| `422` | path unacceptable (§7) | permanent error for that file, skip and report |
+| `429` | rate limited | exponential backoff, honour `Retry-After` |
+| `503` | server paused or busy | exponential backoff |
+| `507` | insufficient disk space | abort the cycle, notify the user |
 
-Ciało błędu:
+Error body:
 ```jsonc
 { "error": "offset_mismatch", "message": "...", "expectedOffset": 5242880 }
 ```
 
-Klient MUSI odróżniać błędy **przejściowe** (`429`, `503`, sieciowe) od **trwałych**
-(`400`, `422`) i nie ponawiać w nieskończoność tych drugich. Każdy błąd trwały MUSI
-trafić do dziennika widocznego w aplikacji.
+The client MUST distinguish **transient** errors (`429`, `503`, network) from **permanent**
+ones (`400`, `422`) and MUST NOT retry the latter indefinitely. Every permanent error MUST
+reach the journal visible in the application.
 
 ---
 
-## 7. Ścieżki
+## 7. Paths
 
-Reguły normalizacji, sanityzacji pod NTFS i rozstrzygania kolizji opisuje osobny
-dokument: **[PATH-RULES.md](PATH-RULES.md)**.
-Wektory testowe: [`testvectors/paths.tsv`](testvectors/paths.tsv) — obie
-implementacje MUSZĄ przechodzić ten sam zestaw.
+Normalisation, NTFS sanitisation and collision-resolution rules are described in a separate
+document: **[PATH-RULES.md](PATH-RULES.md)**.
+Test vectors: [`testvectors/paths.tsv`](testvectors/paths.tsv) — both implementations MUST
+pass the same set.
 
 ---
 
-## 8. Składowanie po stronie serwera
+## 8. Server-side storage
 
-### 8.1 Układ katalogów
+### 8.1 Directory layout
 
 ```
 <root>/
   <device-slug>/
-    files/                      # żywe drzewo, lustro telefonu, przeglądalne w Eksploratorze
+    files/                      # the live tree, mirroring the phone, browsable in Explorer
       DCIM/Camera/IMG_0001.JPG
     .filum/
-      device.json               # pin, etykieta, data parowania
-      incoming/                 # transfery w toku
+      device.json               # pin, label, pairing date
+      incoming/                 # transfers in progress
         <id>.part
-        <id>.meta               # {"p":..,"s":..,"m":..,"received":..}
-      versions/                 # poprzednie wersje (§8.3)
+        <id>.meta               # {"p":..,"s":..,"m":..}
+      versions/                 # previous versions (§8.3)
         DCIM/Camera/IMG_0001.20260828T211430Z.JPG
-      index.jsonl               # mapowania ścieżek rozstrzygniętych z kolizji
-      integrity.jsonl           # rejestr przyjęć spięty łańcuchem skrótów (§9.2)
+      index.jsonl               # mappings for paths resolved out of a collision
+      integrity.jsonl           # acceptance ledger chained by digests (§9.2)
       orphans-<session>.json
 ```
 
-Katalog `files/` MUSI zawierać wyłącznie kompletne pliki. Fragmenty nie mogą być
-w nim widoczne — użytkownik ma w każdej chwili oglądać spójne drzewo (I3).
+The `files/` directory MUST contain only complete files. Partial files MUST NOT be visible
+there — the user is to see a consistent tree at any moment (I3).
 
-### 8.2 Domknięcie transferu
+### 8.2 Committing a transfer
 
-Po odebraniu ostatniego bajtu serwer MUSI wykonać kolejno:
+Having received the last byte, the server MUST perform, in order:
 
-1. sprawdzić `X-Filum-Digest`, jeżeli był podany; niezgodność → odrzucić fragment i `409`,
-2. jeżeli docelowa ścieżka istnieje — odłożyć jej dotychczasową zawartość (§8.3),
-3. przenieść plik z `.filum/incoming/` do `files/` operacją atomową w obrębie wolumenu,
-4. ustawić mtime na wartość z `X-Filum-Mtime`,
-5. usunąć plik `.meta`.
+1. check `X-Filum-Digest` if one was supplied; a mismatch → discard the partial file and `409`,
+2. if the destination path exists — file away its current content (§8.3),
+3. move the file from `.filum/incoming/` to `files/` with an atomic within-volume operation,
+4. set mtime to the value from `X-Filum-Mtime`,
+5. delete the `.meta` file.
 
-Kolejność jest istotna: krok 3 nie może wyprzedzić kroku 2, bo naruszyłoby to I2.
+The order matters: step 3 must not precede step 2, or I2 would be violated.
 
-### 8.3 Wersjonowanie
+### 8.3 Versioning
 
-Gdy pod istniejącą ścieżką pojawia się zawartość o innym `(rozmiar, mtime)`,
-dotychczasowy plik MUSI zostać przeniesiony do
-`.filum/versions/<ta sama ścieżka>/<nazwa>.<YYYYMMDD>T<HHmmss>Z<.rozszerzenie>`,
-gdzie znacznik czasu pochodzi z **mtime starej kopii**, nie z czasu operacji.
+When content with a different `(size, mtime)` appears under an existing path, the current
+file MUST be moved to
+`.filum/versions/<the same path>/<name>.<YYYYMMDD>T<HHmmss>Z<.extension>`,
+where the timestamp comes from the **old copy's mtime**, not from the time of the operation.
 
-Wersje trzymamy poza `files/`, żeby żywe drzewo pozostało czystym lustrem telefonu.
+Versions live outside `files/` so that the live tree stays a clean mirror of the phone.
 
-### 8.4 Próg wolnego miejsca
+### 8.4 Free-space threshold
 
-Serwer MUSI odrzucać zapisy (`507`), gdy wolne miejsce na wolumenie spadłoby poniżej
-`max(5 GiB, 2% pojemności)`. Chroni to system operacyjny przed zapchaniem dysku
-przez urządzenie, które z definicji nigdy niczego nie kasuje.
+The server MUST refuse writes (`507`) when free space on the volume would drop below
+`max(5 GiB, 2% of capacity)`. This protects the operating system from having its disk filled
+by a device that by definition never deletes anything.
 
 ---
 
-## 9. Integralność
+## 9. Integrity
 
-Rozróżniamy trzy zastosowania skrótów kryptograficznych, których **nie wolno mylić**.
-Wszystkie trzy używają SHA-256 zapisanego szesnastkowo małymi literami.
+There are three distinct uses of cryptographic digests here, and they **must not be
+conflated**. All three use SHA-256 written as lowercase hex.
 
-### 9.1 Kontrola integralności transferu
+### 9.1 Transfer integrity
 
-Odpowiada na pytanie: czy do serwera dotarło to, co telefon wysłał.
+Answers the question: did the server receive what the phone sent.
 
-`X-Filum-Digest` jest **wymagany** przy domyślnej konfiguracji serwera (ADR-016).
-Serwer odrzuca żądanie kodem `400 digest_required`, **zanim** przyjmie jakiekolwiek
-bajty — przyjęcie danych, których i tak nie da się wpisać do rejestru, byłoby
-marnowaniem transferu po obu stronach.
+`X-Filum-Digest` is **required** under the server's default configuration (ADR-016). The
+server refuses the request with `400 digest_required` **before** accepting any bytes —
+taking in data that could not be recorded in the ledger anyway would waste the transfer on
+both sides.
 
-Nagłówek niesie skrót **całego pliku** i klient podaje go w każdym fragmencie,
-także przy wznawianiu. Serwer sprawdza go dopiero przy domknięciu transferu (§8.2),
-ale wymaga go od każdego żądania: gdyby przyjmował fragmenty pośrednie bez skrótu,
-wymóg nie obowiązywałby dla żadnego pliku dzielonego na części.
+The header carries the digest of the **whole file**, and the client supplies it with every
+chunk, including on resume. The server only checks it when the transfer commits (§8.2), but
+requires it on every request: were it to accept intermediate chunks without one, the
+requirement would not hold for any file large enough to be split.
 
-Koszt to jeden lokalny odczyt pliku przez telefon. Wznawianie oszczędza transmisję,
-a nie odczyt z pamięci urządzenia — więc pominięcie skrótu przy wznowieniu nie
-oszczędzałoby tego, co jest w tym scenariuszu drogie, a zostawiałoby poza rejestrem
-akurat pliki największe.
+The cost is one local read of the file by the phone. Resuming saves transmission, not reads
+from the device's storage — so omitting the digest on resume would not save what is
+expensive in that scenario, while leaving precisely the largest files out of the ledger.
 
-Instalacja, której zależy wyłącznie na odzyskiwaniu danych, może wymóg wyłączyć
-(`Filum:RequireDigest`). Wtedy skrót jest opcjonalny, a pliki bez niego nie trafiają
-do rejestru.
+An installation that cares only about getting data back MAY disable the requirement
+(`Filum:RequireDigest`). The digest is then optional, and files without one are not recorded
+in the ledger.
 
-### 9.2 Rejestr przyjęć
+### 9.2 Acceptance ledger
 
-Odpowiada na pytanie: co i kiedy serwer przyjął, i czy od tamtej pory ktoś to ruszył.
+Answers the question: what did the server accept and when, and has anyone touched it since.
 
-Każdy przyjęty plik dopisuje wiersz do `.filum/integrity.jsonl` urządzenia:
+Every accepted file appends a line to the device's `.filum/integrity.jsonl`:
 
 ```jsonc
 { "n": 1, "at": 1756400000, "p": "DCIM/IMG_0001.JPG",
   "s": 4812233, "m": 1756400000, "d": "9f86d0…", "prev": "genesis" }
 ```
 
-`prev` zawiera skrót **poprzedniego wiersza w jego dokładnej postaci tekstowej**.
-Pierwszy wiersz kotwiczy łańcuch wartością `genesis`. Hashowany jest zapisany tekst,
-a nie odtworzony obiekt: gdyby serializacja kiedykolwiek zmieniła kolejność pól albo
-format liczb, hashowanie obiektu unieważniłoby całą dotychczasową historię, choć
-nikt by jej nie tknął.
+`prev` holds the digest of the **previous line in its exact textual form**. The first line
+anchors the chain with the value `genesis`. What is hashed is the stored text, not a
+reconstructed object: were serialisation ever to change field order or number formatting,
+hashing the object would invalidate the entire history without anyone having touched it.
 
-Skutek: usunięcie, podmiana albo wstawienie dowolnego wiersza rozspójnia wszystko,
-co po nim następuje. Rejestr, którego nie da się po cichu poprawić, jest czymś
-jakościowo innym niż lista skrótów.
+The consequence: removing, altering or inserting any line breaks everything that follows. A
+ledger that cannot be quietly corrected is a qualitatively different thing from a list of
+digests.
 
-**Czego to nie daje.** Łańcuch wykrywa manipulację częściową. Nie chroni przed
-odtworzeniem całego rejestru od zera przez kogoś, kto ma dostęp do dysku serwera.
-Podpisanie kluczem serwera niczego by nie zmieniło, bo ten klucz leży na tej samej
-maszynie. Uczciwa gwarancja brzmi: **wykrywalność manipulacji częściowej, nie
-niemożliwość manipulacji**. Podniesienie jej wymagałoby zaufanego zewnętrznego
-świadka i wykracza poza zakres projektu (§11).
+**What this does not give.** The chain detects partial tampering. It does not protect
+against someone with access to the server's disk rebuilding the ledger from scratch. Signing
+it with the server key would change nothing, since that key sits on the same machine. The
+honest guarantee reads: **detectability of partial tampering, not impossibility of
+tampering**. Raising it would require a trusted external witness and falls outside the scope
+of the project (§11).
 
-### 9.3 Wykrywanie zmian po stronie klienta
+### 9.3 Client-side change detection
 
-Odpowiada na pytanie: czy plik, który wygląda na niezmieniony, jest tym samym plikiem.
+Answers the question: is a file that looks unchanged the same file.
 
-Polityka jest wyborem użytkownika (ADR-016), bo oba tryby są uzasadnione i różnią
-się ceną, a nie poprawnością:
+The policy is the user's choice (ADR-016), because both modes are justified and differ in
+cost rather than correctness:
 
-| Tryb | Manifest niesie `d` | Wykrywa podmianę zachowującą metadane | Koszt skanu |
+| Mode | Manifest carries `d` | Detects metadata-preserving substitution | Scan cost |
 |---|---|---|---|
-| szybki (domyślny) | nie | nie | same metadane |
-| dokładny | tak | tak | odczyt całej biblioteki w każdym cyklu |
+| fast (default) | no | no | metadata only |
+| thorough | yes | yes | reads the whole library every cycle |
 
-W trybie szybkim tożsamością pliku pozostaje `(ścieżka, rozmiar, mtime)` — I5 i ADR-002.
-W trybie dokładnym serwer zestawia `d` z rejestrem z §9.2 i zgłasza niezgodność
-w polu `divergent` (§5.2).
+In fast mode a file's identity remains `(path, size, mtime)` — I5 and ADR-002. In thorough
+mode the server compares `d` against the ledger from §9.2 and reports the mismatch in the
+`divergent` field (§5.2).
 
-Klient MOŻE pominąć `d` dla pojedynczych pozycji, gdy zabraknie mu budżetu pracy
-w tle w trakcie liczenia — serwer potraktuje je jak w trybie szybkim. Cichy brak
-skrótu jest lepszy niż przerwana synchronizacja.
+The client MAY omit `d` for individual entries when it runs out of background-work budget
+mid-computation — the server will then treat them as in fast mode. A quietly missing digest
+is better than an interrupted sync.
 
-### 9.4 Weryfikacja istniejącej kopii
+### 9.4 Verifying an existing copy
 
-Pełne sprawdzenie zgodności kopii z oryginałem odbywa się przez `POST /verify` (§5.5),
-uruchamiane świadomie przez użytkownika. Próbka MUSI obejmować pliki wszystkich
-rozmiarów: wykluczenie dużych plików „dla szybkości" zostawia największe i najtrudniejsze
-do odtworzenia dane trwale poza kontrolą.
-
----
-
-## 10. Tryb adopcji (opcjonalny, ADR-012)
-
-Przewidziany dla scenariusza, w którym użytkownik wgrał pierwszy zrzut kablem.
-Kopiowanie przez MTP notorycznie nie zachowuje mtime, więc porównanie z §5.2
-uznałoby komplet plików za brakujące.
-
-W trybie adopcji serwer dopasowuje po `(ścieżka, rozmiar)` z tolerancją mtime `±2 s`
-(granulacja FAT) albo z całkowitym pominięciem mtime, a następnie **zapisuje mtime
-podany przez telefon jako kanoniczny**, po czym tryb się wyłącza.
-
-Tryb MUSI być jednorazowy, jawnie włączany w panelu serwera i ograniczony czasowo.
-Ścieżką podstawową pozostaje pełny transfer przez sieć (ADR-012).
+A full check of the copy against the original is performed via `POST /verify` (§5.5),
+started deliberately by the user. The sample MUST span files of all sizes: excluding large
+files "for speed" leaves the largest and hardest-to-reproduce data permanently unchecked.
 
 ---
 
-## 11. Kwestie otwarte
+## 10. Adoption mode (optional, ADR-012)
 
-- Format przyrostowego raportu postępu dla panelu (SignalR czy odpytywanie).
-- Czy `POST /bundle` powinien mieć wariant strumieniowy dla bardzo dużych paczek.
-- Zachowanie przy dwóch urządzeniach zapisujących tę samą ścieżkę — obecnie
-  rozdzielone przez `<device-slug>`, ale warto rozważyć widok scalony w panelu.
-- Polityka retencji wersji w `.filum/versions/` — obecnie brak, katalog rośnie
-  bez ograniczeń.
-- Zaufany zewnętrzny świadek dla rejestru z §9.2. Łańcuch wykrywa manipulację
-  częściową, ale ktoś z dostępem do dysku może odtworzyć rejestr od zera. Podniesienie
-  gwarancji wymagałoby okresowego publikowania skrótu ostatniego wiersza poza serwerem
-  — u drugiego uczestnika, w usłudze znacznika czasu albo na nośniku tylko do odczytu.
-  Każdy z tych wariantów wprowadza zależność, której projekt dotąd nie ma, więc
-  decyzja wymaga osobnego rozważenia.
+Intended for the scenario where the user loaded the first dump over a cable. Copying over
+MTP notoriously fails to preserve mtime, so the comparison in §5.2 would declare every file
+missing.
+
+In adoption mode the server matches on `(path, size)` with an mtime tolerance of `±2 s`
+(FAT granularity) or ignoring mtime entirely, then **records the mtime supplied by the phone
+as canonical**, after which the mode switches itself off.
+
+The mode MUST be single-use, explicitly enabled in the server panel, and time-limited. The
+primary path remains a full transfer over the network (ADR-012).
+
+---
+
+## 11. Open questions
+
+- The format of incremental progress reports for the panel (SignalR or polling).
+- Whether `POST /bundle` should have a streaming variant for very large bundles.
+- Behaviour when two devices write the same path — currently separated by `<device-slug>`,
+  but a merged view in the panel is worth considering.
+- A retention policy for versions in `.filum/versions/` — currently none; the directory
+  grows without bound.
+- A trusted external witness for the ledger from §9.2. The chain detects partial tampering,
+  but someone with disk access can rebuild the ledger from scratch. Raising the guarantee
+  would require periodically publishing the digest of the last line outside the server — to
+  a second participant, to a timestamping service, or onto write-once media. Each of those
+  introduces a dependency the project does not currently have, so the decision needs
+  separate consideration.
