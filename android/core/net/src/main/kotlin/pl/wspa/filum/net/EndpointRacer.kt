@@ -8,7 +8,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import pl.wspa.filum.protocol.PingResponse
 import pl.wspa.filum.protocol.Protocol
 
-/** A route that did not answer, with the reason — it goes into the application's journal. */
+/** A route that did not answer, with the reason - it goes into the application's journal. */
 data class EndpointFailure(val endpoint: ServerEndpoint, val reason: String)
 
 sealed interface RaceOutcome {
@@ -30,10 +30,10 @@ sealed interface RaceOutcome {
  * Instead of asking one address after another whether the server is there, we ask **all of
  * them at once** and take the first valid answer. At home the local network wins as the
  * fastest, away from home the overlay does, and after a router change a dead address costs
- * only the timeout — in parallel with the rest, so it delays nothing.
+ * only the timeout - in parallel with the rest, so it delays nothing.
  *
  * The racer knows nothing of OkHttp: it is handed a probe function. This is not abstraction
- * for its own sake — local and overlay routes need **different** HTTP clients (binding the
+ * for its own sake - local and overlay routes need **different** HTTP clients (binding the
  * socket to a specific network, §4.3), and choosing the client belongs to the layer above.
  */
 class EndpointRacer(

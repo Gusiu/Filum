@@ -117,7 +117,7 @@ public class BundleReaderTests
         Assert.True(results[0].Ok);
         Assert.False(results[1].Ok);
         Assert.Equal("digest_mismatch", results[1].Error);
-        Assert.True(results[2].Ok, "the file after the rejected one must arrive — the frames did not slip");
+        Assert.True(results[2].Ok, "the file after the rejected one must arrive - the frames did not slip");
 
         Assert.True(h.StoredExists("dobry.txt"));
         Assert.False(h.StoredExists("zly.txt"));

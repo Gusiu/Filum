@@ -29,7 +29,7 @@ sealed interface ApiResult<out T> {
         val expectedOffset: Long? get() = error?.expectedOffset
     }
 
-    /** No conversation happened at all — a dropped connection, a timeout, a TLS error. */
+    /** No conversation happened at all - a dropped connection, a timeout, a TLS error. */
     data class Unreachable(val cause: IOException) : ApiResult<Nothing> {
         val message: String get() = cause.message ?: cause::class.java.simpleName
     }
@@ -42,7 +42,7 @@ sealed interface ApiResult<out T> {
     }
 }
 
-/** A value or null — for places where the error has already been handled. */
+/** A value or null - for places where the error has already been handled. */
 fun <T> ApiResult<T>.getOrNull(): T? = (this as? ApiResult.Ok)?.value
 
 inline fun <T> ApiResult<T>.onOk(action: (T) -> Unit): ApiResult<T> {

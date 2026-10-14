@@ -162,7 +162,7 @@ class BundlingTest {
     @Test
     fun `a file omitted from the response returns to the queue`(@TempDir dir: Path) = runTest {
         // The server said nothing about a file we sent. Treating that as success would be
-        // silent loss — the file would vanish from the queue without reaching the disk.
+        // silent loss - the file would vanish from the queue without reaching the disk.
         setUp()
         val a = file(dir, "a.txt", 10)
         val b = file(dir, "b.txt", 10)

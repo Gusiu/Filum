@@ -17,7 +17,7 @@ import java.util.Base64
  *
  * The values are hardcoded on purpose. Were the test to generate a certificate on the fly
  * and compute its fingerprint the same way the production code does, it would only confirm
- * that the code agrees with itself — not that it computes what the rest of the world calls
+ * that the code agrees with itself - not that it computes what the rest of the world calls
  * odciskiem SubjectPublicKeyInfo.
  */
 object TestCertificates {

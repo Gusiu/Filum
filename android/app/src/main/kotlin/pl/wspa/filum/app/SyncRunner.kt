@@ -60,7 +60,7 @@ class SyncRunner(private val container: AppContainer) {
             probe = { endpoint -> FilumApiClient(clients.forProbe(endpoint.kind)).ping(endpoint) }
         )
 
-        // Stored routes first — in the vast majority of cycles one of them answers and
+        // Stored routes first - in the vast majority of cycles one of them answers and
         // there is no reason to pay for discovery.
         var race = racer.fastest(loadCandidates(server))
 
@@ -93,7 +93,7 @@ class SyncRunner(private val container: AppContainer) {
             "Connected over ${reached.endpoint} in ${reached.elapsedMillis} ms.",
         )
 
-        // Default settings until the user changes anything — the first cycle after
+        // Default settings until the user changes anything - the first cycle after
         // po instalacji nie ma jeszcze wiersza w bazie.
         val settings = container.database.settings().get() ?: SettingsEntity()
 
@@ -107,7 +107,7 @@ class SyncRunner(private val container: AppContainer) {
             queue = container.queue,
             journal = journal,
             // The limits come from the ping response; the client assumes none of its own (§5.1).
-            // The integrity policy is the exception — that is the device user's decision, not
+            // The integrity policy is the exception - that is the device user's decision, not
             // the server's, because it is their time and battery that pay for it.
             config = SyncConfig(
                 manifestBatch = reached.ping.limits.manifestBatch,
@@ -193,7 +193,7 @@ class SyncRunner(private val container: AppContainer) {
                 )
                 return changed.asSequence() to true
             }
-            // null means the counter went backwards, i.e. the MediaStore index was rebuilt —
+            // null means the counter went backwards, i.e. the MediaStore index was rebuilt -
             // the delta would be partial, so we drop to a full tree walk.
         }
 

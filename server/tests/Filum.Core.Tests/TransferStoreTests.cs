@@ -73,7 +73,7 @@ public class TransferStoreTests
     {
         // A real-life scenario: a video recording was still being written on the previous
         // attempt. Splicing the old part onto new bytes would produce a file that never
-        // existed — worse than no file, because it looks correct.
+        // existed - worse than no file, because it looks correct.
         using var h = new Harness();
         var first = Harness.Bytes("0123456789");
 

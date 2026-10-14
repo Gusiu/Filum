@@ -13,7 +13,7 @@ public sealed class VersionStore(StoragePaths paths)
 {
     /// <summary>
     /// Moves the existing destination file into .filum/versions/. The timestamp in the
-    /// name comes from the **old copy's** mtime, not from the moment of the operation —
+    /// name comes from the **old copy's** mtime, not from the moment of the operation -
     /// so the name says when the content is from, not when the upload happened to run.
     /// </summary>
     /// <returns>The version's path relative to the device directory, to return to the client.</returns>

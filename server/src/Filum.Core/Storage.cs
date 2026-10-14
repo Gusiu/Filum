@@ -13,14 +13,14 @@ public sealed class FilumOptions
     public string Root { get; set; } = "";
 
     /// <summary>
-    /// Katalog na klucz prywatny serwera. Poza katalogiem backupu — patrz FilumPaths.
+    /// Katalog na klucz prywatny serwera. Poza katalogiem backupu - patrz FilumPaths.
     /// Pusty oznacza %LOCALAPPDATA%\Filum.
     /// </summary>
     public string ConfigDirectory { get; set; } = "";
 
     /// <summary>
     /// The listen address. mTLS has applied since stage 4, so exposure to the network is
-    /// safe — without a paired key no resource other than /pair answers at all.
+    /// safe - without a paired key no resource other than /pair answers at all.
     /// </summary>
     public string Bind { get; set; } = "0.0.0.0";
 
@@ -60,7 +60,7 @@ public sealed class FilumOptions
 
 /// <summary>
 /// The \\?\ prefix that bypasses the Windows 260-character path limit.
-/// The path must be fully expanded beforehand — the extended form is not normalised,
+/// The path must be fully expanded beforehand - the extended form is not normalised,
 /// so '.' and '..' segments inside it would never be resolved.
 /// </summary>
 public static class LongPath

@@ -8,7 +8,7 @@ import javax.net.ssl.X509TrustManager
 
 /**
  * The TLS objects for the HTTP client. Kept together because OkHttp requires the socket
- * factory and the trust manager to be supplied at the same time — separating them leads to
+ * factory and the trust manager to be supplied at the same time - separating them leads to
  * a configuration in which key pinning silently stops working.
  */
 data class TlsBundle(
@@ -30,7 +30,7 @@ object FilumTls {
 
     /**
      * A variant taking key managers directly. It allows pinning and mTLS to be tested on an
-     * ordinary JVM, with no Android Keystore and no emulator — and this is the part where a
+     * ordinary JVM, with no Android Keystore and no emulator - and this is the part where a
      * mistake means uploading the backup to somebody else's address.
      */
     fun bundle(serverPin: String, keyManagers: Array<KeyManager>?): TlsBundle {

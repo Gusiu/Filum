@@ -13,13 +13,13 @@ import javax.net.SocketFactory
  * Binding sockets to the Wi-Fi network, bypassing the VPN tunnel (protocol §4.3).
  *
  * When a VPN is running, the system pushes all of an application's traffic into the tunnel
- * by default. An overlay address then works, but `192.168.1.10` does not — the packet goes
+ * by default. An overlay address then works, but `192.168.1.10` does not - the packet goes
  * to the tunnel instead of the local network. The fix is to ask for a specific [Network]
  * object and use its socket factory.
  *
  * A caveat to verify on the target device: if the VPN blocks traffic outside the tunnel,
  * the binding will fail anyway. The local route then simply loses the race and the overlay
- * one wins — the user sees no error,
+ * one wins - the user sees no error,
  * tylko wolniejszy transfer w domu.
  *
  * Wymaga uprawnienia `ACCESS_NETWORK_STATE`.
@@ -67,7 +67,7 @@ class AndroidLocalNetworkBinder(context: Context) : LocalNetworkBinder, Closeabl
         try {
             connectivity?.unregisterNetworkCallback(callback)
         } catch (e: IllegalArgumentException) {
-            // Already unregistered — there is nothing to clean up.
+            // Already unregistered - there is nothing to clean up.
         }
     }
 

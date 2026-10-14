@@ -107,7 +107,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     /**
-     * A manual cycle takes the same road as a nightly one — through WorkManager.
+     * A manual cycle takes the same road as a nightly one - through WorkManager.
      *
      * A separate "right now" path would mean a second implementation of the same thing, tested
      * incidentally, and a certainty that sooner or later one of them would start behaving
@@ -141,7 +141,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
                             "${result.missing.size} of ${result.checked} files are missing; " +
                                 "they will arrive at the next sync."
 
-                        else -> "Checked ${result.checked} files — all matching."
+                        else -> "Checked ${result.checked} files - all matching."
                     }
 
                     is VerificationResult.Failed -> "The check could not be run: ${result.reason}"

@@ -10,7 +10,7 @@ import org.junit.jupiter.params.provider.ValueSource
 
 /**
  * Tests for the rules in docs/PATH-RULES.md. The vector set is shared with the C#
- * implementation — a divergence between the two shows up here, not on a device.
+ * implementation - a divergence between the two shows up here, not on a device.
  */
 class PathRulesTest {
 
@@ -75,7 +75,7 @@ class PathRulesTest {
 
     @Test
     fun `the collision suffix is stable`() {
-        // The value is stated outright in docs/PATH-RULES.md §6 — the document, C# and
+        // The value is stated outright in docs/PATH-RULES.md §6 - the document, C# and
         // Kotlin have to agree, or the server and the client diverge on disk.
         assertEquals("~6a8a8e", PathRules.caseCollisionSuffix("Pictures/photo.jpg"))
     }

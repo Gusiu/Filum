@@ -12,14 +12,14 @@ Engineering thesis, WSPA.
 
 ## What it is, and what it is not
 
-Filum is a **backup, not a sync**. The distinction is not cosmetic — the whole
+Filum is a **backup, not a sync**. The distinction is not cosmetic - the whole
 architecture follows from it: deleting a file on the phone **does not delete it
 from the PC**.
 
 The well-known tools (Syncthing, Resilio, FolderSync, Nextcloud) synchronise in
 both directions and propagate deletions. Someone tidying up their gallery loses
 the backup at precisely the moment they need it. The set of files Filum keeps is
-monotonic — it can only grow.
+monotonic - it can only grow.
 
 ## Components
 
@@ -31,13 +31,13 @@ monotonic — it can only grow.
 ## Key properties
 
 - **Nothing is lost.** The server exposes no delete operation. Different content
-  under a known path does not overwrite what is there — the old version is filed away.
+  under a known path does not overwrite what is there - the old version is filed away.
 - **Storage is transparent.** What lands on disk is an ordinary directory tree,
   browsable in Explorer. Restoring does not require this application.
 - **Integrity is checkable.** The digest of every accepted file goes into an
   append-only ledger where each line carries the digest of the one before it.
   Removing or altering an entry breaks everything that follows. The ledger is plain
-  JSONL — it can be verified without this application, in a few lines of code.
+  JSONL - it can be verified without this application, in a few lines of code.
 - **Change detection is the user's choice.** Fast mode compares size and modification
   time; thorough mode hashes every file on every scan and catches a substitution that
   left the metadata alone.
@@ -52,7 +52,7 @@ monotonic — it can only grow.
 
 | Document | Contents |
 |---|---|
-| [docs/PROTOCOL.md](docs/PROTOCOL.md) | protocol specification — normative for both implementations |
+| [docs/PROTOCOL.md](docs/PROTOCOL.md) | protocol specification - normative for both implementations |
 | [docs/PATH-RULES.md](docs/PATH-RULES.md) | path normalisation and sanitisation for NTFS |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | module breakdown, flows, build order |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | architecture decision record, including the rejected alternatives |
@@ -65,13 +65,13 @@ implementing from the document alone is the evidence that the document is comple
 ## Target environment
 
 - Phone: Android 11 or newer (`minSdk 30`), `targetSdk 36`
-- Sideloaded — requires `MANAGE_EXTERNAL_STORAGE`
+- Sideloaded - requires `MANAGE_EXTERNAL_STORAGE`
 - PC: Windows 10/11, NTFS
 - A library of any size; the first sync spreads over as many cycles as it needs
 
 ## Status
 
-Stages 1–9 of the [build order table](docs/ARCHITECTURE.md#8-build-order).
+Stages 1-9 of the [build order table](docs/ARCHITECTURE.md#8-build-order).
 
 | Item | State |
 |---|---|
@@ -92,7 +92,7 @@ Stages 1–9 of the [build order table](docs/ARCHITECTURE.md#8-build-order).
 | QR scanning with the phone camera | not started |
 
 `EndToEndTest` runs the real Kotlin client against the real C# server and checks that
-both compute the same file identity — details in [android/README.md](android/README.md).
+both compute the same file identity - details in [android/README.md](android/README.md).
 That test earns its keep: a disagreement over whether an empty optional field is
 omitted or written as null passed the full unit suite on both sides and only surfaced
 there.
@@ -110,4 +110,4 @@ cd server && dotnet test
 cd server && dotnet run --project src/Filum.Server --no-launch-profile
 ```
 
-The Android client needs Android Studio — details in [android/README.md](android/README.md).
+The Android client needs Android Studio - details in [android/README.md](android/README.md).

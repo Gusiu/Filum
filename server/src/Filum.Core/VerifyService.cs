@@ -7,7 +7,7 @@ namespace Filum.Core;
 /// Integrity checking of the stored copies (protocol §5.5).
 ///
 /// This is the **only** place where the server hashes existing files. Change detection
-/// rests on the triple (path, size, mtime) and stays that way by default (I5, ADR-002) —
+/// rests on the triple (path, size, mtime) and stays that way by default (I5, ADR-002) -
 /// verification answers a different question: is what lies on the disk still what arrived
 /// from the phone. Storage media can silently corrupt a byte, and a backup that does not
 /// know it is a backup of an illusion.

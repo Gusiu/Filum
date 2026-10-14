@@ -9,7 +9,7 @@ namespace Filum.Tray;
 ///
 /// Gives the application a physical presence in the system: at a glance the user can see
 /// whether the server is running, and right-click reaches what would otherwise need hunting
-/// okna — panel i katalog kopii.
+/// okna - panel i katalog kopii.
 /// </summary>
 internal static class Program
 {
@@ -78,7 +78,7 @@ internal static class Program
                 _statusItem.Text = "The server is not running";
                 _folderItem.Enabled = false;
                 // The icon's tooltip has a hard 63-character limit; anything longer is silently cut.
-                _icon.Text = "Filum — the server is not running";
+                _icon.Text = "Filum - the server is not running";
                 return;
             }
 
@@ -90,7 +90,7 @@ internal static class Program
                 : $"{devices} {Devices(devices)}, {files} files";
 
             _folderItem.Enabled = Directory.Exists(_status.BackupRoot);
-            _icon.Text = Truncate($"Filum — {Bytes(_status.FreeBytes)} free");
+            _icon.Text = Truncate($"Filum - {Bytes(_status.FreeBytes)} free");
         }
 
         private void OpenBackupFolder()

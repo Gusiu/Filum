@@ -10,7 +10,7 @@ namespace Filum.Core.Tests;
 ///
 /// The ledger answers a question the file copy alone cannot be asked: what did the server
 /// accept and when, and has anyone touched it since. The digest chain turns a list of
-/// entries into a record that cannot be quietly corrected — and that is the only property
+/// entries into a record that cannot be quietly corrected - and that is the only property
 /// this ledger exists for, so that is what these tests aim at.
 /// </summary>
 public class IntegrityLedgerTests
@@ -79,7 +79,7 @@ public class IntegrityLedgerTests
     public void AlteringAnEntry_IsDetected()
     {
         // Someone with disk access changes a digest in the ledger so that a substituted
-        // file looks original. The entry itself looks perfectly fine — what exposes the
+        // file looks original. The entry itself looks perfectly fine - what exposes the
         // mismatch is the chain, because the next line points at the old form.
         using var h = new Harness();
         Append(h, "a.txt", "aaa");
@@ -132,7 +132,7 @@ public class IntegrityLedgerTests
     [Fact]
     public void AppendingAtTheEnd_IsValid()
     {
-        // The ledger is append-only by definition — new entries must not invalidate it.
+        // The ledger is append-only by definition - new entries must not invalidate it.
         using var h = new Harness();
         Append(h, "a.txt", "aaa");
         Assert.True(h.Ledger.Verify(Harness.Slug).Intact);
@@ -154,7 +154,7 @@ public class IntegrityLedgerTests
     [Fact]
     public void AFilesLatestDigest_ComesFromItsNewestEntry()
     {
-        // A file may enter the ledger many times — what counts is the current state.
+        // A file may enter the ledger many times - what counts is the current state.
         using var h = new Harness();
         Append(h, "note.txt", "first version");
         Append(h, "note.txt", "second version");
@@ -166,7 +166,7 @@ public class IntegrityLedgerTests
     public void TheLedgerIsReadableByAForeignTool()
     {
         // The ledger's entire value rests on being checkable **without** this application.
-        // A byte-order mark made the first line invalid JSON for standard parsers — and an
+        // A byte-order mark made the first line invalid JSON for standard parsers - and an
         // evidentiary record that needs knowledge of one implementation's storage
         // conventions to read is worth as much as trust in that implementation. Nothing.
         using var h = new Harness();
@@ -178,7 +178,7 @@ public class IntegrityLedgerTests
         Assert.False(raw.Length >= 3 && raw[0] == 0xEF && raw[1] == 0xBB && raw[2] == 0xBF,
                      "the ledger starts with a byte-order mark");
 
-        // Read without any involvement of our code — exactly as a third party would.
+        // Read without any involvement of our code - exactly as a third party would.
         foreach (var line in File.ReadAllLines(LedgerPath(h)).Where(l => l.Length > 0))
         {
             using var parsed = JsonDocument.Parse(line);
@@ -190,7 +190,7 @@ public class IntegrityLedgerTests
     public void ADigestAfterAcceptance_IsVisibleDespiteAnEarlierQuery()
     {
         // The ledger keeps a path-to-digest index, built lazily on the first question asked.
-        // Asking about a file that does not exist yet builds that index empty — and if the
+        // Asking about a file that does not exist yet builds that index empty - and if the
         // write path does not refresh it, the next question answers out of date. In
         // thorough mode that means reporting a divergence for a file the server had just
         // correctly accepted.
@@ -271,7 +271,7 @@ public class DigestRequirementTests
     public async Task AFailedTransfer_LeavesNoEntry()
     {
         // An entry for a file that ultimately never landed on disk would be worse than no
-        // entry — it would claim possession of something that is not there.
+        // entry - it would claim possession of something that is not there.
         using var h = new Harness(o => o.RequireDigest = true);
         var wrongDigest = Harness.Digest(Harness.Bytes("something else entirely"));
 
@@ -284,7 +284,7 @@ public class DigestRequirementTests
     public async Task SuccessiveVersionsOfAFile_LeaveATraceOfBoth()
     {
         // The ledger records acceptances, not current state. The previous version of the
-        // file sits in .filum/versions and its digest stays in the ledger — together they
+        // file sits in .filum/versions and its digest stays in the ledger - together they
         // give a reconstructible history rather than a snapshot.
         using var h = new Harness(o => o.RequireDigest = true);
 
@@ -304,14 +304,14 @@ public class DigestRequirementTests
 /// ledger (ADR-016).
 ///
 /// The point is the difference between the two modes. Fast mode compares metadata and has
-/// no way of noticing a substitution that preserved it — that is the known price of
+/// no way of noticing a substitution that preserved it - that is the known price of
 /// ADR-002, not a defect. Thorough mode notices, because it asks a different question.
 /// </summary>
 public class ThoroughModeTests
 {
     private const long Mtime = 1_756_400_000;
 
-    /// <summary>Places a file and records it in the ledger — the state after a successful sync.</summary>
+    /// <summary>Places a file and records it in the ledger - the state after a successful sync.</summary>
     private static void Accept(Harness h, string path, string content)
     {
         var bytes = Harness.Bytes(content);
@@ -380,7 +380,7 @@ public class ThoroughModeTests
     public void FastMode_DoesNotDetectAMetadataPreservingSubstitution()
     {
         // This test documents a limitation, not a wish. Without a digest the server has
-        // only size and time to go on — and those agree. That is precisely why thorough
+        // only size and time to go on - and those agree. That is precisely why thorough
         // mode exists.
         using var h = new Harness();
         Accept(h, "contract.pdf", "original text");
@@ -398,7 +398,7 @@ public class ThoroughModeTests
     {
         // A file placed into the copy by hand, or accepted before the ledger was running.
         // There is nothing to compare against, and a guess would be a false alarm on the
-        // first thorough scan — which is exactly when an alarm has to mean something.
+        // first thorough scan - which is exactly when an alarm has to mean something.
         using var h = new Harness();
         h.Seed("old.txt", Harness.Bytes("content"), Mtime);
 
@@ -412,7 +412,7 @@ public class ThoroughModeTests
     public void ASizeChange_IsReportedAsAnOrdinaryUpdate()
     {
         // A divergence is meant to say "the metadata is lying". An ordinary edit changes
-        // mtime or size and is nothing suspicious — conflating the two would strip the
+        // mtime or size and is nothing suspicious - conflating the two would strip the
         // report of its value.
         using var h = new Harness();
         Accept(h, "note.txt", "short");

@@ -27,7 +27,7 @@ public readonly record struct SanitizeResult(bool Ok, string? Stored, PathReject
 /// Maps a canonical path from the phone onto a storage path under NTFS.
 ///
 /// The normative implementation of docs/PATH-RULES.md. Its mirror image is the
-/// <c>PathRules</c> class in the :core:protocol module on the Android side — both
+/// <c>PathRules</c> class in the :core:protocol module on the Android side - both
 /// pass the same docs/testvectors/paths.tsv set.
 ///
 /// The class is deliberately free of file operations. Joining with the device
@@ -107,7 +107,7 @@ public static class PathRules
 
     /// <summary>
     /// Encodes a single component. The order of the rules is normative
-    /// (docs/PATH-RULES.md §5) — reordering them breaks injectivity.
+    /// (docs/PATH-RULES.md §5) - reordering them breaks injectivity.
     /// </summary>
     public static string EncodeSegment(string segment)
     {
@@ -144,7 +144,7 @@ public static class PathRules
             encoded = escaped.Append(encoded, 1, encoded.Length - 1).ToString();
         }
 
-        // Rule 4: a trailing dot or space. We encode only the last character — the
+        // Rule 4: a trailing dot or space. We encode only the last character - the
         // earlier ones stop being trailing, so Windows will not trim them.
         var last = encoded[^1];
         if (last is '.' or ' ')
@@ -163,7 +163,7 @@ public static class PathRules
 
     /// <summary>
     /// Reverses the percent-encoding. The <c>~xxxxxx</c> suffix from rule 6 and from
-    /// case-collision resolution cannot be reversed without index.jsonl — left alone here.
+    /// case-collision resolution cannot be reversed without index.jsonl - left alone here.
     /// </summary>
     public static string Decode(string storedPath)
     {
@@ -207,7 +207,7 @@ public static class PathRules
     }
 
     /// <summary>
-    /// Truncates without splitting a %XX sequence — otherwise the encoding would stop
+    /// Truncates without splitting a %XX sequence - otherwise the encoding would stop
     /// being reversible. Every '%' in the encoded text starts a sequence, because a
     /// literal '%' was turned into %25 earlier.
     /// </summary>

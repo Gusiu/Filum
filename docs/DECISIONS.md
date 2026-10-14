@@ -1,4 +1,4 @@
-# Filum — architecture decision record
+# Filum - architecture decision record
 
 Each entry records the context, the decision, the rationale and the **rejected
 alternatives**. That last heading is the important one: a thesis defends itself by showing
@@ -8,7 +8,7 @@ As of 2026-09-01. Entries marked *accepted* hold until explicitly changed.
 
 ---
 
-## ADR-001 — One-way backup rather than synchronisation
+## ADR-001 - One-way backup rather than synchronisation
 
 **Status:** accepted
 
@@ -27,16 +27,16 @@ decision follows from it.
 propagates deletions (the same), time-based retention with automatic cleanup (the user
 would lose data without a conscious decision).
 
-**Consequences.** Disk usage grows without bound — mitigated by the orphan report
+**Consequences.** Disk usage grows without bound - mitigated by the orphan report
 (ADR-015), which informs but does not delete.
 
 ---
 
-## ADR-002 — File identity without a cryptographic digest
+## ADR-002 - File identity without a cryptographic digest
 
 **Status:** accepted as the **default**, supplemented by ADR-016
 
-**Context.** A phone's library can be large — tens or hundreds of gigabytes. Classic tools
+**Context.** A phone's library can be large - tens or hundreds of gigabytes. Classic tools
 detect changes by comparing content digests.
 
 **Decision.** A file is identified by the triple `(path, size, mtime)`. Digests serve only
@@ -58,13 +58,13 @@ is nearly free, because the bytes pass through the CPU anyway. We reject hashing
 of *change detection*, not as a method of *integrity checking*. Conflating the two is a
 common mistake.
 
-**Revision.** This decision remains the default mode but is no longer the only one — ADR-016
+**Revision.** This decision remains the default mode but is no longer the only one - ADR-016
 adds a thorough mode in which a file's identity is its digest. The reason: metadata can be
 forged, and in forensic use that is not a hypothetical scenario.
 
 ---
 
-## ADR-003 — A server with no database; the disk is the source of truth
+## ADR-003 - A server with no database; the disk is the source of truth
 
 **Status:** accepted
 
@@ -73,7 +73,7 @@ forged, and in forensic use that is not a hypothetical scenario.
 **Decision.** No content index. The answer is produced by a `stat()` on each entry in the
 batch and a comparison of `(size, mtime)` against the filesystem.
 
-**Rationale.** Two thousand `stat()` calls on NTFS take tens of milliseconds — irrelevant
+**Rationale.** Two thousand `stat()` calls on NTFS take tens of milliseconds - irrelevant
 next to transfers lasting hours. In exchange, a whole class of problems disappears: an index
 drifting out of step with reality, schema migrations, a database corrupted by a power cut.
 A backup moved to another disk, copied, or restored from a copy simply works. A file deleted
@@ -87,7 +87,7 @@ ledger's index) are explicitly marked as reconstructible and non-authoritative.
 
 ---
 
-## ADR-004 — Server in C#/.NET
+## ADR-004 - Server in C#/.NET
 
 **Status:** accepted
 
@@ -103,7 +103,7 @@ icon. In .NET these are native APIs; in Python they are workarounds through `cty
 additionally tends to trip antivirus heuristics.
 
 **Rejected.** Python/FastAPI (a poor deployment story on Windows), Kotlin/Ktor (tempting for
-sharing a protocol module with the client — see consequences).
+sharing a protocol module with the client - see consequences).
 
 **Consequences.** We give up sharing protocol code with the Android client. We consider this
 an advantage: two independent implementations reconciled by a written specification and
@@ -112,7 +112,7 @@ hidden its gaps.
 
 ---
 
-## ADR-005 — Mutual key pinning instead of a certificate authority
+## ADR-005 - Mutual key pinning instead of a certificate authority
 
 **Status:** accepted
 
@@ -133,19 +133,19 @@ and an authority), a homegrown mini-CA signing CSRs (more moving parts with no s
 gain).
 
 **Consequences.** The client does not verify the hostname. This is safe **only** because key
-pinning replaces it — and must be documented that way, so that nobody removes one safeguard
+pinning replaces it - and must be documented that way, so that nobody removes one safeguard
 in the belief that the other covers it.
 
 **StrongBox is not required.** A separate secure element is a higher-end feature; cheaper
 hardware offers only the processor's trusted environment (TEE). The application asks for
-StrongBox and quietly falls back to TEE when refused — the private key leaves the device in
+StrongBox and quietly falls back to TEE when refused - the private key leaves the device in
 neither case; what differs is resistance to physical attack. The level actually in use is
 read from the Keystore on every start and recorded in the journal at pairing time, rather
 than assumed from the hardware.
 
 ---
 
-## ADR-006 — Identity by key, not by address
+## ADR-006 - Identity by key, not by address
 
 **Status:** accepted
 
@@ -167,11 +167,11 @@ outside the local network).
 
 **Consequences.** It requires binding the socket to a specific `Network` object on Android so
 that local routes work despite an active VPN. With a VPN that blocks traffic outside the
-tunnel, the local route becomes unavailable — the degradation must be silent.
+tunnel, the local route becomes unavailable - the degradation must be silent.
 
 ---
 
-## ADR-007 — Keeping previous versions instead of overwriting
+## ADR-007 - Keeping previous versions instead of overwriting
 
 **Status:** accepted
 
@@ -187,12 +187,12 @@ in Explorer with no tools at all (ADR-003).
 **Rejected.** Overwriting (contradicts ADR-001), versioning only non-media files (a rule
 dependent on file type, hard to defend and hard to test).
 
-**Consequences.** No retention policy — the versions directory grows without bound. Recorded
+**Consequences.** No retention policy - the versions directory grows without bound. Recorded
 as an open question.
 
 ---
 
-## ADR-008 — Aggregating small files
+## ADR-008 - Aggregating small files
 
 **Status:** accepted, to be confirmed by measurement
 
@@ -208,13 +208,13 @@ transfer.
 **Rejected.** `PUT` per file only (overhead), a whole tar archive (prevents resuming and
 partial success).
 
-**Consequences.** Bundles do not support resuming — acceptable, since they only cover small
+**Consequences.** Bundles do not support resuming - acceptable, since they only cover small
 files. The threshold must be established by measurement, not assumed; it is one of the
 experiments for the results chapter.
 
 ---
 
-## ADR-009 — Percent-encoding instead of character substitution
+## ADR-009 - Percent-encoding instead of character substitution
 
 **Status:** accepted
 
@@ -224,7 +224,7 @@ experiments for the results chapter.
 deterministic digest-derived suffix.
 
 **Rationale.** The mapping must be injective. Substituting `_` makes `a<b.txt` and `a_b.txt`
-land on the same path, and the second file silently overwrites the first — a direct violation
+land on the same path, and the second file silently overwrites the first - a direct violation
 of ADR-001 and ADR-007.
 
 **Rejected.** Substituting `_` (lossy), full base64 encoding of names (unreadable for the
@@ -235,7 +235,7 @@ fully reversible.
 
 ---
 
-## ADR-010 — A web panel plus a tray icon
+## ADR-010 - A web panel plus a tray icon
 
 **Status:** accepted
 
@@ -244,7 +244,7 @@ fully reversible.
 **Decision.** The interface is a page served by the server itself (Blazor), opened from the
 tray icon's menu.
 
-**Rationale.** The server is an HTTP server anyway, so the panel is nearly free — no second
+**Rationale.** The server is an HTTP server anyway, so the panel is nearly free - no second
 set of libraries and no second way of presenting state. The tray icon gives the application a
 physical presence in the system.
 
@@ -263,7 +263,7 @@ the tray ultimately has to be a separate process talking to the server over the 
 
 ---
 
-## ADR-011 — mtime in seconds, normalised in one place
+## ADR-011 - mtime in seconds, normalised in one place
 
 **Status:** accepted
 
@@ -282,7 +282,7 @@ in the other direction anyway).
 
 ---
 
-## ADR-012 — The first transfer over the network; adoption mode optional
+## ADR-012 - The first transfer over the network; adoption mode optional
 
 **Status:** accepted
 
@@ -304,7 +304,7 @@ run).
 
 ---
 
-## ADR-013 — targetSdk 36 and distribution outside the store
+## ADR-013 - targetSdk 36 and distribution outside the store
 
 **Status:** accepted
 
@@ -327,7 +327,7 @@ included in the backup.
 
 ---
 
-## ADR-014 — The overlay network as an interchangeable deployment profile
+## ADR-014 - The overlay network as an interchangeable deployment profile
 
 **Status:** accepted
 
@@ -351,7 +351,7 @@ version is achieved only with a self-hosted relay or port forwarding.
 
 ---
 
-## ADR-015 — An orphan report without deletion
+## ADR-015 - An orphan report without deletion
 
 **Status:** accepted
 
@@ -374,7 +374,7 @@ the application or through an explicit action in the panel.
 
 ---
 
-## ADR-016 — Integrity over frugality
+## ADR-016 - Integrity over frugality
 
 **Status:** accepted
 
@@ -389,17 +389,17 @@ about which nothing can be demonstrated has limited evidentiary value.
    without one. This is no longer the optional convenience of protocol §9.
 2. **An integrity ledger.** The server keeps a durable, append-only record: for every accepted
    file, its path, size, mtime, digest and the moment of acceptance. The ledger is a **chain of
-   digests** — each entry covers the digest of the previous one, so retroactive edits to the
+   digests** - each entry covers the digest of the previous one, so retroactive edits to the
    ledger itself are detectable.
 3. **The change-detection policy is the user's choice.** Fast mode preserves ADR-002. Thorough
    mode hashes every file on every scan and compares it against the ledger, thereby detecting a
-   **metadata-preserving substitution** — a file with unchanged size and modification time but
+   **metadata-preserving substitution** - a file with unchanged size and modification time but
    different content.
 4. **Verification need not be a sample.** The user chooses the scope; a sample remains the
    default for reasons of time, not of principle. Whatever the scope, it must span files of all
    sizes: excluding large ones leaves the hardest-to-reproduce data permanently unchecked.
 
-**Rationale.** The distinction from ADR-002 still holds — hashing for change detection really
+**Rationale.** The distinction from ADR-002 still holds - hashing for change detection really
 does cost a full read of the data. What changes is the answer to whether it is worth it: in
 evidentiary use, detecting a metadata-preserving substitution is exactly what the mechanism
 exists for. Tampering that leaves size and mtime alone is trivial to perform and invisible to
@@ -411,7 +411,7 @@ digests into a record that cannot be quietly corrected.
 **Rejected.** Forcing thorough mode with no choice (on a large library and weaker hardware this
 would mean day-long cycles and a user who turns the application off), signing the ledger with
 the server key (the key sits on the same machine, so the signature does not protect against
-whoever has access to it — the digest chain gives the same detectability without pretending to
+whoever has access to it - the digest chain gives the same detectability without pretending to
 a stronger guarantee).
 
 **Consequences.** Thorough mode requires a full read of the phone's storage on every cycle. This
@@ -419,13 +419,13 @@ is visible in the interface and documented, rather than hidden behind a default.
 
 ---
 
-## ADR-017 — No assumptions about device capacity
+## ADR-017 - No assumptions about device capacity
 
 **Status:** accepted
 
 **Context.** The documentation assumed a first sync on the order of 200 GB and derived part of
 its reasoning from that number. The assumption turned out to be tied to one particular piece of
-hardware — on a device with less storage it is physically impossible, and on a larger one it is
+hardware - on a device with less storage it is physically impossible, and on a larger one it is
 an underestimate.
 
 **Decision.** We assume nothing about library size or device capacity anywhere. The thresholds
@@ -433,13 +433,13 @@ we do need are **relative**, or follow from constraints unrelated to data size.
 
 | Threshold | Relative to | Why not absolute |
 |---|---|---|
-| free-space reserve | `max(2% of capacity, a small minimum)` | 2% of a 128 GB disk is too little, of an 8 TB disk too much — hence both terms |
+| free-space reserve | `max(2% of capacity, a small minimum)` | 2% of a 128 GB disk is too little, of an 8 TB disk too much - hence both terms |
 | bundling threshold | HTTP request overhead against transfer time | depends on the network, not on library size |
 | chunk size | the duration of a single request | depends on throughput |
 | background-work budget | the Android system limit | not our choice to make |
 
 **Rationale.** The architecture defends itself without that number. Three-level resumability,
-incremental scanning and the budget all make sense for a library of any size — more so the
+incremental scanning and the budget all make sense for a library of any size - more so the
 larger it is, but there is no threshold below which they stop mattering. Tying the reasoning to
 one figure made it false everywhere that figure does not hold.
 

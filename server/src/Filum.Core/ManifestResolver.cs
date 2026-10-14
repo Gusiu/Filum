@@ -6,7 +6,7 @@ namespace Filum.Core;
 
 /// <summary>
 /// The record accompanying a .part file. It holds the transfer's identity and nothing
-/// else; the number of bytes received is deliberately NOT stored here — we take it from
+/// else; the number of bytes received is deliberately NOT stored here - we take it from
 /// the .part file's length, so that two sources of truth cannot disagree after an abrupt
 /// shutdown (ADR-003).
 /// </summary>
@@ -27,7 +27,7 @@ public sealed record PartMetadata(
         }
         catch (JsonException)
         {
-            // A corrupt record is treated as no record — the transfer starts from zero.
+            // A corrupt record is treated as no record - the transfer starts from zero.
             return null;
         }
     }
@@ -49,7 +49,7 @@ public sealed record ManifestResolution(
 
 /// <summary>
 /// Answers the question of what the server is missing by comparing against the
-/// filesystem. The server keeps no content index (ADR-003) — the disk is the source of
+/// filesystem. The server keeps no content index (ADR-003) - the disk is the source of
 /// truth, so a backup moved to different media, or edited by hand in Explorer, simply
 /// works.
 ///
@@ -111,7 +111,7 @@ public sealed class ManifestResolver(StoragePaths paths, FilumOptions options, I
     /// <summary>
     /// Whether the content changed despite unchanged metadata.
     ///
-    /// The absence of a ledger entry is **not** evidence of divergence — the file may have
+    /// The absence of a ledger entry is **not** evidence of divergence - the file may have
     /// entered the copy before the ledger was running, or been placed there by hand.
     /// Treating such a file as substituted would mean a false alarm on every first sync in
     /// thorough mode, which is exactly when the report needs to mean something.
@@ -126,7 +126,7 @@ public sealed class ManifestResolver(StoragePaths paths, FilumOptions options, I
 
     /// <summary>
     /// The resume offset. An unfinished partial file counts only when it was created for
-    /// the same (size, mtime) pair — otherwise we would splice two different versions of a
+    /// the same (size, mtime) pair - otherwise we would splice two different versions of a
     /// file together, for instance when a video was still being written on the last attempt.
     /// </summary>
     private long ResumeOffset(string slug, ManifestEntry entry)

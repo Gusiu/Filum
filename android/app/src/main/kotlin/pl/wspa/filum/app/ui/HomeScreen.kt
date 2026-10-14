@@ -117,7 +117,7 @@ fun HomeScreen(
             Text("Integrity check", style = MaterialTheme.typography.titleSmall)
             Text(
                 "Checks whether the copies on the computer still match the files on the phone. " +
-                    "A random sample, started by hand — checking the whole library would mean " +
+                    "A random sample, started by hand - checking the whole library would mean " +
                     "reading all the storage on both sides.",
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -197,7 +197,7 @@ private fun IntegrityPolicySelector(current: IntegrityPolicy, onChange: (Integri
             when (current) {
                 IntegrityPolicy.FAST ->
                     "A file counts as changed when its size or modification time changed. " +
-                        "The scan does not read file contents, so it is fast — but a substitution " +
+                        "The scan does not read file contents, so it is fast - but a substitution " +
                         "that preserved those two values will go unnoticed."
 
                 IntegrityPolicy.THOROUGH ->

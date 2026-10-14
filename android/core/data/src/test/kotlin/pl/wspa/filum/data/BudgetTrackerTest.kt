@@ -30,7 +30,7 @@ private class FakeBudgetDao : BudgetDao {
  * The foreground service budget (architecture §3.5).
  *
  * A mistake here ends with the system killing the transfer at a random moment instead
- * of letting it close — which is why we count ourselves, and with a margin.
+ * of letting it close - which is why we count ourselves, and with a margin.
  */
 class BudgetTrackerTest {
 
@@ -88,7 +88,7 @@ class BudgetTrackerTest {
     @Test
     fun `the window rolls, it is not a calendar day`() = runTest {
         // Four hours of work from 00:00 to 04:00. By 25:00 only the first two have
-        // fallen out of the window — the other two still count. That is the difference
+        // fallen out of the window - the other two still count. That is the difference
         // between a rolling window and a reset at midnight, and it decides whether the
         // night cycle starts at all or gets killed halfway.
         val dao = FakeBudgetDao()

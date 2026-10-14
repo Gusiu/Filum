@@ -38,7 +38,7 @@ class SyncWorker(
         budget.prune()
 
         if (!budget.hasRoomToStart()) {
-            // The budget is spent for the rolling window. That is not an error — just not
+            // The budget is spent for the rolling window. That is not an error - just not
             // today. We return success so WorkManager does not multiply attempts.
             log(LogLevel.INFO, "budget_exhausted", "Background work budget spent; coming back later.")
             return Result.success()
@@ -67,7 +67,7 @@ class SyncWorker(
         } finally {
             runCatching { wifiLock?.release() }
             // Time spent is always recorded, including after an exception and after
-            // cancellation — otherwise the budget would stop reflecting reality and the
+            // cancellation - otherwise the budget would stop reflecting reality and the
             // system would kill the work at a random point in the next cycle.
             budget.record(startedAt, System.currentTimeMillis())
         }
@@ -84,7 +84,7 @@ class SyncWorker(
      *
      * An incremental scan is cheap but rests on the MediaStore counter, which does not
      * cover files outside the index. A periodic full reconciliation catches what the
-     * increment missed — and it is the only thing that lets the server compute orphans (§5.6).
+     * increment missed - and it is the only thing that lets the server compute orphans (§5.6).
      */
     private suspend fun isFullReconciliation(): Boolean {
         val last = container.database.scanState().get(VOLUME)?.lastFullScanAt ?: return true

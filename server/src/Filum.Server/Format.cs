@@ -29,7 +29,7 @@ public static class Format
     /// </summary>
     public static string Moment(DateTimeOffset? moment)
     {
-        if (moment is not { } at) return "—";
+        if (moment is not { } at) return "-";
 
         var elapsed = DateTimeOffset.UtcNow - at;
 

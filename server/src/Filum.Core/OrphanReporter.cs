@@ -10,7 +10,7 @@ namespace Filum.Core;
 ///
 /// Since the server never deletes anything, moving files around on the phone multiplies
 /// copies and the disk grows without end. The report gives the user a basis for a decision
-/// — but it is **informational only**. Neither the server nor the client deletes anything
+/// - but it is **informational only**. Neither the server nor the client deletes anything
 /// on its basis; that would violate invariant I1.
 ///
 /// Orphans are a by-product of reconciliation: we compute them only for a session that
@@ -26,7 +26,7 @@ public sealed class OrphanReporter(StoragePaths paths)
     ///
     /// Written to disk rather than kept in memory: a session covering a hundred thousand
     /// files is fifty requests spread over time, and the server has no reason to hold state
-    /// between them — least of all state that would vanish on restart.
+    /// between them - least of all state that would vanish on restart.
     /// </summary>
     public void RecordBatch(string slug, string session, IEnumerable<string> canonicalPaths)
     {
@@ -113,7 +113,7 @@ public sealed class OrphanReporter(StoragePaths paths)
         }
     }
 
-    /// <summary>Abandons an unfinished session — called for an incremental session.</summary>
+    /// <summary>Abandons an unfinished session - called for an incremental session.</summary>
     public void Discard(string slug, string session) => Cleanup(slug, session);
 
     private HashSet<string> ReadReported(string slug, string session)

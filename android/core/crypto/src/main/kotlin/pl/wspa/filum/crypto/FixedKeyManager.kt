@@ -12,7 +12,7 @@ import javax.net.ssl.X509ExtendedKeyManager
  *
  * We deliberately do **not** use [javax.net.ssl.KeyManagerFactory]: the standard
  * implementation picks a certificate from the list of authorities the server names in its
- * CertificateRequest. The Filum server sends no such list, because it has no authority —
+ * CertificateRequest. The Filum server sends no such list, because it has no authority -
  * it authenticates by key fingerprint (ADR-005). The default manager would therefore find
  * no match and the handshake would proceed **without a client certificate**, which the
  * server would refuse with 401 on every request.

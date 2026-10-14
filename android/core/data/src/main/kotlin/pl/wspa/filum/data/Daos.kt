@@ -103,7 +103,7 @@ interface FileEntryDao {
     /**
      * Cleans up successfully finished entries older than the given moment.
      *
-     * The queue is not an archive — the history lives in the journal and in the sessions.
+     * The queue is not an archive - the history lives in the journal and in the sessions.
      * Without it the table would grow by every one of a hundred thousand files and never shrink.
      */
     @Query("DELETE FROM file_entry WHERE state = 'DONE' AND updatedAt < :before")

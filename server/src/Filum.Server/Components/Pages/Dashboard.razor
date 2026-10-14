@@ -33,7 +33,7 @@
                     @Format.Bytes(snapshot.FreeBytes) of @Format.Bytes(snapshot.TotalBytes)
                     @if (snapshot.FreeBytes < 20L * 1024 * 1024 * 1024)
                     {
-                        <span class="warning">— running low</span>
+                        <span class="warning">- running low</span>
                     }
                 </dd>
 
@@ -73,7 +73,7 @@
                             @entry.Label
                             @if (!entry.Enabled)
                             {
-                                <span class="warning"> — disabled</span>
+                                <span class="warning"> - disabled</span>
                             }
                             <div class="mono muted">@entry.Slug</div>
                         </td>
@@ -89,13 +89,13 @@
                             }
                             else
                             {
-                                <span class="muted">—</span>
+                                <span class="muted">-</span>
                             }
                         </td>
                         <td>
                             @if (entry.Ledger is not { } ledger)
                             {
-                                <span class="muted">—</span>
+                                <span class="muted">-</span>
                             }
                             else if (ledger.Intact)
                             {
@@ -106,7 +106,7 @@
                             {
                                 @* A broken chain is the one thing in this panel that means
                                    somebody has been at the files. It has to stand out and it
-                                   has to name the entry the divergence starts from — without
+                                   has to name the entry the divergence starts from - without
                                    that, the report is an alarm nobody can act on. *@
                                 <span class="warning">ledger tampered with</span>
                                 <div class="muted">

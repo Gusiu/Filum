@@ -13,7 +13,7 @@ public static class FilumApi
 {
     /// <summary>
     /// The limit from §5.5. The server hashes its own copies, so the request is expensive
-    /// — with no limit, a single call could occupy the disk for hours.
+    /// - with no limit, a single call could occupy the disk for hours.
     /// </summary>
     private const int MaxVerifyBatch = 256;
 
@@ -376,7 +376,7 @@ public static class FilumApi
         }
     }
 
-    /// <summary>The label is presentational only (§3.2) but ends up in a directory name — so it is trimmed.</summary>
+    /// <summary>The label is presentational only (§3.2) but ends up in a directory name - so it is trimmed.</summary>
     private static string CleanLabel(string? label)
     {
         var cleaned = (label ?? "").Trim();

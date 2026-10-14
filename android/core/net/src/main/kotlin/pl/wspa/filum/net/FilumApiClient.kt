@@ -32,7 +32,7 @@ import java.util.Base64
 /**
  * The protocol's resources wrapped in typed calls (§5 of PROTOCOL.md).
  *
- * The client knows no "server address" — every call is given a specific route, because the
+ * The client knows no "server address" - every call is given a specific route, because the
  * same instance may talk over the local network during one session and over the overlay
  * after a network change (ADR-006).
  */
@@ -78,7 +78,7 @@ class FilumApiClient(
     }
 
     /**
-     * Sends a chunk of a file. The body is streamed straight from disk — loading a
+     * Sends a chunk of a file. The body is streamed straight from disk - loading a
      * four-gigabyte recording into memory would kill the process on the first video.
      *
      * @param digest the digest of the whole file, sent with every chunk including on resume,
@@ -128,7 +128,7 @@ class FilumApiClient(
     /**
      * Asks the server to check the digests of its own copies (§5.5).
      *
-     * The operation is expensive on the server — it hashes files from disk — so only a
+     * The operation is expensive on the server - it hashes files from disk - so only a
      * deliberate decision by the user invokes it, never an automatic cycle.
      */
     suspend fun verify(
@@ -164,7 +164,7 @@ class FilumApiClient(
         return try {
             ApiResult.Ok(parse(body))
         } catch (e: Exception) {
-            // A valid response code but an unreadable body — most often this means
+            // A valid response code but an unreadable body - most often this means
             // there is no Filum at the other end at all, but somebody else's service.
             ApiResult.Unreachable(IOException("The server response cannot be read: ${e.message}", e))
         }
@@ -190,7 +190,7 @@ class FilumApiClient(
 
             // An explicit `null` in a field with a default is to mean the same as the field
             // being absent. Without this, the response `{"divergent":null}` wrecked the
-            // **whole** manifest parse over an optional, empty field — one side omitted the
+            // **whole** manifest parse over an optional, empty field - one side omitted the
             // field, the other wrote null, and that was enough to stop the sync.
             // Unknown keys are already ignored; there is no reason for a known key holding
             // null to be treated more harshly.
@@ -203,7 +203,7 @@ class FilumApiClient(
  * A chunk of a file as a request body, streamed from a given offset.
  *
  * We do not build on the ready-made `asRequestBody`, because that always sends the whole
- * file — and resuming is precisely about sending only the missing piece.
+ * file - and resuming is precisely about sending only the missing piece.
  */
 internal class FileChunkBody(
     private val file: File,

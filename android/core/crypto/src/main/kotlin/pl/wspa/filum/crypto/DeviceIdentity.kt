@@ -22,7 +22,7 @@ import javax.security.auth.x500.X500Principal
  * self-signed certificate the phone introduces itself with over mTLS (protocol §3.1,
  * ADR-005).
  *
- * The private key is created inside the Keystore and **never leaves it** — it cannot be
+ * The private key is created inside the Keystore and **never leaves it** - it cannot be
  * read even on a rooted phone, provided the device has StrongBox. The application only
  * ever holds a handle; the signing is done by the system.
  *
@@ -33,7 +33,7 @@ import javax.security.auth.x500.X500Principal
  * Gdzie fizycznie mieszka klucz prywatny.
  *
  * The distinction is practical, not merely descriptive. StrongBox is a separate chip
- * scalony odporny na atak fizyczny; TEE to wydzielony tryb tego samego procesora —
+ * scalony odporny na atak fizyczny; TEE to wydzielony tryb tego samego procesora -
  * far better than nothing, but exposed to a class of attacks StrongBox is not.
  * Lower-end devices usually have only a TEE.
  */
@@ -44,7 +44,7 @@ enum class KeySecurity {
     /** The processor's trusted execution environment. */
     TRUSTED_ENVIRONMENT,
 
-    /** The key in process memory — this should not happen on Android 11 or newer. */
+    /** The key in process memory - this should not happen on Android 11 or newer. */
     SOFTWARE,
 
     /** Could not be determined. */
@@ -61,7 +61,7 @@ class DeviceIdentity private constructor(
     val security: KeySecurity,
 ) {
 
-    /** The certificate in DER form — exactly what goes into the pairing request's `cert` field. */
+    /** The certificate in DER form - exactly what goes into the pairing request's `cert` field. */
     val certificateDer: ByteArray get() = certificate.encoded
 
     /** This device's public key fingerprint; the server knows it as `deviceKey`. */
@@ -72,7 +72,7 @@ class DeviceIdentity private constructor(
      *
      * We deliberately do NOT use [javax.net.ssl.KeyManagerFactory]: the standard implementation
      * picks a certificate from the list of authorities the server expects. Our server sends no
-     * such list (having no authority — ADR-005), so the default manager would pick nothing
+     * such list (having no authority - ADR-005), so the default manager would pick nothing
      * and the handshake would proceed without a client certificate.
      */
     fun keyManagers(): Array<KeyManager> = arrayOf(FixedKeyManager(alias, certificate, privateKey))
@@ -82,7 +82,7 @@ class DeviceIdentity private constructor(
         private const val KEYSTORE = "AndroidKeyStore"
         const val DEFAULT_ALIAS = "filum-device-key"
 
-        /** The validity period is irrelevant under key pinning — see [KeyPin]. It just must not expire. */
+        /** The validity period is irrelevant under key pinning - see [KeyPin]. It just must not expire. */
         private const val VALIDITY_YEARS = 50
 
         fun exists(alias: String = DEFAULT_ALIAS): Boolean = keyStore().containsAlias(alias)
@@ -90,7 +90,7 @@ class DeviceIdentity private constructor(
         /**
          * Loads the identity, or creates it on first pairing.
          *
-         * The key survives application updates but not an uninstall — the phone then loses its
+         * The key survives application updates but not an uninstall - the phone then loses its
          * identity and has to be paired again. That is intended: uninstalling the application
          * is meant to revoke its access to the backup.
          */
@@ -102,7 +102,7 @@ class DeviceIdentity private constructor(
             val key = store.getKey(alias, null) as? PrivateKey
 
             if (certificate == null || key == null) {
-                // The entry is incomplete — the Keystore can end up like this after a failed
+                // The entry is incomplete - the Keystore can end up like this after a failed
                 // aktualizacji systemu. Odtwarzamy od zera; skutkiem jest ponowne parowanie.
                 Log.w(TAG, "Incomplete Keystore entry for $alias, regenerating")
                 store.deleteEntry(alias)
@@ -173,7 +173,7 @@ class DeviceIdentity private constructor(
                 .setCertificateSerialNumber(BigInteger.valueOf(System.currentTimeMillis()))
                 .setCertificateNotBefore(notBefore.time)
                 .setCertificateNotAfter(notAfter.time)
-                // Synchronizacja idzie w tle, w nocy, przy zablokowanym ekranie —
+                // Synchronizacja idzie w tle, w nocy, przy zablokowanym ekranie -
                 // requiring user authentication would stop it at the first file.
                 .setUserAuthenticationRequired(false)
                 .setIsStrongBoxBacked(useStrongBox)
@@ -184,7 +184,7 @@ class DeviceIdentity private constructor(
          * Reads from the Keystore where the key actually lives.
          *
          * Up to and including Android 11 all that can be established is whether the key is in
-         * hardware — telling StrongBox from a TEE arrived only in Android 12. In that case we
+         * hardware - telling StrongBox from a TEE arrived only in Android 12. In that case we
          * return TRUSTED_ENVIRONMENT, because that is the guarantee we are sure of.
          */
         private fun securityOf(key: PrivateKey): KeySecurity = try {

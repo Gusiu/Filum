@@ -1,4 +1,4 @@
-# Filum — protocol specification
+# Filum - protocol specification
 
 Protocol version: **1**
 Status: draft, ahead of the first implementation.
@@ -18,25 +18,25 @@ computer. The direction is phone → PC and nothing else.
 
 The invariants the rest of this specification rests on:
 
-- **I1 — monotonicity.** The set of files the server holds may only grow. Deleting a
+- **I1 - monotonicity.** The set of files the server holds may only grow. Deleting a
   file on the phone does not affect the copy. The server exposes no delete operation.
-- **I2 — no overwriting.** If different content appears under a known path, the previous
+- **I2 - no overwriting.** If different content appears under a known path, the previous
   version MUST be preserved (§8.3). Overwriting is a form of data loss.
-- **I3 — transparent storage.** Data on the server sits as an ordinary directory tree in
+- **I3 - transparent storage.** Data on the server sits as an ordinary directory tree in
   the filesystem. Restoring MUST NOT require this application.
-- **I4 — identity by key.** The parties recognise each other by public key, never by
+- **I4 - identity by key.** The parties recognise each other by public key, never by
   network address (§3).
-- **I5 — file identity depends on policy.** By default a file is identified by the triple
+- **I5 - file identity depends on policy.** By default a file is identified by the triple
   `(path, size, mtime)`; in thorough mode a content digest is part of its identity
   (§9.3, ADR-016). The choice belongs to the client and is visible in the manifest.
-- **I6 — acceptance is recorded.** Every accepted file is appended to an integrity ledger
+- **I6 - acceptance is recorded.** Every accepted file is appended to an integrity ledger
   chained by digests. The ledger makes it possible to show what the server accepted and
   when, and retroactive edits to the ledger itself are detectable (§9.2).
 
 ## 2. Transport layer
 
 - HTTP/1.1 over TLS 1.3 (TLS 1.2 acceptable as a fallback).
-- The server MUST listen on `0.0.0.0` — never on a single chosen address. This follows
+- The server MUST listen on `0.0.0.0` - never on a single chosen address. This follows
   from §4: the same process has to be reachable over the LAN, over an overlay network,
   and over `localhost`.
 - Default port: **8765/tcp**, configurable.
@@ -45,7 +45,7 @@ The invariants the rest of this specification rests on:
 - Timestamps in JSON bodies: ISO 8601 in UTC.
 - `mtime` values: **integer seconds since the Unix epoch, UTC**. The client MUST
   normalise mtime to seconds in one place, at the boundary where it reads the filesystem
-  (ADR-011 — `MediaStore` reports seconds, `File.lastModified()` milliseconds; mixing the
+  (ADR-011 - `MediaStore` reports seconds, `File.lastModified()` milliseconds; mixing the
   units produces phantom differences and endless re-uploads).
 
 ## 3. Identity and authentication
@@ -61,7 +61,7 @@ key's fingerprint against a remembered one.
 - At pairing time the client generates its own key pair. The private key MUST be created
   in the Android Keystore with hardware backing (StrongBox where available) and MUST NOT
   leave the secure element.
-- The **pin** is `base64url(SHA-256(SubjectPublicKeyInfo))` without padding — 43 characters.
+- The **pin** is `base64url(SHA-256(SubjectPublicKeyInfo))` without padding - 43 characters.
 
 The client verifies the server by pin and **does not verify the hostname**. This is safe
 only because the pin fully replaces name verification; skipping both would be a hole. The
@@ -73,7 +73,7 @@ in the list of paired devices.
 ### 3.2 Device identity
 
 A device is identified by the **pin of its client certificate**. The protocol carries no
-device-identifier header — it would be redundant and forgeable. The server derives
+device-identifier header - it would be redundant and forgeable. The server derives
 identity from the TLS layer.
 
 The device label (`label`, e.g. "Galaxy S24 Ultra") is presentational only and may be
@@ -110,7 +110,7 @@ Content-Type: application/json
 ```
 
 The connection runs over TLS verified by the pin from the QR code, but **without** a
-client certificate — this is the only resource reachable without mTLS.
+client certificate - this is the only resource reachable without mTLS.
 
 Response `200`:
 ```jsonc
@@ -133,14 +133,14 @@ ready QR payload for the server's own interface.
 
 The server MUST expose it to loopback connections only. It is the one resource that hands
 out a secret, and the person sitting at the computer is by definition entitled to pair a
-phone — exposing it on the network would let a stranger's device mint itself a pairing
+phone - exposing it on the network would let a stranger's device mint itself a pairing
 token.
 
 ---
 
 ## 4. Discovery and route selection
 
-The client does not store "the server's address". It stores a **candidate set** — routes
+The client does not store "the server's address". It stores a **candidate set** - routes
 by which a server with a known pin can be reached.
 
 ### 4.1 Local network advertising
@@ -151,7 +151,7 @@ The server MUST advertise an mDNS/DNS-SD service:
 - instance: `filum-<first 8 chars of pin>`
 - TXT: `v=1`, `k=<server pin>`, `n=<server name>`
 
-While scanning over mDNS the client MUST hold a `MulticastLock` — without it, responses
+While scanning over mDNS the client MUST hold a `MulticastLock` - without it, responses
 never reach the application on many devices.
 
 ### 4.2 Route racing
@@ -173,12 +173,12 @@ others in parallel.
 ### 4.3 Local routes with an active VPN
 
 When a VPN is running on the phone, traffic enters the tunnel by default and the addresses
-in §4.2 items 1–2 stop being reachable. For local routes the client SHOULD bind its socket
+in §4.2 items 1-2 stop being reachable. For local routes the client SHOULD bind its socket
 to a specific `Network` object obtained from `ConnectivityManager` with `TRANSPORT_WIFI`,
 rather than using the default route.
 
-If the VPN blocks traffic outside the tunnel, binding will fail — the client MUST then
-degrade silently to routes 3–4 from §4.2, without reporting an error to the user.
+If the VPN blocks traffic outside the tunnel, binding will fail - the client MUST then
+degrade silently to routes 3-4 from §4.2, without reporting an error to the user.
 
 ### 4.4 Self-updating the route set
 
@@ -195,7 +195,7 @@ address on its next connection over the overlay network.
 
 ### 5.1 `GET /api/v1/ping`
 
-Availability check, limit negotiation and route refresh. Cheap — it is used in the race
+Availability check, limit negotiation and route refresh. Cheap - it is used in the race
 from §4.2, so the server should perform no disk work heavier than reading free space.
 
 Response `200`:
@@ -218,7 +218,7 @@ Response `200`:
 ```
 
 The client MUST reject a server with an unsupported `protocol` and show a legible message.
-The client MUST honour `limits` — it MUST NOT assume defaults when the server has stated
+The client MUST honour `limits` - it MUST NOT assume defaults when the server has stated
 otherwise.
 
 ### 5.2 `POST /api/v1/manifest`
@@ -266,13 +266,13 @@ Response `200`:
   resume from that point.
 - `versioned: true` signals that the path is already occupied by different content and
   that the previous version will be filed away once the transfer completes (§8.3). The
-  field is informational — it exists for presentation in the interface.
+  field is informational - it exists for presentation in the interface.
 - `rejected` carries paths unfit for storage (§7), with an `error` value from the table in
   §4 of PATH-RULES. A single bad path **MUST NOT** invalidate the whole batch. The client
   MUST mark such entries as permanently failed and never attempt to send them.
 
   Without this field the client would learn about the rejection only from a `422` response
-  to a `PUT`, i.e. after one wasted request per such file — which is a real cost when
+  to a `PUT`, i.e. after one wasted request per such file - which is a real cost when
   uploading over a cellular network.
 
 - `divergent` lists paths for which the client supplied a `d` different from the one
@@ -285,7 +285,7 @@ Response `200`:
   ledger or have been placed into the copy by hand.
 
 The server derives `have`/`needed` by comparing `(size, mtime)` against the filesystem. The
-server **keeps no content index of its own** (ADR-003) — the ledger from §9.2 is a record
+server **keeps no content index of its own** (ADR-003) - the ledger from §9.2 is a record
 of acceptances, not an index: the source of truth about the copy's contents remains the
 disk.
 
@@ -310,7 +310,7 @@ Semantics:
   the server MUST answer `409` with `{"expectedOffset": N}`.
 - If the stored partial file was created for a different `(size, mtime)` pair than the one
   in the headers, the server MUST refuse the resume with `409` and `{"expectedOffset": 0}`.
-  This guards against splicing two different versions of a file together — for instance
+  This guards against splicing two different versions of a file together - for instance
   when a video recording was still being written.
 - The transfer is complete when `offset + body_length == X-Filum-Size`. The server then
   performs the commit (§8.2).
@@ -323,7 +323,7 @@ Response `200`:
 { "received": 1204112, "offset": 4812233, "complete": true, "versioned": null }
 ```
 
-The client SHOULD skip files modified within the last **60 seconds** — they may still be
+The client SHOULD skip files modified within the last **60 seconds** - they may still be
 being written.
 
 ### 5.4 `POST /api/v1/bundle`
@@ -344,11 +344,11 @@ bytes  payload     // exactly s bytes
 
 - The sum of sizes MUST NOT exceed `limits.bundleMaxBytes`.
 - The number of files MUST NOT exceed `limits.bundleMaxCount`.
-- Bundles do not support resuming. The files are small — on error the client retries the
+- Bundles do not support resuming. The files are small - on error the client retries the
   whole bundle or moves the entries to `PUT /file`.
 - The `d` field is **required** in a bundle; the cost of hashing a small file is negligible.
 
-Response `200` — one result per file, since a request may succeed partially:
+Response `200` - one result per file, since a request may succeed partially:
 ```jsonc
 { "results": [
   { "p": "Pictures/a.jpg", "ok": true,  "versioned": null },
@@ -358,7 +358,7 @@ Response `200` — one result per file, since a request may succeed partially:
 
 ### 5.5 `POST /api/v1/verify`
 
-Integrity verification — an operation **explicitly started by the user**, never part of an
+Integrity verification - an operation **explicitly started by the user**, never part of an
 automatic cycle.
 
 ```jsonc
@@ -376,7 +376,7 @@ it and SHOULD reject requests larger than 256 entries.
 ### 5.6 `GET /api/v1/orphans?session=<uuid>`
 
 Orphan report: paths present on the server that were **absent** from a complete manifest
-for that session — that is, files deleted or moved on the phone.
+for that session - that is, files deleted or moved on the phone.
 
 The resource is available only for a session closed with `mode: "full"` and `final: true`.
 
@@ -424,7 +424,7 @@ reach the journal visible in the application.
 
 Normalisation, NTFS sanitisation and collision-resolution rules are described in a separate
 document: **[PATH-RULES.md](PATH-RULES.md)**.
-Test vectors: [`testvectors/paths.tsv`](testvectors/paths.tsv) — both implementations MUST
+Test vectors: [`testvectors/paths.tsv`](testvectors/paths.tsv) - both implementations MUST
 pass the same set.
 
 ---
@@ -451,14 +451,14 @@ pass the same set.
 ```
 
 The `files/` directory MUST contain only complete files. Partial files MUST NOT be visible
-there — the user is to see a consistent tree at any moment (I3).
+there - the user is to see a consistent tree at any moment (I3).
 
 ### 8.2 Committing a transfer
 
 Having received the last byte, the server MUST perform, in order:
 
 1. check `X-Filum-Digest` if one was supplied; a mismatch → discard the partial file and `409`,
-2. if the destination path exists — file away its current content (§8.3),
+2. if the destination path exists - file away its current content (§8.3),
 3. move the file from `.filum/incoming/` to `files/` with an atomic within-volume operation,
 4. set mtime to the value from `X-Filum-Mtime`,
 5. delete the `.meta` file.
@@ -492,7 +492,7 @@ conflated**. All three use SHA-256 written as lowercase hex.
 Answers the question: did the server receive what the phone sent.
 
 `X-Filum-Digest` is **required** under the server's default configuration (ADR-016). The
-server refuses the request with `400 digest_required` **before** accepting any bytes —
+server refuses the request with `400 digest_required` **before** accepting any bytes -
 taking in data that could not be recorded in the ledger anyway would waste the transfer on
 both sides.
 
@@ -502,7 +502,7 @@ requires it on every request: were it to accept intermediate chunks without one,
 requirement would not hold for any file large enough to be split.
 
 The cost is one local read of the file by the phone. Resuming saves transmission, not reads
-from the device's storage — so omitting the digest on resume would not save what is
+from the device's storage - so omitting the digest on resume would not save what is
 expensive in that scenario, while leaving precisely the largest files out of the ledger.
 
 An installation that cares only about getting data back MAY disable the requirement
@@ -548,12 +548,12 @@ cost rather than correctness:
 | fast (default) | no | no | metadata only |
 | thorough | yes | yes | reads the whole library every cycle |
 
-In fast mode a file's identity remains `(path, size, mtime)` — I5 and ADR-002. In thorough
+In fast mode a file's identity remains `(path, size, mtime)` - I5 and ADR-002. In thorough
 mode the server compares `d` against the ledger from §9.2 and reports the mismatch in the
 `divergent` field (§5.2).
 
 The client MAY omit `d` for individual entries when it runs out of background-work budget
-mid-computation — the server will then treat them as in fast mode. A quietly missing digest
+mid-computation - the server will then treat them as in fast mode. A quietly missing digest
 is better than an interrupted sync.
 
 ### 9.4 Verifying an existing copy
@@ -583,13 +583,13 @@ primary path remains a full transfer over the network (ADR-012).
 
 - The format of incremental progress reports for the panel (SignalR or polling).
 - Whether `POST /bundle` should have a streaming variant for very large bundles.
-- Behaviour when two devices write the same path — currently separated by `<device-slug>`,
+- Behaviour when two devices write the same path - currently separated by `<device-slug>`,
   but a merged view in the panel is worth considering.
-- A retention policy for versions in `.filum/versions/` — currently none; the directory
+- A retention policy for versions in `.filum/versions/` - currently none; the directory
   grows without bound.
 - A trusted external witness for the ledger from §9.2. The chain detects partial tampering,
   but someone with disk access can rebuild the ledger from scratch. Raising the guarantee
-  would require periodically publishing the digest of the last line outside the server — to
+  would require periodically publishing the digest of the last line outside the server - to
   a second participant, to a timestamping service, or onto write-once media. Each of those
   introduces a dependency the project does not currently have, so the decision needs
   separate consideration.

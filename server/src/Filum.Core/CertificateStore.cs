@@ -7,7 +7,7 @@ namespace Filum.Core;
 /// The server certificate and key fingerprint computation (protocol §3.1, ADR-005).
 ///
 /// Filum uses no certificate authority. A self-signed certificate is purely a container
-/// for a public key here — authentication is a comparison of the key's fingerprint
+/// for a public key here - authentication is a comparison of the key's fingerprint
 /// against a remembered one, on both ends of the connection.
 /// </summary>
 public sealed class CertificateStore
@@ -38,7 +38,7 @@ public sealed class CertificateStore
     /// <summary>
     /// Wczytuje certyfikat albo tworzy go przy pierwszym uruchomieniu.
     ///
-    /// The file does NOT live in the backup directory — that gets copied to another disk
+    /// The file does NOT live in the backup directory - that gets copied to another disk
     /// or restored from a copy, so the private key would travel with the data.
     /// </summary>
     public static CertificateStore LoadOrCreate(string configDirectory)
@@ -59,7 +59,7 @@ public sealed class CertificateStore
         return new CertificateStore(created, path);
     }
 
-    /// <summary>A certificate held only in memory — for tests.</summary>
+    /// <summary>A certificate held only in memory - for tests.</summary>
     public static CertificateStore InMemory() => new(Create(), path: "");
 
     private static X509Certificate2 Create()

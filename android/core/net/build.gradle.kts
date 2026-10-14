@@ -16,7 +16,7 @@ android {
     }
 
     // Wyścig tras i klient HTTP dają się przetestować na zwykłej maszynie wirtualnej,
-    // razem z prawdziwym TLS i mTLS — MockWebServer zestawia autentyczny uścisk dłoni.
+    // razem z prawdziwym TLS i mTLS - MockWebServer zestawia autentyczny uścisk dłoni.
     testOptions {
         unitTests.all { it.useJUnitPlatform() }
     }

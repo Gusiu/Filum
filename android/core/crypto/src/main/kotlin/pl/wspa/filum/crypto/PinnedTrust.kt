@@ -15,7 +15,7 @@ class PinMismatchException(expected: String, actual: String) : CertificateExcept
 /**
  * Trust in exactly one remembered public key (protocol §3.1).
  *
- * There is no certificate authority here and no trust chain — the server certificate is
+ * There is no certificate authority here and no trust chain - the server certificate is
  * self-signed by definition and serves purely as a container for the key. The only
  * criterion is that the fingerprint matches the one that arrived in the QR code.
  *
@@ -37,7 +37,7 @@ class PinnedTrustManager(private val expectedPin: String) : X509TrustManager {
     }
 
     /**
-     * The client never verifies anyone else's client certificates — that is the server's
+     * The client never verifies anyone else's client certificates - that is the server's
      * role. Calling this method would mean using the object where it does not belong.
      */
     override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {
@@ -53,7 +53,7 @@ class PinnedTrustManager(private val expectedPin: String) : X509TrustManager {
  *
  * **This is safe only together with [PinnedTrustManager]**, and only because key pinning
  * fully replaces name verification. The server is reachable at several addresses at once
- * (LAN, overlay network, mDNS — protocol §4), all of them pointing at the same key;
+ * (LAN, overlay network, mDNS - protocol §4), all of them pointing at the same key;
  * requiring SAN entries for each would be unworkable, because the addresses change over
  * time.
  *

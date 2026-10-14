@@ -39,7 +39,7 @@ abstract class FilumDatabase : RoomDatabase() {
             Room.databaseBuilder(context.applicationContext, FilumDatabase::class.java, NAME)
                 // The database holds only the queue and the history, never user data.
                 // On a schema mismatch, rebuilding it from scratch costs one full scan
-                // rather than the loss of anything — which beats an application that
+                // rather than the loss of anything - which beats an application that
                 // fails to start after an update.
                 .fallbackToDestructiveMigration(dropAllTables = true)
                 .build()

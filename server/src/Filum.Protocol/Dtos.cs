@@ -52,7 +52,7 @@ public sealed record PairResponse(string DeviceKey, string ServerInstanceId, int
 
 /// <summary>
 /// A device as the panel sees it. The model is flat and self-contained, because the
-/// tray icon reads the same response — a separate process with no access to the
+/// tray icon reads the same response - a separate process with no access to the
 /// server's internal types.
 /// </summary>
 public sealed record AdminDevice(
@@ -73,7 +73,7 @@ public sealed record AdminDevice(
 /// <summary>
 /// A summary of one device's integrity ledger.
 ///
-/// The entry count alone says nothing without an answer to whether the chain holds —
+/// The entry count alone says nothing without an answer to whether the chain holds -
 /// which is why both fields live here together and the panel never shows one without
 /// the other.
 /// </summary>
@@ -139,7 +139,7 @@ public sealed record ManifestResponse(
     /// metadata-preserving change does not happen by accident, and the client records it
     /// in the journal.
     ///
-    /// The field is **omitted** when nothing diverges — §5.2 says so. A nullable type does
+    /// The field is **omitted** when nothing diverges - §5.2 says so. A nullable type does
     /// not achieve that on its own: System.Text.Json writes `"divergent": null` by
     /// default, which is a different thing from the field being absent.
     /// </summary>
@@ -190,7 +190,7 @@ public sealed record VerifyResponse(
 /// <summary>
 /// Files present on the server and no longer on the phone.
 ///
-/// The report is informational only — nothing is deleted on its basis
+/// The report is informational only - nothing is deleted on its basis
 /// (ADR-015, niezmiennik I1).
 /// </summary>
 public sealed record OrphanReport(

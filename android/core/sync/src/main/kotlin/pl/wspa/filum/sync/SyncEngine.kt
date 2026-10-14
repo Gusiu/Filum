@@ -17,7 +17,7 @@ import kotlin.math.min
  *
  * The whole thing is built around one principle: **every step saves state**. Killing the
  * process at any moment costs at most one chunk of one file, because resumability works at
- * three levels — mid-file (an offset), mid-queue (the database survives a restart) and
+ * three levels - mid-file (an offset), mid-queue (the database survives a restart) and
  * mid-campaign (the first dump spread over several nights).
  *
  * That is what makes the six-hour foreground service limit stop being a problem: the engine
@@ -98,7 +98,7 @@ class SyncEngine(
             index++
 
             // Agreeing a hundred thousand files takes fifty requests. With the budget spent
-            // we stop here — the queue is already partly written, so the next cycle picks
+            // we stop here - the queue is already partly written, so the next cycle picks
             // the work up from this point.
             if (deadline.reached()) {
                 journal.record(
@@ -113,11 +113,11 @@ class SyncEngine(
     }
 
     /**
-     * The digest for the manifest — computed in thorough mode only.
+     * The digest for the manifest - computed in thorough mode only.
      *
      * The deadline is checked here, not only between batches: a batch holds up to two thousand
      * entries, and with large files hashing one can take longer than the whole remaining
-     * background window. Omitting a digest is safe — the server will treat the entry as it
+     * background window. Omitting a digest is safe - the server will treat the entry as it
      * would in fast mode.
      */
     private fun digestFor(file: ScannedFile, deadline: Deadline): String? {
@@ -127,7 +127,7 @@ class SyncEngine(
         return try {
             sha256(File(file.absolutePath))
         } catch (e: IOException) {
-            // The file vanished or is unreadable. There is no point aborting the exchange —
+            // The file vanished or is unreadable. There is no point aborting the exchange -
             // the transfer will report the same thing with a more specific message.
             null
         }
@@ -141,7 +141,7 @@ class SyncEngine(
         val rejected = response.rejected.associate { it.path to it.error }
 
         // Content changed with the metadata untouched. The file enters the queue anyway,
-        // because the server put it in "needed" — but this is an event the user is to be
+        // because the server put it in "needed" - but this is an event the user is to be
         // told about, not an ordinary update.
         for (path in response.divergent) {
             journal.record(
@@ -151,7 +151,7 @@ class SyncEngine(
         }
 
         // The server reports how many files it holds, but not which. Anything in neither
-        // "needed" nor "rejected" the server already has — and we do not send it.
+        // "needed" nor "rejected" the server already has - and we do not send it.
         val alreadyThere = batch.map { it.canonicalPath }
             .filterNot { it in needed || it in rejected }
 
@@ -207,7 +207,7 @@ class SyncEngine(
 
     /**
      * Ending because of the budget. Always through this one path, because a night cycle with
-     * no journal entry cannot be diagnosed — all the user sees is that some files did not
+     * no journal entry cannot be diagnosed - all the user sees is that some files did not
      * arrive by morning, with no way to find out why.
      */
     private suspend fun stopOnBudget(): SyncOutcome {
@@ -223,7 +223,7 @@ class SyncEngine(
     /**
      * Splits files into bundles fitting the limits from the ping response.
      *
-     * A file larger than the bundle limit cannot travel in one — it ends up alone in a bundle
+     * A file larger than the bundle limit cannot travel in one - it ends up alone in a bundle
      * and is rejected by the size threshold above anyway; all we watch here is that we never
      * build a bundle the server would refuse.
      */
@@ -285,7 +285,7 @@ class SyncEngine(
             }
 
             is ApiResult.Unreachable -> {
-                // The bundle did not arrive whole. All of its files return to the queue — we
+                // The bundle did not arrive whole. All of its files return to the queue - we
                 // have no idea how many the server managed to store, and re-sending breaks
                 // nothing, because the manifest will sift them out anyway.
                 entries.forEach { queue.markTransientFailure(it.canonicalPath, result.message) }
@@ -328,7 +328,7 @@ class SyncEngine(
             }
         }
 
-        // The server said nothing about a file we sent. We do not assume success — it
+        // The server said nothing about a file we sent. We do not assume success - it
         // returns to the queue and resolves itself at the next manifest.
         for ((path, _) in byPath) {
             if (path !in reported) queue.markTransientFailure(path, "brak wyniku w odpowiedzi")
@@ -339,7 +339,7 @@ class SyncEngine(
         val file = File(entry.absolutePath)
 
         if (!file.isFile) {
-            // The user deleted the file between the scan and the upload. That is not an error —
+            // The user deleted the file between the scan and the upload. That is not an error -
             // kopia z poprzednich cykli i tak zostaje na serwerze (niezmiennik I1).
             queue.markPermanentFailure(entry.canonicalPath, "the file no longer exists")
             return SendResult.SKIPPED
@@ -374,7 +374,7 @@ class SyncEngine(
         var mismatches = 0
 
         // The digest is always computed, including on resume. Resuming saves transmission,
-        // not reads from the phone's storage — and without a digest the server accepts
+        // not reads from the phone's storage - and without a digest the server accepts
         // nothing anyway (ADR-016). The price is one local read; the gain is a ledger entry.
         val digest = sha256(file)
 
@@ -439,7 +439,7 @@ class SyncEngine(
             }
         }
 
-        // The loop exited with no confirmation of completion — the server counted differently.
+        // The loop exited with no confirmation of completion - the server counted differently.
         queue.markTransientFailure(entry.canonicalPath, "the server did not confirm completion")
         return SendResult.FAILED
     }
@@ -482,7 +482,7 @@ class SyncEngine(
         /** How many entries we take from the queue at once. Fewer means more database queries. */
         const val UPLOAD_BATCH = 256
 
-        /** Bundle errors after which retrying is pointless — the fault is the file's, not the network's. */
+        /** Bundle errors after which retrying is pointless - the fault is the file's, not the network's. */
         val PERMANENT_BUNDLE_ERRORS = setOf(
             "absolute", "traversal", "dot_segment", "empty_segment", "nul", "path_too_long",
         )

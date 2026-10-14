@@ -1,4 +1,4 @@
-# Filum — path rules
+# Filum - path rules
 
 Normative document. Both implementations MUST pass the
 [`testvectors/paths.tsv`](testvectors/paths.tsv) set.
@@ -13,11 +13,11 @@ the rules are spelled out here rather than left to the implementation.
 Android uses filesystems from the ext4/f2fs family: they are case-sensitive and allow any
 byte in a name except `/` and `\0`. Windows with NTFS is considerably more restrictive:
 
-- forbidden characters `< > : " | ? * \` and the control codes `0x01`–`0x1F`,
-- names reserved since DOS: `CON`, `PRN`, `AUX`, `NUL`, `COM1`–`COM9`, `LPT1`–`LPT9`,
+- forbidden characters `< > : " | ? * \` and the control codes `0x01`-`0x1F`,
+- names reserved since DOS: `CON`, `PRN`, `AUX`, `NUL`, `COM1`-`COM9`, `LPT1`-`LPT9`,
   including with any extension and regardless of case,
 - trailing dots and spaces are silently trimmed,
-- **names are case-insensitive** — `Photo.jpg` and `photo.jpg` are the same file,
+- **names are case-insensitive** - `Photo.jpg` and `photo.jpg` are the same file,
 - a limit of 255 UTF-16 units per component and 260 characters for the whole path, unless
   the `\\?\` prefix is used.
 
@@ -88,7 +88,7 @@ are written in **uppercase**.
 2. Characters forbidden by NTFS:
    `<` → `%3C`, `>` → `%3E`, `:` → `%3A`, `"` → `%22`,
    `|` → `%7C`, `?` → `%3F`, `*` → `%2A`, `\` → `%5C`.
-3. Control codes `0x01`–`0x1F` → `%01`–`%1F`.
+3. Control codes `0x01`-`0x1F` → `%01`-`%1F`.
 4. **Trailing dot or space**: encode **only the segment's last character**
    (`.` → `%2E`, ` ` → `%20`). Dots and spaces inside a name are left alone, because
    Windows trims only trailing ones. The rule applies once: `files...` → `files..%2E`.
@@ -102,7 +102,7 @@ are written in **uppercase**.
    `SHA-256` of the original segment (that is, the digest's first 3 bytes). This yields at
    most 254 units. The entry goes into `index.jsonl` (§7).
 
-   Truncation **must not split a `%XX` sequence** — otherwise the encoding stops being
+   Truncation **must not split a `%XX` sequence** - otherwise the encoding stops being
    reversible. If the boundary falls inside a sequence, back up to its start. Every `%` in
    the encoded text starts a sequence, because a literal `%` was turned into `%25` by rule
    1, so the recognition is unambiguous.
@@ -112,21 +112,21 @@ Segments are joined with the platform separator and appended to
 
 The server MUST perform all file operations through paths carrying the `\\?\` prefix, to
 bypass the 260-character limit. The prefix itself does not lift the 255-unit per-component
-limit — hence rule 6.
+limit - hence rule 6.
 
 ---
 
 ## 6. Case collisions
 
 NTFS is case-insensitive, so `Pictures/Photo.jpg` and `Pictures/photo.jpg` from the phone
-point at one file on disk. Left unhandled, the second would silently overwrite the first —
+point at one file on disk. Left unhandled, the second would silently overwrite the first -
 another violation of I2.
 
 Detection needs no index at all, because **Windows preserves case on write** even though it
 ignores case when looking a name up:
 
 1. Compute the destination path `S` per §5.
-2. Check whether a file exists at `S`. If not — write directly, done.
+2. Check whether a file exists at `S`. If not - write directly, done.
 3. If it exists, read the **actual name from the directory** and compare it against `S`
    byte for byte.
    - Equal → this is the same file, the normal update path (versioning, protocol §8.3).
@@ -136,7 +136,7 @@ ignores case when looking a name up:
    `Pictures/photo.jpg` → `Pictures/photo~6a8a8e.jpg`.
 
 The value `~6a8a8e` in the example above is binding and is checked by a test on both sides
-— an implementation producing anything else has diverged from this document.
+- an implementation producing anything else has diverged from this document.
 
 The resolution is deterministic and stable: the same source path always yields the same
 destination name, including after restoring the backup from a copy.
@@ -146,7 +146,7 @@ destination name, including after restoring the backup from a copy.
 ## 7. `index.jsonl`
 
 The file `<root>/<device-slug>/.filum/index.jsonl` contains entries **only** for paths that
-cannot be reversed by percent-decoding alone — that is, the cases from §5 rule 6 and §6.
+cannot be reversed by percent-decoding alone - that is, the cases from §5 rule 6 and §6.
 
 ```jsonc
 {"p":"Pictures/photo.jpg","s":"Pictures/photo~6a8a8e.jpg","r":"case_collision"}
@@ -164,5 +164,5 @@ Percent-decoding is unambiguous, so for the vast majority of files the original 
 recovered with no side state at all. The `~<hash>` cases require consulting `index.jsonl`
 or a manifest.
 
-Keeping the mapping reversible is not tidiness for its own sake — it is the condition for
+Keeping the mapping reversible is not tidiness for its own sake - it is the condition for
 being able to move the whole backup back onto a device with a case-sensitive filesystem.

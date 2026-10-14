@@ -36,7 +36,7 @@ public sealed record ChunkOutcome(
 /// The transfer lifecycle: a partial file in .filum/incoming/, resuming by offset, and
 /// committing with versioning (protocol §5.3 and §8.2).
 ///
-/// The files/ directory holds only complete files — the user is to see a consistent tree
+/// The files/ directory holds only complete files - the user is to see a consistent tree
 /// at any moment (I3), so partial files never appear in it.
 /// </summary>
 public sealed class TransferStore(
@@ -62,7 +62,7 @@ public sealed class TransferStore(
 
         // Refused immediately, before anything reaches the disk. Accepting bytes that
         // could not be recorded in the ledger anyway would waste the transfer on both
-        // sides — and on resume the client has no way to send the digest on its own.
+        // sides - and on resume the client has no way to send the digest on its own.
         if (options.RequireDigest && request.Digest is null)
         {
             return new ChunkOutcome(ChunkStatus.DigestRequired);
@@ -112,7 +112,7 @@ public sealed class TransferStore(
             if (meta is null || !meta.Matches(request.Size, request.Mtime))
             {
                 // The partial file was created for a different version of the file.
-                // Splicing would produce a file that never existed — start over (§5.3).
+                // Splicing would produce a file that never existed - start over (§5.3).
                 return new ChunkOutcome(ChunkStatus.OffsetMismatch, ExpectedOffset: 0);
             }
 
@@ -134,7 +134,7 @@ public sealed class TransferStore(
 
         // The client sent more than it declared in X-Filum-Size. Silently truncating
         // would produce a file considered complete though assembled from inconsistent
-        // data — exactly the kind of silent loss this whole project exists to avoid.
+        // data - exactly the kind of silent loss this whole project exists to avoid.
         if (await HasMoreDataAsync(body, ct).ConfigureAwait(false))
         {
             TruncateTo(partPath, request.Offset);

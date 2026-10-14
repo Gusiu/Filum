@@ -8,7 +8,7 @@ namespace Filum.Server;
 /// <summary>
 /// Access to the client certificate of the current connection.
 ///
-/// Put behind an interface because TestServer does not establish real TLS — without it
+/// Put behind an interface because TestServer does not establish real TLS - without it
 /// the authorisation logic could not be tested any way other than by running the whole
 /// server with a network.
 /// </summary>
@@ -29,7 +29,7 @@ public static class DeviceContext
     public static void Set(HttpContext context, DeviceRecord record) => context.Items[ItemKey] = record;
 
     /// <summary>
-    /// The device established by the middleware. Throws when there is none — that would
+    /// The device established by the middleware. Throws when there is none - that would
     /// mean a resource accidentally exposed outside authentication, and failing loudly is
     /// far better than writing into an arbitrary directory.
     /// </summary>
@@ -44,11 +44,11 @@ public static class DeviceContext
 /// Three different levels apply, because they protect against three different things:
 ///
 /// <list type="bullet">
-/// <item><b>Phone</b> — mTLS with a pinned key (protocol §3.2). Protects the data from a
+/// <item><b>Phone</b> - mTLS with a pinned key (protocol §3.2). Protects the data from a
 /// stranger's device on the same network.</item>
-/// <item><b>Pairing</b> — a single-use token instead of a certificate, because the device
+/// <item><b>Pairing</b> - a single-use token instead of a certificate, because the device
 /// dopiero go zdobywa (§3.3).</item>
-/// <item><b>Panel and administrative resources</b> — loopback only. The person sitting at
+/// <item><b>Panel and administrative resources</b> - loopback only. The person sitting at
 /// the computer is entitled by definition; exposing the panel on the network would let a
 /// stranger's device mint itself a pairing token or read the contents of the backup.</item>
 /// </list>
@@ -62,7 +62,7 @@ public sealed class DeviceAuthenticationMiddleware(
     /// <summary>The pairing resource: a token instead of a certificate, reachable from the network.</summary>
     private const string PairPath = "/api/v1/pair";
 
-    /// <summary>Token issuing and administrative resources — from this computer only.</summary>
+    /// <summary>Token issuing and administrative resources - from this computer only.</summary>
     private static readonly string[] LoopbackOnlyPaths = ["/api/v1/pair/new", "/api/v1/admin"];
 
     public async Task InvokeAsync(HttpContext context)
@@ -136,7 +136,7 @@ public sealed class DeviceAuthenticationMiddleware(
     /// Adres nieznany traktujemy jako zdalny.
     ///
     /// Kestrel always supplies it, but were it ever to sit behind a proxy, a missing
-    /// address must not open the panel — in doubt we take the restrictive branch.
+    /// address must not open the panel - in doubt we take the restrictive branch.
     /// </summary>
     private static bool IsLoopback(HttpContext context)
     {

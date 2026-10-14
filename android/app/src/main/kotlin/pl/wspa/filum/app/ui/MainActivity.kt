@@ -77,7 +77,7 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * MANAGE_EXTERNAL_STORAGE is not an ordinary runtime permission — the user grants it on a
+     * MANAGE_EXTERNAL_STORAGE is not an ordinary runtime permission - the user grants it on a
      * separate system settings screen (ADR-013).
      */
     private fun openStorageAccessSettings() {

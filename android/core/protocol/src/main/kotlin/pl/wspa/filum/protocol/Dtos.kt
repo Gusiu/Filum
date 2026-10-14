@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * Modele wymiany z serwerem. Lustro `Filum.Protocol.Dtos` po stronie .NET —
+ * Modele wymiany z serwerem. Lustro `Filum.Protocol.Dtos` po stronie .NET -
  * the field names are normative and described in docs/PROTOCOL.md.
  */
 
@@ -110,12 +110,12 @@ data class PingResponse(
  *
  * The choice belongs to the user, because both modes are justified and differ in cost
  * rather than correctness. What thorough mode costs depends on the library's size and the
- * device's storage speed — things the application cannot know in advance.
+ * device's storage speed - things the application cannot know in advance.
  */
 enum class IntegrityPolicy {
 
     /**
-     * Identity from the (size, modification time) pair — ADR-002. The scan does not read file
+     * Identity from the (size, modification time) pair - ADR-002. The scan does not read file
      * contents, so it is fast, but a metadata-preserving substitution goes unnoticed.
      */
     FAST,
@@ -133,7 +133,7 @@ data class ManifestEntry(
     @SerialName("s") val size: Long,
     @SerialName("m") val mtime: Long,
     /**
-     * The content digest — thorough mode only (§5.2, ADR-016). In fast mode the field is not
+     * The content digest - thorough mode only (§5.2, ADR-016). In fast mode the field is not
      * sent, because computing it requires reading every file.
      */
     @SerialName("d") val digest: String? = null,
@@ -248,7 +248,7 @@ data class ErrorResponse(
 /**
  * Telling transient errors from permanent ones. Without it, a file rejected with 422 would
  * return to the queue forever, while a momentarily busy server would be abandoned for
- * good — both mistakes are expensive.
+ * good - both mistakes are expensive.
  */
 enum class FailureKind { TRANSIENT, PERMANENT }
 

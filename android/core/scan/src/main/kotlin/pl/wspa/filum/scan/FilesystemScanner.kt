@@ -11,7 +11,7 @@ import java.util.ArrayDeque
  * files, collecting everything into memory at once is a needless risk, and the consumer
  * przetwarzamy je partiami po 2000.
  *
- * The walk is iterative, not recursive — deep trees must not overflow the stack.
+ * The walk is iterative, not recursive - deep trees must not overflow the stack.
  */
 class FilesystemScanner(
     private val root: File,

@@ -26,7 +26,7 @@ data class BundleEntry(
  * many content bytes as it announces, and repeat.
  *
  * Everything is streamed straight from disk. A bundle is at most eight megabytes, so
- * collecting one in memory would be no catastrophe — but across several concurrent
+ * collecting one in memory would be no catastrophe - but across several concurrent
  * connections that number starts multiplying for no reason at all.
  */
 class BundleBody(private val entries: List<BundleEntry>) : RequestBody() {
@@ -56,7 +56,7 @@ class BundleBody(private val entries: List<BundleEntry>) : RequestBody() {
                 val written = source.read(sink.buffer, minOf(remaining, SEGMENT))
                 if (written == -1L) {
                     // The file shrank between the scan and the upload. There is no saving this
-                    // mid-bundle — the frame has already announced its length, so aborting the
+                    // mid-bundle - the frame has already announced its length, so aborting the
                     // transfer is the only honest way out.
                     throw IOException("The file shrank while being bundled: ${entry.canonicalPath}")
                 }
@@ -70,7 +70,7 @@ class BundleBody(private val entries: List<BundleEntry>) : RequestBody() {
      * The header is built by hand rather than with a serialiser.
      *
      * The path is the only field needing escaping, and its content comes from the phone's
-     * filesystem — which is to say it can contain anything. The rest is numbers and a
+     * filesystem - which is to say it can contain anything. The rest is numbers and a
      * hexadecimal digest.
      */
     private fun headerOf(entry: BundleEntry): ByteArray {

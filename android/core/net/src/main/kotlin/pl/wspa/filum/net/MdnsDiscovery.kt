@@ -45,7 +45,7 @@ class MdnsDiscovery(context: Context) {
     suspend fun discover(timeoutMillis: Long = DEFAULT_TIMEOUT_MILLIS): List<DiscoveredServer> {
         val manager = nsd ?: return emptyList()
 
-        // Without a multicast lock many devices receive no mDNS answers at all —
+        // Without a multicast lock many devices receive no mDNS answers at all -
         // Wi-Fi filters out broadcast frames to save power.
         val lock = acquireMulticastLock()
         val found = ConcurrentHashMap<String, DiscoveredServer>()
@@ -167,7 +167,7 @@ class MdnsDiscovery(context: Context) {
 
         /**
          * The discovery window. Longer than the route race timeout, because mDNS needs several
-         * messages exchanged — but we only reach for it once the stored routes
+         * messages exchanged - but we only reach for it once the stored routes
          * have failed, so that cost never falls on an ordinary cycle.
          */
         const val DEFAULT_TIMEOUT_MILLIS = 3_000L

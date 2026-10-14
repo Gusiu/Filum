@@ -23,7 +23,7 @@ data class ScannedFile(
  * `MediaStore.DATE_MODIFIED` podaje **sekundy**, a `File.lastModified()` **milisekundy**.
  * If the same file reached the manifest from one source at one time and the other at
  * another, its identity would change between cycles and it would be uploaded over and over.
- * On a library of any size that is a failure rather than an inconvenience — all that
+ * On a library of any size that is a failure rather than an inconvenience - all that
  * changes is how quickly the user notices.
  */
 object Mtime {
