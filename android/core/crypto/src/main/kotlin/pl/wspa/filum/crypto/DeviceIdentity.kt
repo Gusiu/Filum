@@ -162,9 +162,13 @@ class DeviceIdentity private constructor(
 
             return KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_SIGN)
                 .setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
-                // TLS 1.3 signs with ecdsa_secp256r1_sha256; the other digests are added
-                // so we do not fall over on an older version negotiation.
+                // Conscrypt hashes the TLS handshake itself and hands the key a finished
+                // digest to sign, which the Keystore treats as DIGEST_NONE. Without it the
+                // key refuses every signature and the client certificate is never presented.
+                // The named digests keep the key usable by code that signs whole messages
+                // through the standard Signature API.
                 .setDigests(
+                    KeyProperties.DIGEST_NONE,
                     KeyProperties.DIGEST_SHA256,
                     KeyProperties.DIGEST_SHA384,
                     KeyProperties.DIGEST_SHA512,
@@ -173,7 +177,7 @@ class DeviceIdentity private constructor(
                 .setCertificateSerialNumber(BigInteger.valueOf(System.currentTimeMillis()))
                 .setCertificateNotBefore(notBefore.time)
                 .setCertificateNotAfter(notAfter.time)
-                // Synchronizacja idzie w tle, w nocy, przy zablokowanym ekranie -
+                // The sync runs in the background, at night, with the screen locked -
                 // requiring user authentication would stop it at the first file.
                 .setUserAuthenticationRequired(false)
                 .setIsStrongBoxBacked(useStrongBox)
