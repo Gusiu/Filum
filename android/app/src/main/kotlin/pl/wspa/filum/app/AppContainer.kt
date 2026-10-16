@@ -61,7 +61,7 @@ sealed interface PairingResult {
  *
  * The phone generates its own key pair in the Android Keystore, presents the certificate
  * to the server and remembers the server's key fingerprint from the QR code. From then on
- * the address stops being an identity — only the key counts (ADR-006).
+ * the address stops being an identity - only the key counts (ADR-006).
  */
 class PairingController(private val container: AppContainer) {
 
@@ -73,7 +73,7 @@ class PairingController(private val container: AppContainer) {
 
         val identity = DeviceIdentity.loadOrCreate()
 
-        // During pairing we have no right to present a client certificate yet — /pair is
+        // During pairing we have no right to present a client certificate yet - /pair is
         // the one resource reachable without mTLS. Trust in the server rests solely on the
         // key fingerprint from the QR code.
         val bootstrapTls = FilumTls.bundle(payload.key, keyManagers = null)
@@ -110,7 +110,7 @@ class PairingController(private val container: AppContainer) {
                     return PairingResult.Rejected(result.message)
                 }
 
-                is ApiResult.Unreachable -> lastProblem = "$endpoint — ${result.message}"
+                is ApiResult.Unreachable -> lastProblem = "$endpoint - ${result.message}"
             }
         }
 
@@ -141,7 +141,7 @@ class PairingController(private val container: AppContainer) {
     private fun describe(security: KeySecurity): String = when (security) {
         KeySecurity.STRONGBOX -> "osobny element bezpieczny (StrongBox)"
         KeySecurity.TRUSTED_ENVIRONMENT -> "the processor's trusted environment (TEE)"
-        KeySecurity.SOFTWARE -> "process memory — no hardware backing"
+        KeySecurity.SOFTWARE -> "process memory - no hardware backing"
         KeySecurity.UNKNOWN -> "nieustalony poziom zabezpieczenia"
     }
 

@@ -28,7 +28,7 @@ import javax.net.ssl.KeyManager
  * prawdziwemu serwerowi w C#**, po prawdziwym mTLS.
  *
  * Server and client are written independently and reconciled solely by docs/PROTOCOL.md.
- * The unit tests on each side check that each does what its author intended — only this
+ * The unit tests on each side check that each does what its author intended - only this
  * test checks that **the intentions agree**. It is the one place where a divergence in
  * header encoding, in mtime units
  * albo w semantyce wznawiania.
@@ -36,7 +36,7 @@ import javax.net.ssl.KeyManager
  * Run conditionally, because it needs a running server. The launching command sets the
  * environment variables; without them the test is skipped and does not break a normal build.
  *
- * The Android Keystore is not needed here — the identity is built from a JVM key pair
+ * The Android Keystore is not needed here - the identity is built from a JVM key pair
  * through the same [FixedKeyManager] production uses.
  */
 @EnabledIfEnvironmentVariable(named = "FILUM_HOST", matches = ".+")
@@ -97,7 +97,7 @@ class EndToEndTest {
         ).walk().toList().toMutableList()
         assertEquals(3, scanned.size, "the scanner should find all three files on disk")
 
-        // A name with a colon is entirely ordinary on Android and forbidden under NTFS —
+        // A name with a colon is entirely ordinary on Android and forbidden under NTFS -
         // the main reason the PATH-RULES rules exist. The test runs on Windows, though,
         // where such a file cannot be created, so we supply that path as the canonical one
         // over a safely named file. The server still receives exactly what it would get from
@@ -137,7 +137,7 @@ class EndToEndTest {
         val outcome = engine.run("e2e-1", ManifestRequest.MODE_FULL, scanned.asSequence(), Deadline { false })
 
         // The reason goes into the message: a conformance test that says only "wrong type"
-        // leaves you guessing which side diverged — and that is the one piece of
+        // leaves you guessing which side diverged - and that is the one piece of
         // information you come here for.
         val completed = assertInstanceOf(SyncOutcome.Completed::class.java, outcome, outcome.toString())
         println("sent ${completed.filesSent} files, ${completed.bytesSent} B")

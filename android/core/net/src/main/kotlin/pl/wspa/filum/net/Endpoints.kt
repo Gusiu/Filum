@@ -20,7 +20,7 @@ enum class EndpointKind {
 
     /**
      * Whether the route goes over the local network. Such sockets are bound to a specific
-     * `Network` object so they work despite an active VPN — otherwise the packet would
+     * `Network` object so they work despite an active VPN - otherwise the packet would
      * enter the tunnel and 192.168.x.x would become unreachable.
      */
     val isLocal: Boolean get() = this == MDNS || this == LAN
@@ -28,7 +28,7 @@ enum class EndpointKind {
 
 /**
  * One candidate route to the server. The client stores no "server address",
- * only a set of such candidates (ADR-006) — the identity is the key fingerprint, not an address.
+ * only a set of such candidates (ADR-006) - the identity is the key fingerprint, not an address.
  */
 data class ServerEndpoint(
     val host: String,
@@ -60,7 +60,7 @@ data class ServerEndpoint(
             }
 
             // More than one colon without brackets means a bare IPv6 address. RFC 3986
-            // requires brackets when a port follows an IPv6 address — without this rule
+            // requires brackets when a port follows an IPv6 address - without this rule
             // the last group of "fe80::1" would look like a port number.
             if (trimmed.count { it == ':' } > 1) {
                 return ServerEndpoint(trimmed, defaultPort, kind)

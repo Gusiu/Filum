@@ -4,7 +4,7 @@ namespace Filum.Protocol.Tests;
 
 /// <summary>
 /// Tests for the rules in docs/PATH-RULES.md. The vector set is shared with the Kotlin
-/// implementation — a divergence between the two shows up here, not on a device.
+/// implementation - a divergence between the two shows up here, not on a device.
 /// </summary>
 public class PathRulesTests
 {
@@ -85,7 +85,7 @@ public class PathRulesTests
     [Fact]
     public void TheCollisionSuffix_IsStable()
     {
-        // The value is stated outright in docs/PATH-RULES.md §6 — the document and the
+        // The value is stated outright in docs/PATH-RULES.md §6 - the document and the
         // code have to agree, or the Kotlin implementation will follow the document.
         Assert.Equal("~6a8a8e", PathRules.CaseCollisionSuffix("Pictures/photo.jpg"));
     }

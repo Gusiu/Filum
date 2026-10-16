@@ -38,7 +38,7 @@ public class CertificateStoreTests
     [Fact]
     public void ReloadingIt_KeepsTheSameFingerprint()
     {
-        // The fingerprint is the server's identity — were it to change on restart, every
+        // The fingerprint is the server's identity - were it to change on restart, every
         // start-up would invalidate every paired phone.
         using var directory = new TempRoot();
 
@@ -340,7 +340,7 @@ public class AuthenticationTests
 ///
 /// The panel issues pairing tokens and shows what is in the backup, so a stranger's device
 /// on the same network must not be able to touch it. The person at the computer is the
-/// only entitled audience — and that is the only criterion available here.
+/// only entitled audience - and that is the only criterion available here.
 /// </summary>
 public class PanelAccessTests
 {
@@ -419,7 +419,7 @@ public class PanelAccessTests
     [Fact]
     public async Task Unpairing_DeletesNoFiles()
     {
-        // The most common reason to unpair is a lost phone — which is exactly the moment
+        // The most common reason to unpair is a lost phone - which is exactly the moment
         // the backup matters most (invariant I1).
         using var app = new FilumApp();
         var slug = await app.PairAsync();
@@ -461,7 +461,7 @@ public class PairingCodeRenderingTests
     [Fact]
     public async Task EveryCall_YieldsADifferentToken()
     {
-        // The token is single-use, so two codes in a row cannot be the same code —
+        // The token is single-use, so two codes in a row cannot be the same code -
         // otherwise a second phone would have nothing to pair with.
         using var app = new FilumApp();
         var admin = app.Services.GetRequiredService<AdminService>();
@@ -486,7 +486,7 @@ public class MdnsAdvertiserTests
     public void InstanceName_MatchesTheFieldInThePairingCode()
     {
         // The phone matches an advertisement to the server it paired with by exactly this
-        // string — a divergence between the two places would mean discovery finds the
+        // string - a divergence between the two places would mean discovery finds the
         // server while the client fails to recognise it.
         const string pin = "EhZa6VgNQovoNrFs_e2PcVbgKr8EQf4ZzTQI5slNr7A";
 

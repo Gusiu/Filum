@@ -14,7 +14,7 @@ public sealed record BundleEntryHeader(
 
 public sealed record BundleEntryResult(string Path, bool Ok, string? Error = null, string? Versioned = null);
 
-/// <summary>The whole bundle is rejected — reading the stream further is pointless.</summary>
+/// <summary>The whole bundle is rejected - reading the stream further is pointless.</summary>
 public sealed class BundleFormatException(string message) : Exception(message);
 
 /// <summary>
@@ -25,7 +25,7 @@ public sealed class BundleFormatException(string message) : Exception(message);
 /// A bundle carries many files in one request.
 ///
 /// The framing is binary and streaming: read a header, then exactly as many bytes as it
-/// announces, and repeat. We never hold a whole bundle in memory — eight megabytes per
+/// announces, and repeat. We never hold a whole bundle in memory - eight megabytes per
 /// request times several concurrent connections is already a number not worth
 /// multiplying without cause.
 /// </summary>
@@ -80,7 +80,7 @@ public sealed class BundleReader(TransferStore transfers, FilumOptions options)
         var request = new ChunkRequest(header.Path, header.Size, header.Mtime, Offset: 0, header.Digest);
         var outcome = await transfers.WriteAsync(slug, request, payload, ct).ConfigureAwait(false);
 
-        // Whatever happened, the rest of this file has to be consumed — otherwise we
+        // Whatever happened, the rest of this file has to be consumed - otherwise we
         // would start reading the next header from the middle of someone else's data.
         await payload.DrainAsync(ct).ConfigureAwait(false);
 
@@ -97,7 +97,7 @@ public sealed class BundleReader(TransferStore transfers, FilumOptions options)
         };
     }
 
-    /// <summary>Returns null when the stream ended on a file boundary — a valid end of bundle.</summary>
+    /// <summary>Returns null when the stream ended on a file boundary - a valid end of bundle.</summary>
     private static async Task<BundleEntryHeader?> ReadHeaderAsync(Stream body, CancellationToken ct)
     {
         var lengthBytes = new byte[4];

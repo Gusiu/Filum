@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 namespace Filum.Core;
 
 /// <summary>
-/// Stored in <c>&lt;device-slug&gt;/.filum/device.json</c>. It holds public data only — a
+/// Stored in <c>&lt;device-slug&gt;/.filum/device.json</c>. It holds public data only - a
 /// public key's fingerprint is not a secret, so it may live in the backup directory.
 /// </summary>
 public sealed record DeviceRecord(
@@ -17,7 +17,7 @@ public sealed record DeviceRecord(
     [property: JsonPropertyName("enabled")] bool Enabled = true);
 
 /// <summary>
-/// The list of paired devices. The disk remains the source of truth (ADR-003) — memory is
+/// The list of paired devices. The disk remains the source of truth (ADR-003) - memory is
 /// only a cache, because the read has to be cheap on every HTTP request. Deleting a
 /// device's directory in Explorer unpairs it once the server restarts.
 /// </summary>
@@ -59,14 +59,14 @@ public sealed class DeviceRegistry
             }
             catch (JsonException)
             {
-                // A corrupt entry is skipped — the device simply has to be paired again.
+                // A corrupt entry is skipped - the device simply has to be paired again.
             }
         }
     }
 
     /// <summary>
     /// Registers a device or refreshes the label of a known one. Pairing again with the
-    /// same key does NOT create a second directory — otherwise the user would lose access
+    /// same key does NOT create a second directory - otherwise the user would lose access
     /// to the existing copy every time they rescanned the QR code.
     /// </summary>
     public DeviceRecord Register(string pin, string label)
@@ -99,7 +99,7 @@ public sealed class DeviceRegistry
     /// Revokes a device's access, leaving its files untouched.
     ///
     /// Only device.json is removed. The files/ directory stays, because invariant I1 holds
-    /// here too — the most common reason to unpair is a lost phone, which is the moment the
+    /// here too - the most common reason to unpair is a lost phone, which is the moment the
     /// backup matters most.
     /// </summary>
     public bool Forget(string pin)

@@ -24,7 +24,7 @@ import java.nio.file.Path
  * Silnik jednego cyklu synchronizacji.
  *
  * This is the most important suite in the whole client: the decisions taken here are what
- * to retry, what to set aside permanently and when to stop — and each of them ends either
+ * to retry, what to set aside permanently and when to stop - and each of them ends either
  * in losing a file or in sending it over and over.
  */
 class SyncEngineTest {
@@ -93,7 +93,7 @@ class SyncEngineTest {
         val b = file(dir, "DCIM/b.jpg", "bbb")
 
         // The server reports only b as needed. File a is in neither "needed" nor
-        // "rejected", so the server has it — and it must not be sent again.
+        // "rejected", so the server has it - and it must not be sent again.
         transport.manifestResponder = { ApiResult.Ok(ManifestResponse(1, listOf(NeededFile("DCIM/b.jpg", 0)))) }
 
         val outcome = run(listOf(a, b))
@@ -156,7 +156,7 @@ class SyncEngineTest {
         setUp()
         val a = file(dir, "clip.mp4", "0123456789")
 
-        // The server names a different value every time — something on the other side is
+        // The server names a different value every time - something on the other side is
         // changing while we work. Without a limit this loop would never end.
         var nextOffset = 0L
         transport.putInterceptor = { _, _, _ ->
@@ -203,7 +203,7 @@ class SyncEngineTest {
     fun `a resumed file gets a digest too`(@TempDir dir: Path) = runTest {
         // We used to skip the digest on resume so as not to read the file from the start.
         // That saved the wrong thing: resuming rescues transmission, not reads from the
-        // phone's storage — and it left resumed files out of the ledger, which is to say
+        // phone's storage - and it left resumed files out of the ledger, which is to say
         // precisely the largest ones, where the confirmation matters most.
         setUp()
         val a = file(dir, "clip.mp4", "0123456789")
@@ -244,7 +244,7 @@ class SyncEngineTest {
 
     @Test
     fun `thorough mode adds a digest to the manifest`(@TempDir dir: Path) = runTest {
-        // This is the only difference the server sees — and it is what lets it compare the
+        // This is the only difference the server sees - and it is what lets it compare the
         // client's claim against the ledger before anything is transferred.
         setUp()
         val a = file(dir, "a.txt", "content")

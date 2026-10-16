@@ -8,7 +8,7 @@ namespace Filum.Core.Tests;
 /// Integrity checking (protocol §5.5).
 ///
 /// The one place where the server hashes existing files. Change detection stays
-/// digest-free by default (I5) — verification answers a different question: is what lies
+/// digest-free by default (I5) - verification answers a different question: is what lies
 /// on the disk still what arrived from the phone.
 /// </summary>
 public class VerifyServiceTests
@@ -109,7 +109,7 @@ public class VerifyServiceTests
 /// The orphan report (protocol §5.6, ADR-015).
 ///
 /// The server never deletes anything, so moving files around on the phone multiplies
-/// copies. The report gives the user a basis for a decision — and that is where it stops.
+/// copies. The report gives the user a basis for a decision - and that is where it stops.
 /// </summary>
 public class OrphanReporterTests
 {
@@ -160,7 +160,7 @@ public class OrphanReporterTests
     public void OrphansAreReportedInCanonicalForm()
     {
         // On disk the file sits under its sanitised name, but the phone knows only the
-        // canonical form — a report in disk form would be useless to it.
+        // canonical form - a report in disk form would be useless to it.
         using var h = new Harness();
         h.Seed("Documents/raport:v2.txt", Harness.Bytes("x"), Mtime);
 

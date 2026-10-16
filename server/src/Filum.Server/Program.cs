@@ -21,7 +21,7 @@ builder.Services.Configure<FilumOptions>(builder.Configuration.GetSection(FilumO
 builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<FilumOptions>>().Value);
 builder.Services.AddSingleton(TimeProvider.System);
 
-// Configuration is needed before the container exists — Kestrel has to be handed the
+// Configuration is needed before the container exists - Kestrel has to be handed the
 // certificate while the listener is still being built.
 var options = builder.Configuration.GetSection(FilumOptions.SectionName).Get<FilumOptions>() ?? new FilumOptions();
 var backupRoot = FilumPaths.ResolveRoot(options);
@@ -71,7 +71,7 @@ builder.WebHost.ConfigureKestrel(kestrel =>
             // before the device has anything to introduce itself with.
             https.ClientCertificateMode = ClientCertificateMode.AllowCertificate;
 
-            // The trust chain is of no interest — the certificates are self-signed by
+            // The trust chain is of no interest - the certificates are self-signed by
             // definition (ADR-005). The real verification is comparing the key fingerprint
             // against the list of paired devices, in DeviceAuthenticationMiddleware.
             https.ClientCertificateValidation = (_, _, _) => true;

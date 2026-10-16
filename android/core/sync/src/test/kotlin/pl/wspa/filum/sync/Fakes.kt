@@ -18,7 +18,7 @@ import java.io.IOException
 /**
  * A fake queue: a complete in-memory implementation.
  *
- * It behaves like Room — writes persist within the test — so we check real state
+ * It behaves like Room - writes persist within the test - so we check real state
  * transitions rather than whether the engine called the right method.
  */
 class FakeQueue : SyncQueue {
@@ -140,7 +140,7 @@ class FakeTransport : SyncTransport {
     val digestsSeen = linkedMapOf<String, String?>()
     val putCalls = mutableListOf<Triple<String, Long, Long>>()
 
-    /** The digest from every individual PUT request — not only the closing one. */
+    /** The digest from every individual PUT request - not only the closing one. */
     val digestsPerCall = mutableListOf<String?>()
 
     var manifestResponder: (ManifestRequest) -> ApiResult<ManifestResponse> = { request ->
@@ -165,7 +165,7 @@ class FakeTransport : SyncTransport {
         return manifestResponder(request)
     }
 
-    /** The digests declared in the manifest — empty while the client is in fast mode. */
+    /** The digests declared in the manifest - empty while the client is in fast mode. */
     val manifestDigests = linkedMapOf<String, String?>()
 
     override suspend fun putFile(

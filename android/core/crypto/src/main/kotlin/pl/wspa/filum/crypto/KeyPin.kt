@@ -9,7 +9,7 @@ import java.util.Base64
  * (protocol §3.1, ADR-005).
  *
  * Computed over SubjectPublicKeyInfo rather than the whole certificate. That way a pin
- * survives replacing the certificate while keeping the key pair — and a certificate
+ * survives replacing the certificate while keeping the key pair - and a certificate
  * expiring stops being an event that breaks a working installation.
  */
 object KeyPin {
@@ -18,7 +18,7 @@ object KeyPin {
 
     fun of(certificate: X509Certificate): String = ofSpki(certificate.publicKey.encoded)
 
-    /** [spki] is the DER-encoded SubjectPublicKeyInfo — exactly what `PublicKey.getEncoded()` returns. */
+    /** [spki] is the DER-encoded SubjectPublicKeyInfo - exactly what `PublicKey.getEncoded()` returns. */
     fun ofSpki(spki: ByteArray): String =
         Base64.getUrlEncoder().withoutPadding()
             .encodeToString(MessageDigest.getInstance("SHA-256").digest(spki))

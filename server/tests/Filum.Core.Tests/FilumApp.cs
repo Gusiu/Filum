@@ -29,7 +29,7 @@ public sealed class StubClientCertificateProvider : IClientCertificateProvider
 /// <summary>
 /// TestServer sets no remote address, while the panel and the administrative resources
 /// admit loopback connections only. We substitute the address rather than loosening the
-/// condition in production code — which also lets us check what a stranger's device sees.
+/// condition in production code - which also lets us check what a stranger's device sees.
 /// </summary>
 public sealed class RemoteAddressFilter(Func<IPAddress> address) : IStartupFilter
 {
@@ -57,7 +57,7 @@ public sealed class FilumApp : WebApplicationFactory<Program>
 
     public StubClientCertificateProvider Certificates { get; } = new();
 
-    /// <summary>The client certificate used in pairing — the counterpart of the Android Keystore key.</summary>
+    /// <summary>The client certificate used in pairing - the counterpart of the Android Keystore key.</summary>
     public X509Certificate2 ClientCertificate { get; } = CertificateStore.InMemory().Certificate;
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -90,7 +90,7 @@ public sealed class FilumApp : WebApplicationFactory<Program>
     ///
     /// The result is remembered, because the server limits pairing to 5 attempts per 15
     /// minutes from one address (§3.3). Pairing in every test's constructor would exhaust
-    /// that limit — as it duly did the first time these tests were run.
+    /// that limit - as it duly did the first time these tests were run.
     /// </summary>
     public async Task<string> PairAsync(string label = "Galaxy S24 Ultra")
     {

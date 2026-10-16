@@ -17,7 +17,7 @@ enum class Schedule {
 }
 
 /**
- * The user's settings. One row — there is nothing here that would need a key-value table,
+ * The user's settings. One row - there is nothing here that would need a key-value table,
  * and an explicit schema survives change better than loose pairs.
  */
 @Entity(tableName = "settings")
@@ -27,7 +27,7 @@ data class SettingsEntity(
 
     /**
      * The automatic cycle requires charging and an unmetered network (architecture §3.6).
-     * These conditions can be turned off, but that is a deliberate decision by the user —
+     * These conditions can be turned off, but that is a deliberate decision by the user -
      * uploading a whole library over cellular is not to happen by accident.
      */
     val requireCharging: Boolean = true,
@@ -38,7 +38,7 @@ data class SettingsEntity(
      *
      * Fast mode by default, because thorough mode reads the whole library on every cycle
      * and on a large set that gets expensive. Turning it on is a deliberate choice, just as
-     * turning off the conditions above is — with the difference that here you pay in time
+     * turning off the conditions above is - with the difference that here you pay in time
      * and gain the ability to detect a metadata-preserving substitution.
      */
     val integrityPolicy: IntegrityPolicy = IntegrityPolicy.FAST,

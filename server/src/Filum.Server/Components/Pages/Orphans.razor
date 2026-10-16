@@ -16,7 +16,7 @@
             <p>There is no report for this device yet.</p>
             <p class="muted">
                 One is produced after a full reconciliation, which the phone performs
-                periodically — an incremental scan knows nothing about the files it did not
+                periodically - an incremental scan knows nothing about the files it did not
                 mention, so no difference can be derived from it.
             </p>
         </div>
@@ -24,7 +24,7 @@
     else if (report.Count == 0)
     {
         <div class="card">
-            <p>The copy matches the phone's contents — no files are without a counterpart.</p>
+            <p>The copy matches the phone's contents - no files are without a counterpart.</p>
             <p class="muted">As of @Format.Moment(report.GeneratedAt).</p>
         </div>
     }
@@ -37,7 +37,7 @@
                 the phone. Usually these are files that were deleted or moved elsewhere.
             </p>
             <p class="muted">
-                Filum does nothing about this and never will — this is a backup, and its
+                Filum does nothing about this and never will - this is a backup, and its
                 whole point is to survive a deletion on the phone. The list exists so that a
                 person can make the decision, should the disk start running out of space.
                 As of @Format.Moment(report.GeneratedAt).

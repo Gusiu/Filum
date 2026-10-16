@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 namespace Filum.Core;
 
 /// <summary>
-/// One entry in the integrity ledger — one accepted file.
+/// One entry in the integrity ledger - one accepted file.
 ///
 /// The field names are short, because the ledger grows by a line per file and on a large
 /// library its own size starts to matter.
@@ -32,11 +32,11 @@ public sealed record LedgerVerification(
 ///
 /// It answers a question the file copy alone cannot be asked: **what arrived here and
 /// when, and has anyone touched it since**. For evidentiary use that is the right
-/// question — detecting that a file changed is not enough on its own if there is nothing
+/// question - detecting that a file changed is not enough on its own if there is nothing
 /// to show how it looked before.
 ///
 /// Every line carries the digest of the line before it. Removing or altering any entry
-/// therefore breaks everything that follows — and a record that cannot be quietly
+/// therefore breaks everything that follows - and a record that cannot be quietly
 /// corrected is a qualitatively different thing from a list of digests.
 ///
 /// **What this does not give.** The chain detects retroactive edits, but does not protect
@@ -68,7 +68,7 @@ public sealed class IntegrityLedger(StoragePaths paths)
     /// Path to most recently accepted digest, built lazily on the first question asked.
     ///
     /// Without it every check would walk the ledger from the start, and a manifest batch
-    /// holds up to two thousand entries — against a ledger of a hundred thousand entries
+    /// holds up to two thousand entries - against a ledger of a hundred thousand entries
     /// that would mean hundreds of millions of line reads per request.
     /// </summary>
     private readonly Dictionary<string, Dictionary<string, string>> _index = new(StringComparer.Ordinal);
@@ -139,7 +139,7 @@ public sealed class IntegrityLedger(StoragePaths paths)
     /// Checks that the chain holds.
     ///
     /// Walks the ledger from the start, recomputing digests. It reports the **first** line
-    /// from which something no longer adds up — everything after it would be inconsistent
+    /// from which something no longer adds up - everything after it would be inconsistent
     /// anyway, so listing all of them would add nothing.
     /// </summary>
     public LedgerVerification Verify(string slug)
@@ -165,11 +165,11 @@ public sealed class IntegrityLedger(StoragePaths paths)
 
             if (entry.Sequence != expectedSequence)
                 return new LedgerVerification(false, count, entry.Sequence,
-                    $"Entry number {entry.Sequence} where {expectedSequence} was expected — a line is missing or was inserted.");
+                    $"Entry number {entry.Sequence} where {expectedSequence} was expected - a line is missing or was inserted.");
 
             if (entry.Previous != expectedPrevious)
                 return new LedgerVerification(false, count, entry.Sequence,
-                    "An entry does not point at the previous line — the ledger was edited.");
+                    "An entry does not point at the previous line - the ledger was edited.");
 
             expectedPrevious = HashOf(line);
             expectedSequence++;
@@ -211,7 +211,7 @@ public sealed class IntegrityLedger(StoragePaths paths)
         }
     }
 
-    /// <summary>The last line's number and digest — the anchor for the next one.</summary>
+    /// <summary>The last line's number and digest - the anchor for the next one.</summary>
     private (long Sequence, string Hash) TailOf(string file)
     {
         var extended = LongPath.Extended(file);

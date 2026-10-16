@@ -20,7 +20,7 @@ public sealed class TempRoot : IDisposable
         }
         catch (IOException)
         {
-            // A temp directory — a failed cleanup is no reason to fail the test.
+            // A temp directory - a failed cleanup is no reason to fail the test.
         }
     }
 }
@@ -38,7 +38,7 @@ public sealed class Harness : IDisposable
         {
             Root = _root.Path,
 
-            // The transfer mechanics tests — resuming, offsets, versioning — are checking
+            // The transfer mechanics tests - resuming, offsets, versioning - are checking
             // something other than the integrity policy, and supplying a digest in every
             // one of them would only obscure the intent. The requirement itself has its own
             // tests in IntegrityTests, where it is turned on explicitly.
@@ -82,7 +82,7 @@ public sealed class Harness : IDisposable
     public Task<ChunkOutcome> WriteWholeAsync(string canonicalPath, byte[] content, long mtime, bool withDigest = false)
         => WriteAsync(canonicalPath, content, content.Length, mtime, 0, withDigest ? Digest(content) : null);
 
-    /// <summary>Puts a file straight on disk, bypassing the transfer — for setting up state.</summary>
+    /// <summary>Puts a file straight on disk, bypassing the transfer - for setting up state.</summary>
     public void Seed(string canonicalPath, byte[] content, long mtime)
     {
         var target = TargetOf(canonicalPath);

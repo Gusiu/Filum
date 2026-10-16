@@ -7,7 +7,7 @@ import kotlin.math.min
  * The budget for a `dataSync` foreground service (architecture §3.5).
  *
  * Android 15 grants such a service **six hours a day** over a rolling window. Once they
- * run out the system calls `onTimeout()` and kills the work at a moment of its choosing —
+ * run out the system calls `onTimeout()` and kills the work at a moment of its choosing -
  * waiting for that is a mistake, because the transfer is cut off at a random point.
  *
  * So we track the budget ourselves and stop with a **hard margin**: after five hours, not
@@ -65,7 +65,7 @@ class BudgetTracker(
         /** The system's rolling window: 24 hours. */
         const val WINDOW_BUCKETS = 24L
 
-        /** The system limit. Stated for comparison — we never come close to it ourselves. */
+        /** The system limit. Stated for comparison - we never come close to it ourselves. */
         const val SYSTEM_LIMIT_SECONDS = 6L * 60 * 60
 
         /** Our limit, with an hour's margin for shutting the work down in a controlled way. */

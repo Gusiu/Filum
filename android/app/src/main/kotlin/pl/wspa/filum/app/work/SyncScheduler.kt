@@ -69,7 +69,7 @@ object SyncScheduler {
         }
     }
 
-    /** Whether any cycle is running — used to grey out the button in the interface. */
+    /** Whether any cycle is running - used to grey out the button in the interface. */
     fun observeRunning(context: Context): Flow<Boolean> =
         WorkManager.getInstance(context)
             .getWorkInfosForUniqueWorkFlow(MANUAL_WORK)
@@ -84,7 +84,7 @@ object SyncScheduler {
         .build()
 
     /**
-     * Flexibility for the system. The wider the better for the battery — Android can attach
+     * Flexibility for the system. The wider the better for the battery - Android can attach
      * our work to a window in which it wakes the device anyway.
      */
     private fun flexOf(interval: Duration): Duration =

@@ -19,7 +19,7 @@ public sealed record QrPayload(
 /// <summary>
 /// Pairing tokens: single-use, expiring after 10 minutes (§3.3).
 ///
-/// The token is the only secret protecting the moment of pairing — after that the pinned
+/// The token is the only secret protecting the moment of pairing - after that the pinned
 /// client key takes over as the identity and the token stops mattering.
 /// </summary>
 public sealed class PairingService(TimeProvider time)
@@ -62,7 +62,7 @@ public sealed class PairingService(TimeProvider time)
 
     /// <summary>
     /// Builds the string to encode in the QR code. It carries the server's key fingerprint,
-    /// so after scanning the phone knows whom to trust — and from then on the address stops
+    /// so after scanning the phone knows whom to trust - and from then on the address stops
     /// being an identity (ADR-006).
     /// </summary>
     public static string Encode(QrPayload payload)

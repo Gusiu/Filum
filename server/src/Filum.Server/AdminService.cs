@@ -10,7 +10,7 @@ public sealed record PairingCode(string Payload, string QrSvg, int ExpiresInSeco
 /// <summary>
 /// Dane i operacje panelu.
 ///
-/// Everything here requires a loopback connection — the panel issues pairing tokens and
+/// Everything here requires a loopback connection - the panel issues pairing tokens and
 /// shows the contents of the backup, so the person at the computer is the only entitled
 /// audience (see <see cref="DeviceAuthenticationMiddleware"/>).
 /// </summary>
@@ -75,7 +75,7 @@ public sealed class AdminService(
     /// Revokes a device's access but **does not delete its files**.
     ///
     /// Invariant I1 holds here too: unpairing a phone must not erase the copy, because the
-    /// most common reason to unpair is a lost or replaced phone — exactly the moment the
+    /// most common reason to unpair is a lost or replaced phone - exactly the moment the
     /// backup matters most.
     /// </summary>
     public bool Forget(string pin) => registry.Forget(pin);
@@ -85,7 +85,7 @@ public sealed class AdminService(
     ///
     /// Verification walks the entire ledger, so across a hundred thousand entries it costs
     /// reading a dozen or so megabytes of text. That is one sequential read per visit to
-    /// the panel, not per request from a phone — and without it the panel would show an
+    /// the panel, not per request from a phone - and without it the panel would show an
     /// entry count with no indication of whether any of it is still trustworthy.
     /// </summary>
     private AdminLedger? LedgerOf(string slug)

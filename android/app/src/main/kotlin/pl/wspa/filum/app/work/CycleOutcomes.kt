@@ -12,7 +12,7 @@ enum class WorkerDecision { SUCCESS, RETRY, FAILURE }
  *
  * Extracted from the worker so it can be tested without Android. This is not cosmetic: a
  * mistake here either has the system hammering at a switched-off server every few minutes
- * or — the other way round — quietly abandons work that needed
+ * or - the other way round - quietly abandons work that needed
  * tylko ponowienia.
  */
 object CycleOutcomes {
@@ -33,7 +33,7 @@ object CycleOutcomes {
             is SyncOutcome.Failed -> WorkerDecision.RETRY
         }
 
-        // Not being paired is not a transient fault — it needs a decision from the
+        // Not being paired is not a transient fault - it needs a decision from the
         // user, and retrying would only drain the battery.
         is CycleResult.NotPaired -> WorkerDecision.FAILURE
 

@@ -102,7 +102,7 @@ class ExclusionRulesTest {
 
     @Test
     fun `Android media is NOT skipped`() {
-        // WhatsApp lives there among others — exactly the data a user does not want to
+        // WhatsApp lives there among others - exactly the data a user does not want to
         // lose. The directory is accessible, so we cover it.
         assertFalse(rules.isExcluded("Android/media/com.whatsapp/WhatsApp/Media/foto.jpg"))
     }
@@ -161,7 +161,7 @@ class ExclusionRulesTest {
 
 /**
  * Walking the directory tree. The class is plain Kotlin on the JVM, so we test it
- * against real files in a temporary directory — with no emulator and no fakes.
+ * against real files in a temporary directory - with no emulator and no fakes.
  */
 class FilesystemScannerTest {
 

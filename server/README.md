@@ -1,4 +1,4 @@
-# Filum — server
+# Filum - server
 
 .NET 9, ASP.NET Core minimal APIs. Implements the resources described in
 [../docs/PROTOCOL.md](../docs/PROTOCOL.md).
@@ -7,7 +7,7 @@
 
 | Project | Responsibility |
 |---|---|
-| `Filum.Protocol` | DTOs, `PathRules`, protocol constants — no file operations |
+| `Filum.Protocol` | DTOs, `PathRules`, protocol constants - no file operations |
 | `Filum.Core` | storage engine, server certificate, device registry, integrity ledger |
 | `Filum.Server` | Kestrel with mTLS, HTTP resources, pairing, panel |
 | `Filum.Tray` | system tray icon |
@@ -37,7 +37,7 @@ another disk or restored from a backup, and the key would travel with the data.
 `Filum:RequireDigest` is worth understanding before turning it off. With it on, a file
 that arrives without a digest is refused before any bytes reach the disk, and every
 accepted file is recorded in the ledger. Turning it off makes the digest optional and
-leaves those files out of the ledger — reasonable for an installation that only cares
+leaves those files out of the ledger - reasonable for an installation that only cares
 about getting data back, not about being able to show what it received.
 
 ## Security
@@ -67,7 +67,7 @@ history without anyone touching it.
 
 The file is plain JSONL with no byte-order mark, so verifying it takes a few lines in
 any language and does not go through this project's code at all. That independence is
-the point — a ledger only our own implementation can read is worth exactly as much as
+the point - a ledger only our own implementation can read is worth exactly as much as
 trust in that implementation.
 
 What the chain does **not** give you is protection against someone with disk access
@@ -86,7 +86,7 @@ https://127.0.0.1:8765/
 It shows server status, free space, and the paired phones with their file counts, sizes
 and ledger state. Under `/pairing` it draws a QR code for pairing another device.
 
-The panel is reachable **from loopback only** — it issues pairing tokens and shows the
+The panel is reachable **from loopback only** - it issues pairing tokens and shows the
 contents of the backup, so exposing it on the network would let a stranger's device
 pair without the owner knowing (ADR-010). The certificate is self-signed, so the
 browser will warn on first visit.
@@ -102,12 +102,12 @@ The token is single-use and lives for 10 minutes.
 ### Disabling and unpairing a device
 
 A disabled device gets `403` on every request, but its backup is untouched. Unpairing
-removes only the `device.json` entry — the files stay, because the most common reason
+removes only the `device.json` entry - the files stay, because the most common reason
 to unpair is a lost phone, which is exactly when the backup matters most.
 
 ## Running as a Windows service
 
-The same executable works either way — it detects how it was started. The service is
+The same executable works either way - it detects how it was started. The service is
 what lets the backup keep accepting files while no user is logged in.
 
 Publish as a single file:
@@ -122,11 +122,11 @@ Register the service (command prompt with administrator rights):
 sc.exe create Filum binPath= "C:\path\to\Filum.Server.exe" start= auto
 ```
 
-The service runs in session 0 and **cannot show a UI** — which is why the tray icon is
+The service runs in session 0 and **cannot show a UI** - which is why the tray icon is
 a separate process started at logon (ADR-010).
 
 The configuration directory defaults to something account-dependent, so it is worth
-passing `Filum:Root` and `Filum:ConfigDirectory` explicitly at registration time —
+passing `Filum:Root` and `Filum:ConfigDirectory` explicitly at registration time -
 otherwise a service running as `LocalSystem` will use different directories than the
 server started by hand.
 
@@ -140,7 +140,7 @@ Shows whether the server is running, how many phones the backup covers and how m
 space is left. Right-click gives the panel, the pairing screen and the backup directory.
 
 It is a **separate process**, because a Windows service runs in session 0 and cannot
-show a UI. It talks to the server over the same local API as the panel — there is no
+show a UI. It talks to the server over the same local API as the panel - there is no
 special channel between them.
 
 It verifies the server certificate by the key fingerprint read from `server.pfx`, not
@@ -167,7 +167,7 @@ openssl s_client -connect 127.0.0.1:8765 </dev/null 2>/dev/null | openssl x509 -
 The result must match the `k` field from `/api/v1/pair/new`.
 
 Sending a file requires a paired certificate. `X-Filum-Path` is base64url without
-padding, and `X-Filum-Digest` carries the SHA-256 of the whole file — required by
+padding, and `X-Filum-Digest` carries the SHA-256 of the whole file - required by
 default, and checked when the transfer closes:
 
 ```bash

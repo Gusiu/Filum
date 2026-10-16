@@ -53,7 +53,7 @@ fun FoldersScreen(
 
         Text(
             "Tick the directories you do not want in the backup. " +
-                "Files already sent stay on the computer — an exclusion applies to what " +
+                "Files already sent stay on the computer - an exclusion applies to what " +
                 "goes from here on.",
             style = MaterialTheme.typography.bodyMedium,
         )
@@ -81,7 +81,7 @@ fun FoldersScreen(
                                     if (folder.fileCount >= 0) "${folder.fileCount} items"
                                     else "unavailable",
                                 )
-                                if (folder.suggested) append(" — often worth skipping")
+                                if (folder.suggested) append(" - often worth skipping")
                             },
                             style = MaterialTheme.typography.bodySmall,
                         )
@@ -98,7 +98,7 @@ fun FoldersScreen(
                 Text(
                     "Android/data and Android/obb have been inaccessible to applications since " +
                         "Android 11 and we do not try to work around that. Thumbnails, trash and " +
-                        "caches are skipped too — that data is reproducible.",
+                        "caches are skipped too - that data is reproducible.",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Text(

@@ -8,7 +8,7 @@ import java.util.Base64
  *
  * The payload carries the server's key fingerprint, so from the moment of pairing the
  * address stops being an identity (ADR-006). That is why pairing has to succeed exactly
- * this once — afterwards the phone recognises the server by whatever route it finds it.
+ * this once - afterwards the phone recognises the server by whatever route it finds it.
  */
 object PairingCode {
 

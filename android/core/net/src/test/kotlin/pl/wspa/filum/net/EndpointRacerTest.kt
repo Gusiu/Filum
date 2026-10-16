@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger
  * The route race (protocol §4.2, ADR-006).
  *
  * The tests run entirely on `runTest`'s virtual clock, so delays measured in seconds do
- * not lengthen the run — while still checking the real ordering of events rather than the
+ * not lengthen the run - while still checking the real ordering of events rather than the
  * selection logic alone.
  */
 class EndpointRacerTest {
@@ -69,7 +69,7 @@ class EndpointRacerTest {
 
     @Test
     fun `probing of the losing routes is cancelled`() {
-        // Without cancellation the phone would hold connections it will never use —
+        // Without cancellation the phone would hold connections it will never use -
         // during overnight work on battery that is no small thing.
         val zakonczone = AtomicInteger()
 

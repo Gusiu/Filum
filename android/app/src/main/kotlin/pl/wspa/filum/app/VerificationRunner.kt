@@ -96,7 +96,7 @@ class VerificationRunner(private val container: AppContainer) {
      *
      * Stratified, because plain sampling with a size cap had a flaw the result does not show:
      * files above the threshold entered the sample **never**. On a typical phone library that
-     * meant video recordings — the data most expensive to reproduce — were the only category
+     * meant video recordings - the data most expensive to reproduce - were the only category
      * permanently outside any checking at all. A separate pool for large files costs a few
      * extra reads and removes that whole blind spot.
      *
@@ -148,7 +148,7 @@ class VerificationRunner(private val container: AppContainer) {
         const val LARGE_FILE_BYTES = 32L * 1024 * 1024
 
         /**
-         * What share of the sample is reserved for large files — here, one fifth.
+         * What share of the sample is reserved for large files - here, one fifth.
          *
          * They are rarer but occupy most of the space. A share proportional to file count would
          * mean that among thousands of photos a recording entered the sample once every few

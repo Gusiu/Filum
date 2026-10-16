@@ -16,7 +16,7 @@ android {
     }
 
     // KeyPin i PinnedTrustManager nie dotykają API Androida, więc ich testy idą
-    // na zwykłej maszynie wirtualnej — bez emulatora, w sekundach.
+    // na zwykłej maszynie wirtualnej - bez emulatora, w sekundach.
     testOptions {
         unitTests.all { it.useJUnitPlatform() }
     }

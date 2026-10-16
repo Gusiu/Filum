@@ -34,13 +34,13 @@ class MediaStoreScanner(
     /**
      * Pliki zmienione od podanej generacji.
      *
-     * Returns `null` when the counter has gone backwards relative to the remembered value —
+     * Returns `null` when the counter has gone backwards relative to the remembered value -
      * that means the index was rebuilt and forces a full walk, since the delta would be partial.
      */
     fun changedSince(generation: Long, volume: String = VOLUME): List<ScannedFile>? {
         val current = currentGeneration(volume)
         if (current < generation) {
-            Log.i(TAG, "The MediaStore counter went backwards ($current < $generation) — a full scan is needed")
+            Log.i(TAG, "The MediaStore counter went backwards ($current < $generation) - a full scan is needed")
             return null
         }
 
@@ -60,7 +60,7 @@ class MediaStoreScanner(
     ): List<ScannedFile> {
         val projection = arrayOf(
             // DATA is formally deprecated, but we hold MANAGE_EXTERNAL_STORAGE and open
-            // files directly — a MediaStore descriptor would not give us the canonical
+            // files directly - a MediaStore descriptor would not give us the canonical
             // path the manifest requires.
             MediaStore.MediaColumns.DATA,
             MediaStore.MediaColumns.SIZE,
@@ -89,7 +89,7 @@ class MediaStoreScanner(
                 val size = cursor.getLong(sizeColumn)
                 if (size <= 0) continue
 
-                // DATE_MODIFIED is in seconds — it goes through the same gate as the
+                // DATE_MODIFIED is in seconds - it goes through the same gate as the
                 // filesystem read, so the units can never drift apart.
                 val mtime = Mtime.fromSeconds(cursor.getLong(mtimeColumn))
                 if (nowSeconds() - mtime < ExclusionRules.QUIESCENCE_SECONDS) continue

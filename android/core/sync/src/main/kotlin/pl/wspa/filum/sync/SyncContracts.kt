@@ -14,7 +14,7 @@ import java.io.File
  * Kontrakty silnika synchronizacji.
  *
  * The engine knows neither OkHttp nor Room. This is not abstraction for its own sake:
- * the decisions taken here — when to stop, what to retry, what to call permanently failed —
+ * the decisions taken here - when to stop, what to retry, what to call permanently failed -
  * are the hardest part of the whole client and have to be testable without a network,
  * bez bazy i bez emulatora.
  */
@@ -44,12 +44,12 @@ data class QueuedFile(
     val absolutePath: String,
     val size: Long,
     val mtime: Long,
-    /** How many bytes the server has confirmed — the resume point. */
+    /** How many bytes the server has confirmed - the resume point. */
     val bytesSent: Long,
     val attempts: Int,
 )
 
-/** The queue's durable state. It has to survive the process being killed — that is what resumability means. */
+/** The queue's durable state. It has to survive the process being killed - that is what resumability means. */
 interface SyncQueue {
 
     suspend fun enqueue(files: List<ScannedFile>)
@@ -85,7 +85,7 @@ interface SyncJournal {
 /**
  * Whether there is still permission to work.
  *
- * One call instead of passing the budget, the network and the charging state separately —
+ * One call instead of passing the budget, the network and the charging state separately -
  * the engine need not know **why** it should stop, only that it should stop cleanly.
  */
 fun interface Deadline {
@@ -107,7 +107,7 @@ data class SyncConfig(
     /**
      * How we detect that a file has changed (ADR-016).
      *
-     * It does not govern sending a digest during a transfer — that is always computed and the
+     * It does not govern sending a digest during a transfer - that is always computed and the
      * server requires it. What it governs is whether we **ask at all** whether a file taken to
      * be unchanged really is the same file.
      */
@@ -120,7 +120,7 @@ data class SyncConfig(
      * Below this size a file goes in a bundle rather than its own request (ADR-008).
      *
      * The value comes from the server's ping response; the client assumes none of its own.
-     * The threshold is to be established by measurement rather than assumed — it is one of the
+     * The threshold is to be established by measurement rather than assumed - it is one of the
      * experiments for the results chapter.
      */
     val smallFileThreshold: Long = 262_144,
@@ -147,7 +147,7 @@ enum class InterruptReason {
 
 sealed interface SyncOutcome {
 
-    /** The queue is empty — everything there was to send has gone. */
+    /** The queue is empty - everything there was to send has gone. */
     data class Completed(val filesSent: Int, val bytesSent: Long) : SyncOutcome
 
     /** We stopped by ourselves, at a moment of our choosing. */

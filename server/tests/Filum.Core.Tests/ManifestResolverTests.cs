@@ -4,7 +4,7 @@ namespace Filum.Core.Tests;
 
 /// <summary>
 /// Resolving a manifest (§5.2). The whole answer is produced by comparing against the
-/// filesystem — the server has no content index (ADR-003), so these tests also check,
+/// filesystem - the server has no content index (ADR-003), so these tests also check,
 /// incidentally, whether the disk really does stand in for a database.
 /// </summary>
 public class ManifestResolverTests
@@ -85,7 +85,7 @@ public class ManifestResolverTests
         var content = Harness.Bytes("0123456789ABCDEF");
         await h.WriteAsync("Movies/clip.mp4", content[..6], content.Length, Mtime, 0);
 
-        // the same file, but the phone reports a different mtime — the part is useless
+        // the same file, but the phone reports a different mtime - the part is useless
         var result = h.Manifest.Resolve(Harness.Slug, [Entry("Movies/clip.mp4", content.Length, Mtime + 30)]);
 
         Assert.Equal(0, Assert.Single(result.Needed).Offset);

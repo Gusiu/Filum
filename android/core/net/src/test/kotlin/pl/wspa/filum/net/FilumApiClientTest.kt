@@ -29,7 +29,7 @@ import javax.net.ssl.KeyManager
 
 /**
  * The resource client over **real TLS**. MockWebServer performs a genuine handshake, so the
- * test also covers key pinning and presenting the client certificate — precisely the things
+ * test also covers key pinning and presenting the client certificate - precisely the things
  * an HTTP fake would not check.
  */
 class FilumApiClientTest {
@@ -127,7 +127,7 @@ class FilumApiClientTest {
 
     @Test
     fun `a server with a different key is rejected at the TLS level`() = runTest {
-        // A substituted server never even gets a chance to answer — that is the point of ADR-005.
+        // A substituted server never even gets a chance to answer - that is the point of ADR-005.
         val obcyPin = KeyPin.of(HeldCertificate.Builder().commonName("Obcy").build().certificate)
         server.enqueue(json(pingBody))
 
@@ -169,7 +169,7 @@ class FilumApiClientTest {
         val sent = server.takeRequest()
         assertEquals("/api/v1/manifest", sent.path)
         val body = sent.body.readUtf8()
-        // The single-letter keys are normative — changing them would break server compatibility.
+        // The single-letter keys are normative - changing them would break server compatibility.
         assertTrue(body.contains("\"p\":\"DCIM/a.jpg\""), body)
         assertTrue(body.contains("\"s\":2048"), body)
         assertTrue(body.contains("\"m\":1756400000"), body)
@@ -317,7 +317,7 @@ class FilumApiClientTest {
     @Test
     fun `a response that is not the Filum protocol is treated as no server`() = runTest {
         // We reached somebody else's service at this address. That is not a protocol error
-        // but evidence that the server is not on this route — the race must not pick it.
+        // but evidence that the server is not on this route - the race must not pick it.
         server.enqueue(json("<html>witaj na routerze</html>"))
 
         val result = api().ping(endpoint())

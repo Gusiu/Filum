@@ -24,7 +24,7 @@ sealed interface SanitizeResult {
  * Maps a canonical path from the phone onto a storage path under NTFS.
  *
  * Implementacja normatywna dla docs/PATH-RULES.md. Lustrzanym odbiciem jest klasa
- * `Filum.Protocol.PathRules` on the server side — both pass the same
+ * `Filum.Protocol.PathRules` on the server side - both pass the same
  * docs/testvectors/paths.tsv.
  *
  * The module is plain Kotlin on the JVM with no Android dependency: the rules can be
@@ -88,7 +88,7 @@ object PathRules {
 
     /**
      * Encodes a single component. The order of the rules is normative
-     * (docs/PATH-RULES.md §5) — reordering them breaks injectivity.
+     * (docs/PATH-RULES.md §5) - reordering them breaks injectivity.
      */
     fun encodeSegment(segment: String): String {
         if (segment.isEmpty()) return segment
@@ -116,7 +116,7 @@ object PathRules {
                 .toString()
         }
 
-        // Rule 4: a trailing dot or space. We encode only the last character — the
+        // Rule 4: a trailing dot or space. We encode only the last character - the
         // earlier ones stop being trailing, so Windows will not trim them.
         val last = encoded.last()
         if (last == '.' || last == ' ') {
@@ -136,7 +136,7 @@ object PathRules {
 
     /**
      * Reverses the percent-encoding. The `~xxxxxx` suffix from rule 6 and from case-collision
-     * resolution cannot be reversed without index.jsonl — this method leaves it alone.
+     * resolution cannot be reversed without index.jsonl - this method leaves it alone.
      */
     fun decode(storedPath: String): String {
         val builder = StringBuilder(storedPath.length)
@@ -176,7 +176,7 @@ object PathRules {
             .joinToString("") { byte -> (byte.toInt() and 0xFF).toString(16).padStart(2, '0') }
 
     /**
-     * Truncates without splitting a %XX sequence — otherwise the encoding would stop being
+     * Truncates without splitting a %XX sequence - otherwise the encoding would stop being
      * reversible. Every '%' in the encoded text starts a sequence, because a literal '%'
      * was turned into %25 earlier.
      */

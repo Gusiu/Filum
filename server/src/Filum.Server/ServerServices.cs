@@ -74,7 +74,7 @@ public sealed class DeviceStats(StoragePaths paths, ILogger<DeviceStats> logger)
 
 /// <summary>
 /// The addresses the server sees itself under. They go into the ping response, which is
-/// what lets the client's route set update itself (§4.4) — one successful connection by
+/// what lets the client's route set update itself (§4.4) - one successful connection by
 /// any road refreshes all the others.
 /// </summary>
 public static class LocalEndpoints

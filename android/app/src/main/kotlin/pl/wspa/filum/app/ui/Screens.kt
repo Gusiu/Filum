@@ -84,7 +84,7 @@ fun PairingScreen(
 
         Text(
             "The phone will generate its own key and store it in the device's security " +
-                "module — a separate chip where one is available, and the processor's trusted " +
+                "module - a separate chip where one is available, and the processor's trusted " +
                 "environment where it is not. The private key leaves the device in neither " +
                 "case. The level actually used is recorded " +
                 "in the journal at pairing time.",

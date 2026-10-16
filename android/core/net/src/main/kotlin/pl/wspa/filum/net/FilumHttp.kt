@@ -43,7 +43,7 @@ class FilumHttpClients(
     /**
      * The client for a given route. For local routes we try a bound socket, and when the VPN
      * blocks traffic outside the tunnel and the binding fails, we quietly fall back to the
-     * default route — there is nothing to inform the user about, since the overlay route is
+     * default route - there is nothing to inform the user about, since the overlay route is
      * about to win anyway (§4.3).
      */
     fun forKind(kind: EndpointKind): OkHttpClient =
@@ -59,7 +59,7 @@ class FilumHttpClients(
     private fun build(socketFactory: SocketFactory?): OkHttpClient {
         val builder = OkHttpClient.Builder()
             .sslSocketFactory(tls.socketFactory, tls.trustManager)
-            // Safe only together with key pinning — see PinnedHostnameVerifier.
+            // Safe only together with key pinning - see PinnedHostnameVerifier.
             .hostnameVerifier(PinnedHostnameVerifier)
             // The server is self-signed and modern; there is no reason to allow
             // negotiations from the days of supporting ancient middleboxes.
