@@ -49,12 +49,16 @@ class EndpointRacer(
         val started = nanoTime()
         val failures = mutableListOf<EndpointFailure>()
 
-        val outcome = withTimeoutOrNull(timeoutMillis) {
+        // Kept outside the timeout block on purpose. Leaving coroutineScope waits for the
+        // cancelled losers, and a probe blocked in a connect to a dead address may notice
+        // cancellation only after the deadline. That delay must not turn a server that
+        // has already answered into a lost race.
+        var winner: RaceOutcome.Reached? = null
+
+        withTimeoutOrNull(timeoutMillis) {
             coroutineScope {
                 val pending: MutableList<Pair<ServerEndpoint, Deferred<ApiResult<PingResponse>>>> =
                     unique.map { it to async { probe(it) } }.toMutableList()
-
-                var winner: RaceOutcome.Reached? = null
 
                 while (pending.isNotEmpty() && winner == null) {
                     val (index, result) = select {
@@ -77,11 +81,10 @@ class EndpointRacer(
 
                 // We have a winner, so the remaining probes are of no further interest.
                 pending.forEach { (_, deferred) -> deferred.cancel() }
-                winner
             }
         }
 
-        return outcome ?: RaceOutcome.AllFailed(failures + timedOut(unique, failures))
+        return winner ?: RaceOutcome.AllFailed(failures + timedOut(unique, failures))
     }
 
     private fun timedOut(

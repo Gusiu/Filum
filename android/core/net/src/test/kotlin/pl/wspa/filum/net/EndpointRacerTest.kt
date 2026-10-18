@@ -1,7 +1,11 @@
 package pl.wspa.filum.net
 
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -88,6 +92,37 @@ class EndpointRacerTest {
         }
 
         assertEquals(0, zakonczone.get())
+    }
+
+    @Test
+    fun `a probe slow to honour cancellation does not cost the winner its result`() = runBlocking {
+        // A probe stuck in blocking I/O on a dead address notices cancellation only when
+        // its own timeout runs out, which can be after the race deadline. Real threads
+        // and real time on purpose: a virtual-time delay() is always cancelled at once
+        // and would hide exactly this case. The winner answers only once the dead probe is
+        // blocked, as on a real network, where a connect to a dead address starts at once.
+        val deadProbeBlocked = CompletableDeferred<Unit>()
+        val racer = EndpointRacer(
+            probe = { endpoint ->
+                if (endpoint == lan) {
+                    deadProbeBlocked.await()
+                    ApiResult.Ok(ping())
+                } else {
+                    withContext(Dispatchers.IO) {
+                        deadProbeBlocked.complete(Unit)
+                        Thread.sleep(600)
+                        ApiResult.Unreachable(IOException("connect timed out"))
+                    }
+                }
+            },
+            timeoutMillis = 300,
+        )
+
+        val outcome = racer.fastest(listOf(lan, martwy))
+
+        val reached = assertInstanceOf(RaceOutcome.Reached::class.java, outcome)
+        assertEquals(lan, reached.endpoint)
+        assertTrue(reached.elapsedMillis < 300, "elapsed ${reached.elapsedMillis} ms")
     }
 
     @Test

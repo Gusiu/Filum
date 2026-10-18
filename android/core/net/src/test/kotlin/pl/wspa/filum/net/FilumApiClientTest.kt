@@ -1,9 +1,15 @@
 package pl.wspa.filum.net
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
+import okhttp3.mockwebserver.SocketPolicy
 import okhttp3.tls.HandshakeCertificates
 import okhttp3.tls.HeldCertificate
 import org.junit.jupiter.api.AfterEach
@@ -25,6 +31,7 @@ import pl.wspa.filum.protocol.ManifestRequest
 import java.io.File
 import java.nio.file.Path
 import java.util.Base64
+import java.util.concurrent.TimeUnit
 import javax.net.ssl.KeyManager
 
 /**
@@ -323,6 +330,20 @@ class FilumApiClientTest {
         val result = api().ping(endpoint())
 
         assertInstanceOf(ApiResult.Unreachable::class.java, result)
+    }
+
+    @Test
+    fun `cancelling a call aborts it instead of waiting for the server`() = runBlocking {
+        // The route race cancels the probes that lost. If cancellation waited for the
+        // server or the call timeout, every dead address would hold the race open.
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
+
+        val call = async(Dispatchers.Default) { api().ping(endpoint()) }
+        assertNotNull(server.takeRequest(5, TimeUnit.SECONDS), "the request never reached the server")
+
+        val aborted = withTimeoutOrNull(2_000) { call.cancelAndJoin(); true }
+
+        assertEquals(true, aborted)
     }
 
     // --- parowanie ---
