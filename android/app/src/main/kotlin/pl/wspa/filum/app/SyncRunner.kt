@@ -95,7 +95,7 @@ class SyncRunner(private val container: AppContainer) {
         )
 
         // Default settings until the user changes anything - the first cycle after
-        // po instalacji nie ma jeszcze wiersza w bazie.
+        // installation has no row in the database yet.
         val settings = container.database.settings().get() ?: SettingsEntity()
 
         val sessionId = UUID.randomUUID().toString()
@@ -142,7 +142,7 @@ class SyncRunner(private val container: AppContainer) {
     private suspend fun journalDiscovery(discovered: List<ServerEndpoint>) {
         RoomJournal(container.database.log()).record(
             JournalLevel.INFO, "mdns_found",
-            "Znaleziono serwer w sieci lokalnej: ${discovered.joinToString { it.toString() }}",
+            "Found the server on the local network: ${discovered.joinToString { it.toString() }}",
         )
 
         // Stored immediately: on the next cycle the route is already among the
@@ -152,7 +152,7 @@ class SyncRunner(private val container: AppContainer) {
         )
     }
 
-    // --- trasy ---
+    // --- routes ---
 
     private suspend fun loadCandidates(server: PairedServerEntity): List<ServerEndpoint> {
         val stored = container.database.endpoints().all().mapNotNull { entity ->
@@ -187,7 +187,7 @@ class SyncRunner(private val container: AppContainer) {
         }
     }
 
-    // --- skan ---
+    // --- scan ---
 
     /** Returns the files and whether the fast path could be used. */
     private suspend fun collectFiles(mode: String): Pair<Sequence<ScannedFile>, Boolean> {

@@ -14,7 +14,7 @@ var builder = WebApplication.CreateBuilder(args);
 //
 // The service is what lets the backup keep working with no user logged in. What it
 // cannot do is display an interface - session 0 forbids it - which is why
-// ikona w zasobniku jest osobnym procesem (ADR-010).
+// the tray icon is a separate process (ADR-010).
 builder.Host.UseWindowsService(options => options.ServiceName = "Filum");
 
 builder.Services.Configure<FilumOptions>(builder.Configuration.GetSection(FilumOptions.SectionName));
@@ -58,7 +58,7 @@ builder.WebHost.ConfigureKestrel(kestrel =>
 {
     // Transfers run to many gigabytes, while the default request body limit is 30 MB.
     // The protection against excess is X-Filum-Size plus the bounded copy in TransferStore,
-    // nie limit transportowy.
+    // not a transport limit.
     kestrel.Limits.MaxRequestBodySize = null;
 
     kestrel.Listen(IPAddress.Parse(options.Bind), options.Port, listen =>
@@ -93,9 +93,9 @@ app.UseAntiforgery();
 app.MapFilumApi();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 
-app.Logger.LogInformation("Filum: katalog backupu {Root}", backupRoot);
-app.Logger.LogInformation("Filum: certyfikat {Path}", certificates.Path);
-app.Logger.LogInformation("Filum: odcisk klucza serwera {Pin}", certificates.Pin);
+app.Logger.LogInformation("Filum: backup directory {Root}", backupRoot);
+app.Logger.LogInformation("Filum: certificate {Path}", certificates.Path);
+app.Logger.LogInformation("Filum: server key fingerprint {Pin}", certificates.Pin);
 app.Logger.LogInformation("Filum: listening on https://{Bind}:{Port}", options.Bind, options.Port);
 
 var known = app.Services.GetRequiredService<DeviceRegistry>().All();
@@ -134,5 +134,5 @@ public static class FilumPaths
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 }
 
-/// <summary>Widoczne dla WebApplicationFactory w testach integracyjnych.</summary>
+/// <summary>Visible to WebApplicationFactory in the integration tests.</summary>
 public partial class Program;

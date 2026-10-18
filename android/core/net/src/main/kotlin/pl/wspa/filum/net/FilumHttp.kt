@@ -11,9 +11,9 @@ import javax.net.SocketFactory
  * The source of socket factories for local routes.
  *
  * When a VPN is running, all of the application's traffic enters the tunnel by default and
- * `192.168.x.x` stops being reachable (protocol §4.3). The fix is to bind the socket; the
- * gniazda do konkretnego obiektu `Network` z `ConnectivityManager`. Implementacja
- * Android implementation lives in `:core:net`, but the interface lets the race be tested without it.
+ * `192.168.x.x` stops being reachable (protocol §4.3). The fix is to bind the socket to a
+ * specific `Network` object from `ConnectivityManager`. The Android implementation lives
+ * in `:core:net`, but the interface lets the race be tested without it.
  */
 fun interface LocalNetworkBinder {
     /** Returns a Wi-Fi-bound socket factory, or `null` when the default route must be used. */

@@ -37,7 +37,7 @@ fun PairingScreen(
     onPair: (code: String, label: String) -> Unit,
 ) {
     var code by rememberSaveable { mutableStateOf("") }
-    var label by rememberSaveable { mutableStateOf(android.os.Build.MODEL ?: "Telefon") }
+    var label by rememberSaveable { mutableStateOf(android.os.Build.MODEL ?: "Phone") }
 
     Column(
         modifier = Modifier
@@ -46,7 +46,7 @@ fun PairingScreen(
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text("Parowanie", style = MaterialTheme.typography.headlineMedium)
+        Text("Pairing", style = MaterialTheme.typography.headlineMedium)
         Text(
             "On the computer, open the Filum panel and get a pairing code, " +
                 "then paste it below. The code is valid for 10 minutes and works once.",
@@ -56,7 +56,7 @@ fun PairingScreen(
         OutlinedTextField(
             value = code,
             onValueChange = { code = it },
-            label = { Text("Kod parowania (filum1:…)") },
+            label = { Text("Pairing code (filum1:…)") },
             singleLine = false,
             minLines = 3,
             modifier = Modifier.fillMaxWidth(),
@@ -103,7 +103,7 @@ fun LogScreen(events: List<LogEventEntity>, onBack: () -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Dziennik", style = MaterialTheme.typography.headlineSmall)
+            Text("Journal", style = MaterialTheme.typography.headlineSmall)
             TextButton(onClick = onBack) { Text("Back") }
         }
 

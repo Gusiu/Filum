@@ -78,11 +78,11 @@ public class DeviceRegistryTests
     public void PairingAgainWithTheSameKey_CreatesNoSecondDirectory()
     {
         // Otherwise the user would lose access to the existing copy on every
-        // ponownym zeskanowaniu kodu QR.
+        // new scan of the QR code.
         using var h = new Harness();
         var registry = new DeviceRegistry(h.Paths);
 
-        var first = registry.Register("PIN-AAA", "Telefon");
+        var first = registry.Register("PIN-AAA", "Phone");
         var second = registry.Register("PIN-AAA", "Phone after a rename");
 
         Assert.Equal(first.Slug, second.Slug);
@@ -94,7 +94,7 @@ public class DeviceRegistryTests
     public void StateSurvivesARestart_BecauseTheDiskIsTheSourceOfTruth()
     {
         using var h = new Harness();
-        new DeviceRegistry(h.Paths).Register("PIN-AAA", "Telefon");
+        new DeviceRegistry(h.Paths).Register("PIN-AAA", "Phone");
 
         var reloaded = new DeviceRegistry(h.Paths);
 
@@ -106,7 +106,7 @@ public class DeviceRegistryTests
     {
         using var h = new Harness();
         var registry = new DeviceRegistry(h.Paths);
-        registry.Register("PIN-AAA", "Telefon");
+        registry.Register("PIN-AAA", "Phone");
 
         registry.SetEnabled("PIN-AAA", false);
 
@@ -115,7 +115,7 @@ public class DeviceRegistryTests
 
     [Theory]
     [InlineData("Galaxy S24 Ultra", "galaxy-s24-ultra-abcdef")]
-    [InlineData("  ", "urzadzenie-abcdef")]
+    [InlineData("  ", "device-abcdef")]
     [InlineData("Phone@#$%Żony", "phone-ony-abcdef")]
     public void DirectoryName_IsLegibleAndSafeForNtfs(string label, string expected)
     {
@@ -123,7 +123,7 @@ public class DeviceRegistryTests
     }
 }
 
-/// <summary>Tokeny parowania (§3.3).</summary>
+/// <summary>Pairing tokens (§3.3).</summary>
 public class PairingServiceTests
 {
     private static PairingService Service(FakeTimeProvider time) => new(time);
@@ -154,20 +154,20 @@ public class PairingServiceTests
     [Fact]
     public void AnUnknownToken_IsRejected()
     {
-        Assert.False(Service(new FakeTimeProvider()).TryConsume("cokolwiek"));
+        Assert.False(Service(new FakeTimeProvider()).TryConsume("anything"));
     }
 
     [Fact]
     public void QrPayload_ContainsTheServerKeyFingerprint()
     {
-        var payload = new QrPayload("PC", "PIN-SERWERA", "TOKEN", 8765, ["192.168.1.5:8765"], "filum-abc");
+        var payload = new QrPayload("PC", "SERVER-PIN", "TOKEN", 8765, ["192.168.1.5:8765"], "filum-abc");
 
         var encoded = PairingService.Encode(payload);
 
         Assert.StartsWith("filum1:", encoded);
         var json = Encoding.UTF8.GetString(FromBase64Url(encoded["filum1:".Length..]));
         var decoded = JsonSerializer.Deserialize<QrPayload>(json);
-        Assert.Equal("PIN-SERWERA", decoded!.Key);
+        Assert.Equal("SERVER-PIN", decoded!.Key);
         Assert.Equal("TOKEN", decoded.Token);
     }
 
@@ -251,7 +251,7 @@ public class AuthenticationTests
     {
         using var app = new FilumApp();
 
-        var response = await app.PostPairAsync(app.CreateClient(), "", "Telefon");
+        var response = await app.PostPairAsync(app.CreateClient(), "", "Phone");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -263,8 +263,8 @@ public class AuthenticationTests
         var client = app.CreateClient();
         var offer = await app.NewPairingAsync();
 
-        var first = await app.PostPairAsync(client, offer!.Payload.Token, "Telefon");
-        var second = await app.PostPairAsync(client, offer.Payload.Token, "Telefon");
+        var first = await app.PostPairAsync(client, offer!.Payload.Token, "Phone");
+        var second = await app.PostPairAsync(client, offer.Payload.Token, "Phone");
 
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, second.StatusCode);
@@ -288,8 +288,8 @@ public class AuthenticationTests
         using var app = new FilumApp();
         await app.PairAsync();
 
-        using var obcy = CertificateStore.InMemory().Certificate;
-        app.Certificates.Current = obcy;
+        using var foreign = CertificateStore.InMemory().Certificate;
+        app.Certificates.Current = foreign;
 
         var response = await app.CreateClient().GetAsync("/api/v1/ping");
 
@@ -344,7 +344,7 @@ public class AuthenticationTests
 /// </summary>
 public class PanelAccessTests
 {
-    private static readonly IPAddress Obcy = IPAddress.Parse("192.168.1.77");
+    private static readonly IPAddress Outsider = IPAddress.Parse("192.168.1.77");
 
     [Fact]
     public async Task Panel_FromLoopback_IsReachable()
@@ -359,7 +359,7 @@ public class PanelAccessTests
     [Fact]
     public async Task Panel_FromTheNetwork_IsRefused()
     {
-        using var app = new FilumApp { RemoteAddress = Obcy };
+        using var app = new FilumApp { RemoteAddress = Outsider };
 
         var response = await app.CreateClient().GetAsync("/");
 
@@ -371,7 +371,7 @@ public class PanelAccessTests
     {
         // Otherwise any device on the network could mint itself a token and pair without
         // the computer's owner knowing.
-        using var app = new FilumApp { RemoteAddress = Obcy };
+        using var app = new FilumApp { RemoteAddress = Outsider };
 
         var response = await app.CreateClient().GetAsync("/api/v1/pair/new");
 
@@ -381,7 +381,7 @@ public class PanelAccessTests
     [Fact]
     public async Task Status_FromTheNetwork_IsRefused()
     {
-        using var app = new FilumApp { RemoteAddress = Obcy };
+        using var app = new FilumApp { RemoteAddress = Outsider };
 
         var response = await app.CreateClient().GetAsync("/api/v1/admin/status");
 
@@ -410,8 +410,8 @@ public class PanelAccessTests
         using var app = new FilumApp();
         var offer = await app.NewPairingAsync();
 
-        app.RemoteAddress = Obcy;
-        var response = await app.PostPairAsync(app.CreateClient(), offer!.Payload.Token, "Telefon");
+        app.RemoteAddress = Outsider;
+        var response = await app.PostPairAsync(app.CreateClient(), offer!.Payload.Token, "Phone");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
@@ -437,7 +437,7 @@ public class PanelAccessTests
     }
 }
 
-/// <summary>Kod parowania rysowany przez panel.</summary>
+/// <summary>The pairing code drawn by the panel.</summary>
 public class PairingCodeRenderingTests
 {
     [Fact]

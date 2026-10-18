@@ -15,7 +15,8 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    // Silnik jest w całości za interfejsami, więc testuje się bez sieci, bazy i emulatora.
+    // The engine sits wholly behind interfaces, so it is tested without a network,
+    // a database or an emulator.
     testOptions {
         unitTests.all { it.useJUnitPlatform() }
     }
@@ -30,7 +31,7 @@ dependencies {
 
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.kotlinx.coroutines.test)
-    // Do wygenerowania pary kluczy klienta w tescie zgodnosci, bez Android Keystore.
+    // Generates the client key pair for the conformance test, without Android Keystore.
     testImplementation(libs.okhttp.tls)
     testRuntimeOnly(libs.junit.platform.launcher)
 }

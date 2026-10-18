@@ -15,8 +15,8 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    // KeyPin i PinnedTrustManager nie dotykają API Androida, więc ich testy idą
-    // na zwykłej maszynie wirtualnej - bez emulatora, w sekundach.
+    // KeyPin and PinnedTrustManager do not touch the Android API, so their tests run
+    // on an ordinary JVM - no emulator, in seconds.
     testOptions {
         unitTests.all { it.useJUnitPlatform() }
     }

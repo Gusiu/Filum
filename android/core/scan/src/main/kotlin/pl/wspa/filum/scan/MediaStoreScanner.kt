@@ -32,7 +32,7 @@ class MediaStoreScanner(
         MediaStore.getGeneration(context, volume)
 
     /**
-     * Pliki zmienione od podanej generacji.
+     * Files changed since the given generation.
      *
      * Returns `null` when the counter has gone backwards relative to the remembered value -
      * that means the index was rebuilt and forces a full walk, since the delta would be partial.

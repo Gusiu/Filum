@@ -239,7 +239,7 @@ class FakeTransport : SyncTransport {
         )
 
         fun outOfSpace(): ApiResult<FileChunkResponse> = ApiResult.failure(
-            HttpStatus.INSUFFICIENT_STORAGE, ErrorResponse("insufficient_storage", "brak miejsca"),
+            HttpStatus.INSUFFICIENT_STORAGE, ErrorResponse("insufficient_storage", "no space"),
         )
 
         fun manifestRejects(vararg paths: String): (ManifestRequest) -> ApiResult<ManifestResponse> = { request ->

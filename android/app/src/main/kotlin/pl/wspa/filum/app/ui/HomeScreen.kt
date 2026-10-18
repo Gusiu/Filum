@@ -62,7 +62,7 @@ fun HomeScreen(
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(server.label, style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "Klucz serwera: ${server.serverPin.take(12)}…",
+                        "Server key: ${server.serverPin.take(12)}…",
                         style = MaterialTheme.typography.bodySmall,
                         fontFamily = FontFamily.Monospace,
                     )
@@ -162,9 +162,9 @@ fun HomeScreen(
         HorizontalDivider()
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onOpenFolders) { Text("Foldery") }
-            OutlinedButton(onClick = onOpenLog) { Text("Dziennik") }
-            TextButton(onClick = onUnpair) { Text("Rozparuj") }
+            OutlinedButton(onClick = onOpenFolders) { Text("Folders") }
+            OutlinedButton(onClick = onOpenLog) { Text("Journal") }
+            TextButton(onClick = onUnpair) { Text("Unpair") }
         }
     }
 }
@@ -172,7 +172,7 @@ fun HomeScreen(
 @Composable
 private fun ScheduleSelector(current: Schedule, onChange: (Schedule) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Harmonogram", style = MaterialTheme.typography.titleSmall)
+        Text("Schedule", style = MaterialTheme.typography.titleSmall)
 
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -208,7 +208,7 @@ private fun ScheduleSelector(current: Schedule, onChange: (Schedule) -> Unit) {
 @Composable
 private fun IntegrityPolicySelector(current: IntegrityPolicy, onChange: (IntegrityPolicy) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Wykrywanie zmian", style = MaterialTheme.typography.titleSmall)
+        Text("Change detection", style = MaterialTheme.typography.titleSmall)
 
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -242,12 +242,12 @@ private fun IntegrityPolicySelector(current: IntegrityPolicy, onChange: (Integri
 }
 
 private fun label(policy: IntegrityPolicy): String = when (policy) {
-    IntegrityPolicy.FAST -> "Szybkie"
+    IntegrityPolicy.FAST -> "Fast"
     IntegrityPolicy.THOROUGH -> "Thorough"
 }
 
 private fun label(schedule: Schedule): String = when (schedule) {
     Schedule.MANUAL -> "Manual"
-    Schedule.DAILY -> "Codziennie"
+    Schedule.DAILY -> "Daily"
     Schedule.WEEKLY -> "Weekly"
 }

@@ -25,13 +25,12 @@ import javax.net.ssl.KeyManager
 
 /**
  * A conformance test between the implementations: **the real Kotlin client against the
- * prawdziwemu serwerowi w C#**, po prawdziwym mTLS.
+ * real C# server**, over real mTLS.
  *
  * Server and client are written independently and reconciled solely by docs/PROTOCOL.md.
  * The unit tests on each side check that each does what its author intended - only this
  * test checks that **the intentions agree**. It is the one place where a divergence in
- * header encoding, in mtime units
- * albo w semantyce wznawiania.
+ * header encoding, in mtime units or in the semantics of resuming would show.
  *
  * Run conditionally, because it needs a running server. The launching command sets the
  * environment variables; without them the test is skipped and does not break a normal build.
@@ -72,7 +71,7 @@ class EndToEndTest {
             endpoint = endpoint,
             token = pairingToken,
             certificateDer = clientCertificate.certificate.encoded,
-            label = "Klient testowy",
+            label = "Test client",
         )
         val pairResponse = assertInstanceOf(ApiResult.Ok::class.java, paired)
         println("paired, deviceKey=${(pairResponse.value as pl.wspa.filum.protocol.PairResponse).deviceKey}")
@@ -88,7 +87,7 @@ class EndToEndTest {
 
         // --- preparing files, including ones that break the NTFS rules ---
 
-        write(root, "DCIM/Camera/IMG_0001.JPG", "zawartosc zdjecia")
+        write(root, "DCIM/Camera/IMG_0001.JPG", "photo content")
         write(root, "Documents/zdjęcie-łąka.txt", "non-ascii name")
         write(root, "Movies/large.bin", "x".repeat(200_000))
 
@@ -102,14 +101,14 @@ class EndToEndTest {
         // where such a file cannot be created, so we supply that path as the canonical one
         // over a safely named file. The server still receives exactly what it would get from
         // a phone, so the sanitisation really is exercised.
-        val zDwukropkiem = File(root, "Documents/raport-v2.txt").apply {
-            writeText("dwukropek w nazwie")
+        val withColon = File(root, "Documents/report-v2.txt").apply {
+            writeText("a colon in the name")
             setLastModified(1_756_400_000_000)
         }
         scanned += pl.wspa.filum.scan.ScannedFile(
             canonicalPath = "Documents/report:v2.txt",
-            absolutePath = zDwukropkiem.absolutePath,
-            size = zDwukropkiem.length(),
+            absolutePath = withColon.absolutePath,
+            size = withColon.length(),
             mtimeSeconds = 1_756_400_000,
         )
 

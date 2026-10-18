@@ -29,11 +29,11 @@ class EndpointRacerTest {
 
     private val lan = ServerEndpoint("192.168.1.10", 8765, EndpointKind.LAN)
     private val overlay = ServerEndpoint("100.64.10.20", 8765, EndpointKind.OVERLAY)
-    private val martwy = ServerEndpoint("10.0.0.1", 8765, EndpointKind.LAN)
+    private val dead = ServerEndpoint("10.0.0.1", 8765, EndpointKind.LAN)
 
     private fun ping(protocol: Int = Protocol.VERSION) = PingResponse(
         protocol = protocol,
-        server = ServerInfo("DESKTOP-PC", "1.0.0", "instancja"),
+        server = ServerInfo("DESKTOP-PC", "1.0.0", "instance"),
         endpoints = listOf("192.168.1.10:8765"),
         storage = StorageInfo(freeBytes = 500_000_000_000, totalBytes = 1_000_000_000_000),
         device = DeviceInfo("Galaxy S24 Ultra", fileCount = 0, bytesStored = 0),
@@ -45,11 +45,11 @@ class EndpointRacerTest {
             when (endpoint) {
                 overlay -> { delay(500); ApiResult.Ok(ping()) }
                 lan -> { delay(20); ApiResult.Ok(ping()) }
-                else -> ApiResult.Unreachable(IOException("brak trasy"))
+                else -> ApiResult.Unreachable(IOException("no route"))
             }
         })
 
-        val outcome = racer.fastest(listOf(overlay, lan, martwy))
+        val outcome = racer.fastest(listOf(overlay, lan, dead))
 
         val reached = assertInstanceOf(RaceOutcome.Reached::class.java, outcome)
         assertEquals(lan, reached.endpoint)
@@ -65,7 +65,7 @@ class EndpointRacerTest {
             else { delay(100_000); ApiResult.Ok(ping()) }
         })
 
-        val outcome = racer.fastest(listOf(martwy, overlay))
+        val outcome = racer.fastest(listOf(dead, overlay))
 
         assertInstanceOf(RaceOutcome.Reached::class.java, outcome)
         assertEquals(overlay, (outcome as RaceOutcome.Reached).endpoint)
@@ -75,7 +75,7 @@ class EndpointRacerTest {
     fun `probing of the losing routes is cancelled`() {
         // Without cancellation the phone would hold connections it will never use -
         // during overnight work on battery that is no small thing.
-        val zakonczone = AtomicInteger()
+        val finished = AtomicInteger()
 
         runTest {
             val racer = EndpointRacer(probe = { endpoint ->
@@ -83,15 +83,15 @@ class EndpointRacerTest {
                     ApiResult.Ok(ping())
                 } else {
                     delay(60_000)
-                    zakonczone.incrementAndGet()
+                    finished.incrementAndGet()
                     ApiResult.Ok(ping())
                 }
             })
 
-            racer.fastest(listOf(lan, overlay, martwy))
+            racer.fastest(listOf(lan, overlay, dead))
         }
 
-        assertEquals(0, zakonczone.get())
+        assertEquals(0, finished.get())
     }
 
     @Test
@@ -118,7 +118,7 @@ class EndpointRacerTest {
             timeoutMillis = 300,
         )
 
-        val outcome = racer.fastest(listOf(lan, martwy))
+        val outcome = racer.fastest(listOf(lan, dead))
 
         val reached = assertInstanceOf(RaceOutcome.Reached::class.java, outcome)
         assertEquals(lan, reached.endpoint)
@@ -179,15 +179,15 @@ class EndpointRacerTest {
     fun `duplicate addresses are probed once`() = runTest {
         // The route set is merged from the pairing code, the cache and the ping response
         // (§4.4), so duplicates are the norm rather than the exception.
-        val wywolania = AtomicInteger()
+        val calls = AtomicInteger()
         val racer = EndpointRacer(probe = {
-            wywolania.incrementAndGet()
-            ApiResult.Unreachable(IOException("brak"))
+            calls.incrementAndGet()
+            ApiResult.Unreachable(IOException("unreachable"))
         })
 
         racer.fastest(listOf(lan, lan, lan))
 
-        assertEquals(1, wywolania.get())
+        assertEquals(1, calls.get())
     }
 
     @Test
@@ -236,7 +236,7 @@ class ServerEndpointTest {
         assertEquals(null, ServerEndpoint.parse("   ", EndpointKind.LAN))
         assertEquals(null, ServerEndpoint.parse("host:0", EndpointKind.LAN))
         assertEquals(null, ServerEndpoint.parse("host:99999", EndpointKind.LAN))
-        assertEquals(null, ServerEndpoint.parse("[niedomkniete", EndpointKind.LAN))
+        assertEquals(null, ServerEndpoint.parse("[unclosed", EndpointKind.LAN))
     }
 
     @Test

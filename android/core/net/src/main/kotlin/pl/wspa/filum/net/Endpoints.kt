@@ -3,7 +3,7 @@ package pl.wspa.filum.net
 /**
  * Where this route came from. The kind decides two things: whether the socket has to be
  * bound to a specific network (protocol §4.3) and which transfer policy applies
- * po jej wygraniu (§3.6 architektury).
+ * once it has won (architecture §3.6).
  */
 enum class EndpointKind {
     /** Found over mDNS on the current local network. */
@@ -43,7 +43,7 @@ data class ServerEndpoint(
 
     companion object {
         /**
-         * Rozbiera zapis `host:port` albo `[ipv6]:port` z odpowiedzi na ping (§4.4) lub
+         * Parses `host:port` or `[ipv6]:port` from the ping response (§4.4) or
          * from the pairing code. It returns null rather than throwing, because the address list
          * comes off the network and one broken entry must not wreck the whole route refresh.
          */

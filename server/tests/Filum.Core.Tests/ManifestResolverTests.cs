@@ -100,13 +100,13 @@ public class ManifestResolverTests
 
         var result = h.Manifest.Resolve(Harness.Slug,
         [
-            Entry("../ucieczka.txt", 10, Mtime),
-            Entry("DCIM/dobry.jpg", 10, Mtime),
+            Entry("../escape.txt", 10, Mtime),
+            Entry("DCIM/good.jpg", 10, Mtime),
         ]);
 
         Assert.Single(result.Needed);
         var rejected = Assert.Single(result.Rejected);
-        Assert.Equal("../ucieczka.txt", rejected.Path);
+        Assert.Equal("../escape.txt", rejected.Path);
         Assert.Equal("traversal", rejected.Error);
     }
 

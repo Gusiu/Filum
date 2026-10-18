@@ -12,8 +12,7 @@ namespace Filum.Core;
 /// from the phone. Storage media can silently corrupt a byte, and a backup that does not
 /// know it is a backup of an illusion.
 ///
-/// The operation is expensive and started deliberately by the user, never in an automatic
-/// automatycznym.
+/// The operation is expensive and started deliberately by the user, never automatically.
 /// </summary>
 public sealed class VerifyService(StoragePaths paths, FilumOptions options)
 {
@@ -34,7 +33,7 @@ public sealed class VerifyService(StoragePaths paths, FilumOptions options)
                                       out var absolute, out _, out _))
             {
                 // An unacceptable path could never have reached the disk, so
-                // z punktu widzenia telefonu jest po prostu nieobecna.
+                // from the phone's point of view it is simply missing.
                 missing.Add(entry.Path);
                 continue;
             }

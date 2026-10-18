@@ -56,14 +56,14 @@ public class BundleReaderTests
         using var h = new Harness();
 
         var results = await ReadAsync(h, Bundle(
-            ("DCIM/a.jpg", "zawartosc a", null),
-            ("Documents/b.txt", "zawartosc b, dluzsza", null),
+            ("DCIM/a.jpg", "content a", null),
+            ("Documents/b.txt", "content b, longer", null),
             ("c.bin", "c", null)));
 
         Assert.Equal(3, results.Count);
         Assert.All(results, r => Assert.True(r.Ok, r.Error));
-        Assert.Equal("zawartosc a", Encoding.UTF8.GetString(h.ReadStored("DCIM/a.jpg")));
-        Assert.Equal("zawartosc b, dluzsza", Encoding.UTF8.GetString(h.ReadStored("Documents/b.txt")));
+        Assert.Equal("content a", Encoding.UTF8.GetString(h.ReadStored("DCIM/a.jpg")));
+        Assert.Equal("content b, longer", Encoding.UTF8.GetString(h.ReadStored("Documents/b.txt")));
         Assert.Equal("c", Encoding.UTF8.GetString(h.ReadStored("c.bin")));
     }
 
@@ -110,18 +110,18 @@ public class BundleReaderTests
         using var h = new Harness();
 
         var results = await ReadAsync(h, Bundle(
-            ("dobry.txt", "poprawna zawartosc", null),
+            ("good.txt", "valid content", null),
             ("bad.txt", "content", Digest(Encoding.UTF8.GetBytes("something else"))),
-            ("kolejny.txt", "tez poprawna", null)));
+            ("next.txt", "also valid", null)));
 
         Assert.True(results[0].Ok);
         Assert.False(results[1].Ok);
         Assert.Equal("digest_mismatch", results[1].Error);
         Assert.True(results[2].Ok, "the file after the rejected one must arrive - the frames did not slip");
 
-        Assert.True(h.StoredExists("dobry.txt"));
+        Assert.True(h.StoredExists("good.txt"));
         Assert.False(h.StoredExists("zly.txt"));
-        Assert.True(h.StoredExists("kolejny.txt"));
+        Assert.True(h.StoredExists("next.txt"));
     }
 
     [Fact]
@@ -130,8 +130,8 @@ public class BundleReaderTests
         using var h = new Harness();
 
         var results = await ReadAsync(h, Bundle(
-            ("../ucieczka.txt", "x", null),
-            ("porzadny.txt", "y", null)));
+            ("../escape.txt", "x", null),
+            ("proper.txt", "y", null)));
 
         Assert.False(results[0].Ok);
         Assert.Equal("traversal", results[0].Error);
@@ -183,7 +183,7 @@ public class BundleReaderTests
         using var h = new Harness();
 
         var error = await Assert.ThrowsAsync<BundleFormatException>(
-            () => ReadAsync(h, Bundle(("a.txt", "x", "nie-jest-skrotem"))));
+            () => ReadAsync(h, Bundle(("a.txt", "x", "not-a-digest"))));
 
         Assert.Contains("digest", error.Message);
     }
@@ -200,7 +200,7 @@ public class BundleReaderTests
         await Assert.ThrowsAsync<BundleFormatException>(() => ReadAsync(h, bundle));
     }
 
-    // --- limity z odpowiedzi na ping ---
+    // --- limits from the ping response ---
 
     [Fact]
     public async Task ABundleOverTheFileCount_IsRejected()

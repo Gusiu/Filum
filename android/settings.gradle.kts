@@ -16,10 +16,10 @@ dependencyResolutionManagement {
 
 rootProject.name = "Filum"
 
-// :core:protocol jest czystym modułem JVM, bez zależności od Androida.
-// Dzięki temu jego testy uruchamiają się na zwykłej maszynie wirtualnej,
-// bez emulatora i bez Android SDK - a to właśnie tutaj mieszkają reguły,
-// których błąd kosztuje ciche skasowanie pliku.
+// :core:protocol is a plain JVM module with no dependency on Android.
+// Its tests therefore run on an ordinary JVM, with no emulator and no Android
+// SDK - and this is where the rules live whose mistakes cost a file silently
+// destroyed.
 include(":core:protocol")
 include(":core:crypto")
 include(":core:net")

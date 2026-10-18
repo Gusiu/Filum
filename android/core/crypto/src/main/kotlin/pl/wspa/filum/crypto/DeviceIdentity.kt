@@ -30,15 +30,15 @@ import javax.security.auth.x500.X500Principal
  * neither BouncyCastle nor any other library for building X.509.
  */
 /**
- * Gdzie fizycznie mieszka klucz prywatny.
+ * Where the private key physically lives.
  *
  * The distinction is practical, not merely descriptive. StrongBox is a separate chip
- * scalony odporny na atak fizyczny; TEE to wydzielony tryb tego samego procesora -
+ * hardened against physical attack; a TEE is an isolated mode of the same processor -
  * far better than nothing, but exposed to a class of attacks StrongBox is not.
  * Lower-end devices usually have only a TEE.
  */
 enum class KeySecurity {
-    /** Osobny element bezpieczny (Samsung Knox Vault i podobne). */
+    /** A separate secure element (Samsung Knox Vault and the like). */
     STRONGBOX,
 
     /** The processor's trusted execution environment. */
@@ -103,7 +103,7 @@ class DeviceIdentity private constructor(
 
             if (certificate == null || key == null) {
                 // The entry is incomplete - the Keystore can end up like this after a failed
-                // aktualizacji systemu. Odtwarzamy od zera; skutkiem jest ponowne parowanie.
+                // system update. We start again from scratch; the cost is pairing again.
                 Log.w(TAG, "Incomplete Keystore entry for $alias, regenerating")
                 store.deleteEntry(alias)
                 return generate(alias)

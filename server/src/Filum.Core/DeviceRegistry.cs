@@ -126,7 +126,7 @@ public sealed class DeviceRegistry
     /// <summary>
     /// The device's directory name. It has to be legible in Explorer (I3), so it is built
     /// from the label rather than from the key fingerprint. Six characters of the
-    /// dwa telefony o tej samej nazwie.
+    /// fingerprint tell apart two phones with the same name.
     /// </summary>
     public static string MakeSlug(string label, string pin)
     {
@@ -149,7 +149,7 @@ public sealed class DeviceRegistry
 
         var slug = builder.ToString().Trim('-');
         if (slug.Length > 40) slug = slug[..40].TrimEnd('-');
-        if (slug.Length == 0) slug = "urzadzenie";
+        if (slug.Length == 0) slug = "device";
 
         var suffix = new string(pin.Where(char.IsAsciiLetterOrDigit).Take(6).ToArray()).ToLowerInvariant();
         return $"{slug}-{suffix}";

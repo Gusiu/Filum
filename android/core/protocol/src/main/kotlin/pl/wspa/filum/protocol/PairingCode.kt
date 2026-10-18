@@ -64,7 +64,7 @@ object PairingCode {
 
     /**
      * We add the padding ourselves, because the protocol uses base64url without it and the decoder
-     * z biblioteki standardowej bywa co do tego wybredny.
+     * from the standard library can be fussy about that.
      */
     private fun decodeBase64Url(value: String): ByteArray {
         val padded = when (value.length % 4) {

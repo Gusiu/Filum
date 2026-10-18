@@ -64,7 +64,7 @@ public sealed class BundleReader(TransferStore transfers, FilumOptions options)
     }
 
     /// <summary>
-    /// Zapisuje jeden plik z paczki.
+    /// Stores one file from a bundle.
     ///
     /// Goes through the ordinary <see cref="TransferStore"/>, so the same path applies as
     /// for a single PUT: digest check, filing the previous version away, atomic move. A

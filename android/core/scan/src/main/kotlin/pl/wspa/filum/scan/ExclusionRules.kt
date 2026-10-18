@@ -74,7 +74,7 @@ class ExclusionRules(
         /**
          * Prefixes of filenames created by the system.
          *
-         * `.trashed-` i `.pending-` to files w koszu MediaStore i files w trakcie
+         * `.trashed-` and `.pending-` mark files in the MediaStore trash and files still
          * being written - the first will vanish shortly, the second are not complete yet.
          */
         val EXCLUDED_NAME_PREFIXES = listOf(
@@ -86,8 +86,8 @@ class ExclusionRules(
          * Directories worth showing the user as candidates for exclusion.
          *
          * They are not excluded by default - the decision is the user's. But these are the ones
-         * that most often hold reproducible or very large data: downloads
-         * instalatory, filmy z gier, podcasty.
+         * that most often hold reproducible or very large data: downloads and
+         * installers, game videos, podcasts.
          */
         val SUGGESTED_FOR_EXCLUSION = setOf(
             "Download",

@@ -22,8 +22,8 @@ android {
 }
 
 
-// Schemat bazy trafia do repozytorium. Dzięki temu każda zmiana modelu jest widoczna
-// w przeglądzie zmian, a migracje da się napisać wobec konkretnego, zapisanego stanu.
+// The database schema goes into the repository. Every model change is then visible
+// in review, and migrations can be written against a specific, recorded state.
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }

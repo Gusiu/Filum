@@ -54,7 +54,7 @@ public static class TestVectors
             var columns = line.Split('\t');
             if (columns.Length != 3)
                 throw new InvalidOperationException(
-                    $"{RelativePath}: oczekiwano 3 kolumn, jest {columns.Length}: {line}");
+                    $"{RelativePath}: expected 3 columns, got {columns.Length}: {line}");
 
             vectors.Add(new PathVector(Unescape(columns[0]), Unescape(columns[1]), columns[2]));
         }

@@ -4,7 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * Modele wymiany z serwerem. Lustro `Filum.Protocol.Dtos` po stronie .NET -
+ * The models exchanged with the server, mirroring `Filum.Protocol.Dtos` on the .NET side -
  * the field names are normative and described in docs/PROTOCOL.md.
  */
 
@@ -22,7 +22,7 @@ object Protocol {
     const val PREFIX = "/api/v1"
 }
 
-// --- parowanie (§3.3) ---
+// --- pairing (§3.3) ---
 
 /**
  * The payload encoded in the QR code. Single-letter field names keep the code dense and
@@ -101,7 +101,7 @@ data class PingResponse(
  * negligible.
  */
 /**
- * Polityka wykrywania zmian (ADR-016).
+ * The change detection policy (ADR-016).
  *
  * It lives in the protocol rather than the engine, because it decides the manifest's
  * shape: in thorough mode an entry carries a digest, in fast mode it does not. The user's
@@ -151,7 +151,7 @@ data class ManifestRequest(
         /** The session covers the device's complete file set; only then does the server compute orphans. */
         const val MODE_FULL = "full"
 
-        /** Przyrost od poprzedniego skanu. */
+        /** The increment since the previous scan. */
         const val MODE_DELTA = "delta"
     }
 }

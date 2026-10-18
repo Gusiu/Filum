@@ -22,11 +22,11 @@ captures/
 *.iml
 .vscode/
 
-# --- Filum: material kryptograficzny generowany przy pierwszym uruchomieniu ---
+# --- Filum: key material generated on the first run ---
 server.pfx
 server-key.pem
 server-cert.pem
 
-# --- Filum: lokalne katalogi testowe ---
+# --- Filum: local test directories ---
 /testdata/
 /backup-root/

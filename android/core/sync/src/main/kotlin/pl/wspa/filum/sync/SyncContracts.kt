@@ -11,12 +11,12 @@ import pl.wspa.filum.scan.ScannedFile
 import java.io.File
 
 /**
- * Kontrakty silnika synchronizacji.
+ * The sync engine's contracts.
  *
  * The engine knows neither OkHttp nor Room. This is not abstraction for its own sake:
  * the decisions taken here - when to stop, what to retry, what to call permanently failed -
  * are the hardest part of the whole client and have to be testable without a network,
- * bez bazy i bez emulatora.
+ * a database or an emulator.
  */
 
 /** The conversation with the server, already bound to a specific route. */
@@ -38,7 +38,7 @@ interface SyncTransport {
     suspend fun putBundle(entries: List<BundleEntry>): ApiResult<BundleResponse>
 }
 
-/** Pozycja kolejki widziana przez silnik. */
+/** A queue entry as the engine sees it. */
 data class QueuedFile(
     val canonicalPath: String,
     val absolutePath: String,

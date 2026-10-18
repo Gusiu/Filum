@@ -9,7 +9,7 @@ import java.util.ArrayDeque
  * Used on the first scan, after a detected MediaStore counter reset, and periodically as
  * reconciliation. It returns a [Sequence] rather than a list: across a hundred thousand
  * files, collecting everything into memory at once is a needless risk, and the consumer
- * przetwarzamy je partiami po 2000.
+ * processes them in batches of 2000 anyway.
  *
  * The walk is iterative, not recursive - deep trees must not overflow the stack.
  */

@@ -9,7 +9,7 @@ import javax.net.ssl.X509TrustManager
 /** The server presented a key we do not know. */
 class PinMismatchException(expected: String, actual: String) : CertificateException(
     "The server key fingerprint does not match the one remembered at pairing time. " +
-        "Oczekiwano $expected, otrzymano $actual."
+        "Expected $expected, got $actual."
 )
 
 /**

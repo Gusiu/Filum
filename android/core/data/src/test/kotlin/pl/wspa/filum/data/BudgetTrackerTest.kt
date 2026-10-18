@@ -37,9 +37,9 @@ class BudgetTrackerTest {
     private val hour = BudgetTracker.BUCKET_MILLIS
 
     /** A whole hour, so that bucket arithmetic reads clearly in the assertions. */
-    private val poczatek = 1_756_400_000_000L / hour * hour
+    private val origin = 1_756_400_000_000L / hour * hour
 
-    private fun tracker(dao: BudgetDao, now: Long = poczatek) = BudgetTracker(dao) { now }
+    private fun tracker(dao: BudgetDao, now: Long = origin) = BudgetTracker(dao) { now }
 
     @Test
     fun `a fresh budget allows the full five-hour window`() = runTest {
@@ -60,7 +60,7 @@ class BudgetTrackerTest {
     @Test
     fun `time spent reduces the remaining budget`() = runTest {
         val dao = FakeBudgetDao()
-        val start = poczatek
+        val start = origin
 
         tracker(dao, start).record(start, start + 2 * hour)
 
@@ -73,7 +73,7 @@ class BudgetTrackerTest {
         // A night cycle runs from 23:40 to 01:20. Dropping all of it into one bucket
         // would break the way the rolling window advances.
         val dao = FakeBudgetDao()
-        val start = poczatek + 40 * 60_000
+        val start = origin + 40 * 60_000
         val end = start + 100 * 60_000
 
         tracker(dao).record(start, end)
@@ -92,21 +92,21 @@ class BudgetTrackerTest {
         // between a rolling window and a reset at midnight, and it decides whether the
         // night cycle starts at all or gets killed halfway.
         val dao = FakeBudgetDao()
-        val wczoraj = poczatek
+        val yesterday = origin
 
-        tracker(dao, wczoraj).record(wczoraj, wczoraj + 4 * hour)
+        tracker(dao, yesterday).record(yesterday, yesterday + 4 * hour)
 
-        assertEquals(2 * 3600, tracker(dao, wczoraj + 25 * hour).usedSeconds())
+        assertEquals(2 * 3600, tracker(dao, yesterday + 25 * hour).usedSeconds())
     }
 
     @Test
     fun `usage older than the whole window stops counting`() = runTest {
         val dao = FakeBudgetDao()
-        val wczoraj = poczatek
+        val yesterday = origin
 
-        tracker(dao, wczoraj).record(wczoraj, wczoraj + 4 * hour)
+        tracker(dao, yesterday).record(yesterday, yesterday + 4 * hour)
 
-        val now = wczoraj + 30 * hour
+        val now = yesterday + 30 * hour
         assertEquals(0, tracker(dao, now).usedSeconds())
         assertEquals(BudgetTracker.SAFE_LIMIT_SECONDS, tracker(dao, now).remainingSeconds())
     }
@@ -114,7 +114,7 @@ class BudgetTrackerTest {
     @Test
     fun `an exhausted budget does not go below zero`() = runTest {
         val dao = FakeBudgetDao()
-        val start = poczatek
+        val start = origin
 
         tracker(dao, start).record(start, start + 10 * hour)
 
@@ -126,7 +126,7 @@ class BudgetTrackerTest {
     @Test
     fun `a remainder under a minute does not justify raising the service`() = runTest {
         val dao = FakeBudgetDao()
-        val start = poczatek
+        val start = origin
         val prawieCaly = BudgetTracker.SAFE_LIMIT_SECONDS - 30
 
         dao.add(BudgetTracker.bucketOf(start), prawieCaly)
@@ -139,11 +139,11 @@ class BudgetTrackerTest {
     @Test
     fun `cleanup removes buckets outside the window`() = runTest {
         val dao = FakeBudgetDao()
-        val stary = poczatek
-        dao.add(BudgetTracker.bucketOf(stary), 600)
-        dao.add(BudgetTracker.bucketOf(stary + 30 * hour), 600)
+        val old = origin
+        dao.add(BudgetTracker.bucketOf(old), 600)
+        dao.add(BudgetTracker.bucketOf(old + 30 * hour), 600)
 
-        tracker(dao, stary + 30 * hour).prune()
+        tracker(dao, old + 30 * hour).prune()
 
         assertEquals(1, dao.buckets.size)
     }
@@ -152,8 +152,8 @@ class BudgetTrackerTest {
     fun `recording an empty or backwards interval is skipped`() = runTest {
         val dao = FakeBudgetDao()
 
-        tracker(dao).record(poczatek, poczatek)
-        tracker(dao).record(poczatek + hour, poczatek)
+        tracker(dao).record(origin, origin)
+        tracker(dao).record(origin + hour, origin)
 
         assertTrue(dao.buckets.isEmpty())
     }

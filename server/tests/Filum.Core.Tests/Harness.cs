@@ -28,7 +28,7 @@ public sealed class TempRoot : IDisposable
 /// <summary>The storage engine assembled over a temp directory, ready for use in a test.</summary>
 public sealed class Harness : IDisposable
 {
-    public const string Slug = "telefon";
+    public const string Slug = "phone";
 
     private readonly TempRoot _root = new();
 

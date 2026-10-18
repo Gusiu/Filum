@@ -11,7 +11,7 @@ import java.nio.file.Path
 import java.text.Normalizer
 
 /**
- * Normalizacja czasu modyfikacji (ADR-011).
+ * Normalising the modification time (ADR-011).
  *
  * This looks like a detail and is one of the two things that can turn a working
  * application into one that uploads the whole library over and over.
@@ -33,9 +33,9 @@ class MtimeTest {
     fun `both sources give the same result for the same instant`() {
         // This is the whole point of the rule: a file read once from MediaStore and once
         // from the filesystem has to have an identical identity, or it returns every scan.
-        val sekundy = 1_756_400_000L
+        val epochSeconds = 1_756_400_000L
 
-        assertEquals(Mtime.fromSeconds(sekundy), Mtime.fromMillis(sekundy * 1000 + 750))
+        assertEquals(Mtime.fromSeconds(epochSeconds), Mtime.fromMillis(epochSeconds * 1000 + 750))
     }
 
     @Test
@@ -97,21 +97,21 @@ class ExclusionRulesTest {
     @Test
     fun `directories inaccessible since Android 11 are skipped`() {
         assertTrue(rules.isExcluded("Android/data/com.example/file.dat"))
-        assertTrue(rules.isExcluded("Android/obb/com.gra/dane.obb"))
+        assertTrue(rules.isExcluded("Android/obb/com.game/data.obb"))
     }
 
     @Test
     fun `Android media is NOT skipped`() {
         // WhatsApp lives there among others - exactly the data a user does not want to
         // lose. The directory is accessible, so we cover it.
-        assertFalse(rules.isExcluded("Android/media/com.whatsapp/WhatsApp/Media/foto.jpg"))
+        assertFalse(rules.isExcluded("Android/media/com.whatsapp/WhatsApp/Media/photo.jpg"))
     }
 
     @Test
     fun `thumbnails and caches are skipped at any depth`() {
         assertTrue(rules.isExcluded("DCIM/.thumbnails/1234.jpg"))
         assertTrue(rules.isExcluded("Pictures/album/.thumbnails/x.jpg"))
-        assertTrue(rules.isExcluded("Documents/cache/tymczasowy.bin"))
+        assertTrue(rules.isExcluded("Documents/cache/temp.bin"))
     }
 
     @Test
@@ -123,13 +123,13 @@ class ExclusionRulesTest {
     @Test
     fun `ordinary files pass through`() {
         assertFalse(rules.isExcluded("DCIM/Camera/IMG_0001.JPG"))
-        assertFalse(rules.isExcluded("Documents/praca/rozdzial.docx"))
-        assertFalse(rules.isExcluded("Download/instalator.apk"))
+        assertFalse(rules.isExcluded("Documents/thesis/chapter.docx"))
+        assertFalse(rules.isExcluded("Download/installer.apk"))
     }
 
     @Test
     fun `a directory name resembling an excluded one is not excluded`() {
-        assertFalse(rules.isExcluded("Pictures/cacheteka/foto.jpg"))
+        assertFalse(rules.isExcluded("Pictures/cachet/photo.jpg"))
         assertFalse(rules.isExcluded("Android/dataset/file.txt"))
     }
 
@@ -140,14 +140,14 @@ class ExclusionRulesTest {
         assertTrue(custom.isExcluded("Download/large.iso"))
         assertTrue(custom.isExcluded("Movies/scratch/clip.mp4"))
         assertTrue(custom.isExcluded("Android/data/x/y"), "the defaults still apply")
-        assertFalse(custom.isExcluded("Movies/wakacje.mp4"))
+        assertFalse(custom.isExcluded("Movies/holiday.mp4"))
     }
 
     @Test
     fun `the default exclusions can be turned off`() {
-        val gole = ExclusionRules(userPrefixes = emptyList(), includeDefaults = false)
+        val bare = ExclusionRules(userPrefixes = emptyList(), includeDefaults = false)
 
-        assertFalse(gole.isExcluded("Android/data/x/y"))
+        assertFalse(bare.isExcluded("Android/data/x/y"))
     }
 
     @Test
@@ -183,14 +183,14 @@ class FilesystemScannerTest {
     fun `it finds files across the whole tree`(@TempDir dir: Path) {
         val root = dir.toFile()
         file(root, "DCIM/Camera/IMG_0001.JPG", "aaa")
-        file(root, "Documents/praca/rozdzial.txt", "bbbb")
-        file(root, "muzyka.mp3", "cc")
+        file(root, "Documents/thesis/chapter.txt", "bbbb")
+        file(root, "music.mp3", "cc")
 
         val found = scanner(root).walk().associateBy { it.canonicalPath }
 
         assertEquals(3, found.size)
         assertEquals(3, found["DCIM/Camera/IMG_0001.JPG"]!!.size)
-        assertEquals(4, found["Documents/praca/rozdzial.txt"]!!.size)
+        assertEquals(4, found["Documents/thesis/chapter.txt"]!!.size)
     }
 
     @Test
@@ -205,21 +205,21 @@ class FilesystemScannerTest {
     fun `an excluded subtree is never visited`(@TempDir dir: Path) {
         val root = dir.toFile()
         file(root, "Android/data/com.example/large.dat", "x")
-        file(root, "Android/media/com.whatsapp/foto.jpg", "y")
+        file(root, "Android/media/com.whatsapp/photo.jpg", "y")
         file(root, "DCIM/a.jpg", "z")
 
         val paths = scanner(root).walk().map { it.canonicalPath }.toSet()
 
-        assertEquals(setOf("Android/media/com.whatsapp/foto.jpg", "DCIM/a.jpg"), paths)
+        assertEquals(setOf("Android/media/com.whatsapp/photo.jpg", "DCIM/a.jpg"), paths)
     }
 
     @Test
     fun `a file being written right now is skipped`(@TempDir dir: Path) {
         // Sending half a recording would leave a file on the server that looks
-        // na kompletny, a nie jest.
+        // complete but is not.
         val root = dir.toFile()
         file(root, "Movies/recording.mp4", "hi", mtime = now - 5)
-        file(root, "Movies/gotowy.mp4", "calosc", mtime = now - 600)
+        file(root, "Movies/finished.mp4", "whole", mtime = now - 600)
 
         val skipped = mutableListOf<String>()
         val found = FilesystemScanner(
@@ -227,7 +227,7 @@ class FilesystemScannerTest {
             onSkipped = { path, _ -> skipped += path },
         ).walk().map { it.canonicalPath }.toList()
 
-        assertEquals(listOf("Movies/gotowy.mp4"), found)
+        assertEquals(listOf("Movies/finished.mp4"), found)
         assertEquals(listOf("Movies/recording.mp4"), skipped)
     }
 
@@ -235,16 +235,16 @@ class FilesystemScannerTest {
     fun `empty files are skipped`(@TempDir dir: Path) {
         val root = dir.toFile()
         file(root, "pusty.txt", "")
-        file(root, "pelny.txt", "x")
+        file(root, "complete.txt", "x")
 
-        assertEquals(listOf("pelny.txt"), scanner(root).walk().map { it.canonicalPath }.toList())
+        assertEquals(listOf("complete.txt"), scanner(root).walk().map { it.canonicalPath }.toList())
     }
 
     @Test
     fun `a deep tree does not overflow the stack`(@TempDir dir: Path) {
         val root = dir.toFile()
-        val deep = (1..200).joinToString("/") { "poziom$it" }
-        file(root, "$deep/na-dnie.txt", "x")
+        val deep = (1..200).joinToString("/") { "level$it" }
+        file(root, "$deep/at-the-bottom.txt", "x")
 
         assertEquals(1, scanner(root).walk().count())
     }
@@ -252,9 +252,9 @@ class FilesystemScannerTest {
     @Test
     fun `the walk is lazy`(@TempDir dir: Path) {
         // Sequence, not List: across a hundred thousand files, collecting everything at
-        // jest niepotrzebnym ryzykiem, a i tak przetwarzamy partiami po 2000.
+        // once is a needless risk, and we process in batches of 2000 anyway.
         val root = dir.toFile()
-        repeat(50) { file(root, "katalog$it/file.txt", "x") }
+        repeat(50) { file(root, "folder$it/file.txt", "x") }
 
         assertEquals(5, scanner(root).walk().take(5).count())
     }

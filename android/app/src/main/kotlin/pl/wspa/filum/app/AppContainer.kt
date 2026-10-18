@@ -139,10 +139,10 @@ class PairingController(private val container: AppContainer) {
     }
 
     private fun describe(security: KeySecurity): String = when (security) {
-        KeySecurity.STRONGBOX -> "osobny element bezpieczny (StrongBox)"
+        KeySecurity.STRONGBOX -> "a separate secure element (StrongBox)"
         KeySecurity.TRUSTED_ENVIRONMENT -> "the processor's trusted environment (TEE)"
         KeySecurity.SOFTWARE -> "process memory - no hardware backing"
-        KeySecurity.UNKNOWN -> "nieustalony poziom zabezpieczenia"
+        KeySecurity.UNKNOWN -> "an undetermined protection level"
     }
 
     suspend fun unpair() {

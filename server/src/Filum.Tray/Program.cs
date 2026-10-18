@@ -5,11 +5,11 @@ using Filum.Protocol;
 namespace Filum.Tray;
 
 /// <summary>
-/// Ikona Filum w zasobniku systemowym.
+/// The Filum icon in the system tray.
 ///
 /// Gives the application a physical presence in the system: at a glance the user can see
 /// whether the server is running, and right-click reaches what would otherwise need hunting
-/// okna - panel i katalog kopii.
+/// for - the panel and the backup directory.
 /// </summary>
 internal static class Program
 {

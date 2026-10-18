@@ -15,15 +15,15 @@ import org.junit.jupiter.params.provider.ValueSource
 class PathRulesTest {
 
     @ParameterizedTest(name = "{0}")
-    @MethodSource("wektory")
+    @MethodSource("pathVectors")
     fun `sanitize matches the vector`(vector: PathVector) {
         when (val result = PathRules.sanitize(vector.input)) {
             is SanitizeResult.Rejected -> {
-                assertTrue(vector.isRejection, "nieoczekiwane odrzucenie: ${result.reason}")
+                assertTrue(vector.isRejection, "unexpected rejection: ${result.reason}")
                 assertEquals(vector.expectedRejection, result.reason)
             }
             is SanitizeResult.Success -> {
-                assertTrue(!vector.isRejection, "oczekiwano odrzucenia, otrzymano ${result.stored}")
+                assertTrue(!vector.isRejection, "expected a rejection, got ${result.stored}")
                 assertEquals(vector.expected, result.stored)
             }
         }
@@ -83,8 +83,8 @@ class PathRulesTest {
     @Test
     fun `the collision suffix differs by letter case`() {
         assertNotEquals(
-            PathRules.caseCollisionSuffix("Pictures/foto.jpg"),
-            PathRules.caseCollisionSuffix("Pictures/Foto.jpg"),
+            PathRules.caseCollisionSuffix("Pictures/photo.jpg"),
+            PathRules.caseCollisionSuffix("Pictures/Photo.jpg"),
         )
     }
 
@@ -155,6 +155,6 @@ class PathRulesTest {
 
     companion object {
         @JvmStatic
-        fun wektory(): List<PathVector> = TestVectors.load()
+        fun pathVectors(): List<PathVector> = TestVectors.load()
     }
 }

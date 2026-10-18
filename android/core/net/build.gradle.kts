@@ -15,8 +15,8 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    // Wyścig tras i klient HTTP dają się przetestować na zwykłej maszynie wirtualnej,
-    // razem z prawdziwym TLS i mTLS - MockWebServer zestawia autentyczny uścisk dłoni.
+    // The route race and the HTTP client can be tested on an ordinary JVM, together
+    // with real TLS and mTLS - MockWebServer performs a genuine handshake.
     testOptions {
         unitTests.all { it.useJUnitPlatform() }
     }

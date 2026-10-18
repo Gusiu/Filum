@@ -64,21 +64,21 @@ public class ApiTests : IClassFixture<FilumApp>
     [Fact]
     public async Task Manifest_UnknownFile_LandsInNeeded()
     {
-        var request = new ManifestRequest("sesja-1", "delta", 0, true,
-            [new ManifestEntry("DCIM/Camera/nowy.jpg", 128, Mtime)]);
+        var request = new ManifestRequest("session-1", "delta", 0, true,
+            [new ManifestEntry("DCIM/Camera/new.jpg", 128, Mtime)]);
 
         var response = await _client.PostAsJsonAsync("/api/v1/manifest", request);
         var body = await response.Content.ReadFromJsonAsync<ManifestResponse>();
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(0, body!.Have);
-        Assert.Equal("DCIM/Camera/nowy.jpg", Assert.Single(body.Needed).Path);
+        Assert.Equal("DCIM/Camera/new.jpg", Assert.Single(body.Needed).Path);
     }
 
     [Fact]
     public async Task Manifest_UnknownMode_Returns400()
     {
-        var request = new ManifestRequest("sesja-1", "lustro", 0, true, []);
+        var request = new ManifestRequest("session-1", "mirror", 0, true, []);
 
         var response = await _client.PostAsJsonAsync("/api/v1/manifest", request);
 
@@ -89,9 +89,9 @@ public class ApiTests : IClassFixture<FilumApp>
     public async Task Manifest_OversizedBatch_Returns413()
     {
         var files = Enumerable.Range(0, 4)
-            .Select(i => new ManifestEntry($"plik{i}.txt", 1, Mtime))
+            .Select(i => new ManifestEntry($"file{i}.txt", 1, Mtime))
             .ToList();
-        var request = new ManifestRequest("sesja-1", "full", 0, true, files);
+        var request = new ManifestRequest("session-1", "full", 0, true, files);
 
         var response = await _client.PostAsJsonAsync("/api/v1/manifest", request);
         var error = await response.Content.ReadFromJsonAsync<ErrorResponse>();
@@ -107,14 +107,14 @@ public class ApiTests : IClassFixture<FilumApp>
     {
         var content = Encoding.UTF8.GetBytes("file content over HTTP");
 
-        var response = await _client.SendAsync(Put("Documents/przez-http.txt", content, content.Length, Mtime, 0));
+        var response = await _client.SendAsync(Put("Documents/over-http.txt", content, content.Length, Mtime, 0));
         var body = await response.Content.ReadFromJsonAsync<FileChunkResponse>();
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.True(body!.Complete);
         Assert.Equal(content.Length, body.Offset);
 
-        var stored = Path.Combine(_app.Root, _slug, "files", "Documents", "przez-http.txt");
+        var stored = Path.Combine(_app.Root, _slug, "files", "Documents", "over-http.txt");
         Assert.Equal(content, await File.ReadAllBytesAsync(stored));
     }
 
@@ -122,9 +122,9 @@ public class ApiTests : IClassFixture<FilumApp>
     public async Task Put_ResumingAtAWrongOffset_Returns409WithTheExpectedOne()
     {
         var content = Encoding.UTF8.GetBytes("0123456789");
-        await _client.SendAsync(Put("Movies/wznawiany.mp4", content[..4], content.Length, Mtime, 0));
+        await _client.SendAsync(Put("Movies/resumed.mp4", content[..4], content.Length, Mtime, 0));
 
-        var response = await _client.SendAsync(Put("Movies/wznawiany.mp4", content[8..], content.Length, Mtime, 8));
+        var response = await _client.SendAsync(Put("Movies/resumed.mp4", content[8..], content.Length, Mtime, 8));
         var error = await response.Content.ReadFromJsonAsync<ErrorResponse>();
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
@@ -135,7 +135,7 @@ public class ApiTests : IClassFixture<FilumApp>
     [Fact]
     public async Task Put_APathEscapingTheDirectory_Returns422()
     {
-        var response = await _client.SendAsync(Put("../../ucieczka.txt", [1, 2, 3], 3, Mtime, 0));
+        var response = await _client.SendAsync(Put("../../escape.txt", [1, 2, 3], 3, Mtime, 0));
         var error = await response.Content.ReadFromJsonAsync<ErrorResponse>();
 
         Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
@@ -149,8 +149,8 @@ public class ApiTests : IClassFixture<FilumApp>
         {
             Content = new ByteArrayContent([1, 2, 3])
         };
-        request.Headers.TryAddWithoutValidation(FilumHeaders.Path, EncodePath("plik.txt"));
-        // brak Size, Mtime, Offset
+        request.Headers.TryAddWithoutValidation(FilumHeaders.Path, EncodePath("file.txt"));
+        // no Size, Mtime or Offset
 
         var response = await _client.SendAsync(request);
 
@@ -177,7 +177,7 @@ public class ApiTests : IClassFixture<FilumApp>
     [Fact]
     public async Task Put_OffsetBeyondTheSize_Returns400()
     {
-        var response = await _client.SendAsync(Put("plik.txt", [1], 10, Mtime, 20));
+        var response = await _client.SendAsync(Put("file.txt", [1], 10, Mtime, 20));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -186,7 +186,7 @@ public class ApiTests : IClassFixture<FilumApp>
     public async Task FullCycle_TheManifestConfirmsTheFileAfterUpload()
     {
         var content = Encoding.UTF8.GetBytes("a file from the full cycle");
-        const string path = "DCIM/Camera/cykl.jpg";
+        const string path = "DCIM/Camera/cycle.jpg";
 
         var before = await (await _client.PostAsJsonAsync("/api/v1/manifest",
             new ManifestRequest("s", "delta", 0, true, [new ManifestEntry(path, content.Length, Mtime)])))

@@ -33,7 +33,7 @@ public sealed class MdnsAdvertiser(
     ///
     /// The same string goes into the pairing code's <c>s</c> field, so the phone can match
     /// an advertisement to the server it paired with even before
-    /// odczyta rekord TXT.
+    /// it reads the TXT record.
     /// </summary>
     public static string BuildInstanceName(string pin) => $"filum-{pin[..8]}";
 
@@ -67,7 +67,7 @@ public sealed class MdnsAdvertiser(
             // multicast permissions or a network without multicast support must not
             // stop the server from accepting a backup.
             logger.LogWarning(ex, "Filum: could not start mDNS advertising; " +
-                                  "telefon nadal znajdzie serwer po zapisanych adresach");
+                                  "the phone will still find the server by its stored addresses");
             Dispose();
         }
 

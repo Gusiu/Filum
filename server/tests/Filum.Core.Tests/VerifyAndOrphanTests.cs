@@ -41,7 +41,7 @@ public class VerifyServiceTests
     {
         // This is the whole reason the mode exists: storage media can silently corrupt
         // content while size and mtime stay unchanged, so ordinary change detection
-        // zmian tego nie zobaczy.
+        // detection would not see it.
         using var h = new Harness();
         h.Seed("DCIM/a.jpg", Harness.Bytes("content after a fault"), Mtime);
 
@@ -63,10 +63,10 @@ public class VerifyServiceTests
 
         var result = await Service(h).VerifyAsync(
             Harness.Slug,
-            [new VerifyEntry("nie-ma-mnie.jpg", Digest("cokolwiek"))],
+            [new VerifyEntry("not-here.jpg", Digest("anything"))],
             CancellationToken.None);
 
-        Assert.Equal(["nie-ma-mnie.jpg"], result.Missing);
+        Assert.Equal(["not-here.jpg"], result.Missing);
         Assert.Empty(result.Mismatch);
     }
 
@@ -77,31 +77,31 @@ public class VerifyServiceTests
 
         var result = await Service(h).VerifyAsync(
             Harness.Slug,
-            [new VerifyEntry("../ucieczka.txt", Digest("x"))],
+            [new VerifyEntry("../escape.txt", Digest("x"))],
             CancellationToken.None);
 
-        Assert.Equal(["../ucieczka.txt"], result.Missing);
+        Assert.Equal(["../escape.txt"], result.Missing);
     }
 
     [Fact]
     public async Task ManyPathsAtOnce_SplitIntoThreeLists()
     {
         using var h = new Harness();
-        h.Seed("dobry.txt", Harness.Bytes("aaa"), Mtime);
+        h.Seed("good.txt", Harness.Bytes("aaa"), Mtime);
         h.Seed("broken.txt", Harness.Bytes("bbb"), Mtime);
 
         var result = await Service(h).VerifyAsync(
             Harness.Slug,
             [
-                new VerifyEntry("dobry.txt", Digest("aaa")),
+                new VerifyEntry("good.txt", Digest("aaa")),
                 new VerifyEntry("broken.txt", Digest("something else")),
-                new VerifyEntry("nieobecny.txt", Digest("ccc")),
+                new VerifyEntry("absent.txt", Digest("ccc")),
             ],
             CancellationToken.None);
 
-        Assert.Equal(["dobry.txt"], result.Ok);
+        Assert.Equal(["good.txt"], result.Ok);
         Assert.Equal(["broken.txt"], result.Mismatch);
-        Assert.Equal(["nieobecny.txt"], result.Missing);
+        Assert.Equal(["absent.txt"], result.Missing);
     }
 }
 
@@ -128,13 +128,13 @@ public class OrphanReporterTests
     public void AFileAbsentFromTheManifest_IsAnOrphan()
     {
         using var h = new Harness();
-        h.Seed("DCIM/zostal.jpg", Harness.Bytes("aaa"), Mtime);
-        h.Seed("DCIM/usuniety.jpg", Harness.Bytes("bbbbb"), Mtime);
+        h.Seed("DCIM/remained.jpg", Harness.Bytes("aaa"), Mtime);
+        h.Seed("DCIM/deleted.jpg", Harness.Bytes("bbbbb"), Mtime);
 
-        var report = Complete(h, "sesja-1", "DCIM/zostal.jpg");
+        var report = Complete(h, "session-1", "DCIM/remained.jpg");
 
         Assert.Equal(1, report.Count);
-        Assert.Equal(["DCIM/usuniety.jpg"], report.Paths);
+        Assert.Equal(["DCIM/deleted.jpg"], report.Paths);
         Assert.Equal(5, report.Bytes);
     }
 
@@ -149,9 +149,9 @@ public class OrphanReporterTests
         h.Seed("c.txt", Harness.Bytes("c"), Mtime);
 
         var reporter = Reporter(h);
-        reporter.RecordBatch(Harness.Slug, "sesja-2", ["a.txt"]);
-        reporter.RecordBatch(Harness.Slug, "sesja-2", ["b.txt"]);
-        var report = reporter.Complete(Harness.Slug, "sesja-2");
+        reporter.RecordBatch(Harness.Slug, "session-2", ["a.txt"]);
+        reporter.RecordBatch(Harness.Slug, "session-2", ["b.txt"]);
+        var report = reporter.Complete(Harness.Slug, "session-2");
 
         Assert.Equal(["c.txt"], report.Paths);
     }
@@ -162,11 +162,11 @@ public class OrphanReporterTests
         // On disk the file sits under its sanitised name, but the phone knows only the
         // canonical form - a report in disk form would be useless to it.
         using var h = new Harness();
-        h.Seed("Documents/raport:v2.txt", Harness.Bytes("x"), Mtime);
+        h.Seed("Documents/report:v2.txt", Harness.Bytes("x"), Mtime);
 
-        var report = Complete(h, "sesja-3");
+        var report = Complete(h, "session-3");
 
-        Assert.Equal(["Documents/raport:v2.txt"], report.Paths);
+        Assert.Equal(["Documents/report:v2.txt"], report.Paths);
     }
 
     [Fact]
@@ -175,11 +175,11 @@ public class OrphanReporterTests
         using var h = new Harness();
         h.Seed("a.txt", Harness.Bytes("a"), Mtime);
 
-        Complete(h, "sesja-4");
-        var wczytany = Reporter(h).Read(Harness.Slug, "sesja-4");
+        Complete(h, "session-4");
+        var loaded = Reporter(h).Read(Harness.Slug, "session-4");
 
-        Assert.NotNull(wczytany);
-        Assert.Equal(["a.txt"], wczytany.Paths);
+        Assert.NotNull(loaded);
+        Assert.Equal(["a.txt"], loaded.Paths);
     }
 
     [Fact]
@@ -187,7 +187,7 @@ public class OrphanReporterTests
     {
         using var h = new Harness();
 
-        Assert.Null(Reporter(h).Read(Harness.Slug, "nigdy-nie-bylo"));
+        Assert.Null(Reporter(h).Read(Harness.Slug, "never-existed"));
     }
 
     [Fact]
@@ -196,7 +196,7 @@ public class OrphanReporterTests
         using var h = new Harness();
         h.Seed("a.txt", Harness.Bytes("a"), Mtime);
 
-        Complete(h, "sesja-5", "a.txt");
+        Complete(h, "session-5", "a.txt");
 
         var sessions = Path.Combine(h.Paths.MetaRoot(Harness.Slug), "sessions");
         Assert.True(!Directory.Exists(sessions) || Directory.GetFiles(sessions).Length == 0);
@@ -210,7 +210,7 @@ public class OrphanReporterTests
         using var h = new Harness();
         h.Seed("orphan.txt", Harness.Bytes("content"), Mtime);
 
-        Complete(h, "sesja-6");
+        Complete(h, "session-6");
 
         Assert.True(h.StoredExists("orphan.txt"));
     }
@@ -221,11 +221,11 @@ public class OrphanReporterTests
         // The identifier comes from the client and ends up in a filename.
         using var h = new Harness();
 
-        Complete(h, "../../../zlosliwa");
+        Complete(h, "../../../malicious");
 
         var meta = h.Paths.MetaRoot(Harness.Slug);
         Assert.True(Directory.GetFiles(meta, "orphans-*.json").Length == 1);
-        Assert.False(File.Exists(Path.Combine(h.Root, "zlosliwa.json")));
+        Assert.False(File.Exists(Path.Combine(h.Root, "malicious.json")));
     }
 
     [Fact]
@@ -234,8 +234,8 @@ public class OrphanReporterTests
         using var h = new Harness();
         h.Seed("a.txt", Harness.Bytes("a"), Mtime);
 
-        Complete(h, "starsza");
-        Complete(h, "nowsza", "a.txt");
+        Complete(h, "older");
+        Complete(h, "newer", "a.txt");
 
         var latest = Reporter(h).Latest(Harness.Slug);
 

@@ -154,7 +154,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
                 verification = when (result) {
                     is VerificationResult.Done -> when {
                         result.corrupted.isNotEmpty() ->
-                            "Uszkodzone kopie: ${result.corrupted.size} z ${result.checked}. " +
+                            "Corrupted copies: ${result.corrupted.size} of ${result.checked}. " +
                                 "They will be re-sent at the next full sync."
 
                         result.missing.isNotEmpty() ->
@@ -279,8 +279,8 @@ fun formatTime(epochMillis: Long): String =
     SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(epochMillis))
 
 fun describe(session: SyncSessionEntity?): String = when {
-    session == null -> "Jeszcze nie synchronizowano."
-    session.endedAt == null -> "Cykl w toku…"
+    session == null -> "Not synced yet."
+    session.endedAt == null -> "A cycle is in progress…"
     // Most cycles after the first find nothing new; "0 files, 0 B" would read as a fault.
     session.result?.startsWith("completed") == true && session.filesDone == 0 ->
         "Last run: nothing new to send."
@@ -289,7 +289,7 @@ fun describe(session: SyncSessionEntity?): String = when {
         "Last run: ${session.filesDone} files, ${formatBytes(session.bytesSent)}."
 
     session.result?.startsWith("interrupted") == true ->
-        "Przerwano po ${session.filesDone} plikach, ${formatBytes(session.bytesSent)}."
+        "Interrupted after ${session.filesDone} files, ${formatBytes(session.bytesSent)}."
 
     else -> "The last attempt did not succeed."
 }

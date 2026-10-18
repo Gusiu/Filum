@@ -152,6 +152,6 @@ public sealed class OrphanReporter(StoragePaths paths)
     private static string Sanitize(string session)
     {
         var cleaned = new string(session.Where(char.IsAsciiLetterOrDigit).Take(64).ToArray());
-        return cleaned.Length > 0 ? cleaned : "sesja";
+        return cleaned.Length > 0 ? cleaned : "session";
     }
 }

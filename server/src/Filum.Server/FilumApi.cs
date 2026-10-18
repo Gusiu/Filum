@@ -25,7 +25,7 @@ public static class FilumApi
         api.MapGet("/pair/new", NewPairing);
 
         // Administrative resources: loopback only, see
-        // DeviceAuthenticationMiddleware. Korzysta z nich ikona w zasobniku,
+        // DeviceAuthenticationMiddleware. They are used by the tray icon,
         // which is a separate process and has no other access to the server's state.
         api.MapGet("/admin/status", (AdminService admin) => Results.Ok(admin.Snapshot()));
 
@@ -47,7 +47,7 @@ public static class FilumApi
         DeviceRegistry registry,
         ILogger<PairingService> logger)
     {
-        var source = context.Connection.RemoteIpAddress?.ToString() ?? "nieznany";
+        var source = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
         if (!limiter.TryRegisterAttempt(source))
         {
             logger.LogWarning("Pairing attempt limit exceeded from {Source}", source);
@@ -156,15 +156,15 @@ public static class FilumApi
         OrphanReporter orphans)
     {
         if (request.Files is null)
-            return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, "Brak pola files.");
+            return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, "The files field is missing.");
 
         if (request.Mode is not ("full" or "delta"))
             return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest,
-                         $"Nieznany tryb '{request.Mode}'; dozwolone: full, delta.");
+                         $"Unknown mode '{request.Mode}'; allowed: full, delta.");
 
         if (request.Files.Count > options.ManifestBatch)
             return Error(StatusCodes.Status413PayloadTooLarge, ErrorCodes.PayloadTooLarge,
-                         $"Partia liczy {request.Files.Count} pozycji, limit to {options.ManifestBatch}.");
+                         $"The batch has {request.Files.Count} entries, the limit is {options.ManifestBatch}.");
 
         var slug = context.Device().Slug;
         var resolution = resolver.Resolve(slug, request.Files);
@@ -232,7 +232,7 @@ public static class FilumApi
                 StatusCodes.Status507InsufficientStorage, ErrorCodes.InsufficientStorage,
                 $"Not enough disk space; {outcome.FreeBytes} B free."),
 
-            _ => Error(StatusCodes.Status500InternalServerError, ErrorCodes.BadRequest, "Nieznany stan transferu.")
+            _ => Error(StatusCodes.Status500InternalServerError, ErrorCodes.BadRequest, "Unknown transfer state.")
         };
     }
 
@@ -269,7 +269,7 @@ public static class FilumApi
         CancellationToken ct)
     {
         if (request.Files is null)
-            return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, "Brak pola files.");
+            return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, "The files field is missing.");
 
         if (request.Files.Count > MaxVerifyBatch)
             return Error(StatusCodes.Status413PayloadTooLarge, ErrorCodes.PayloadTooLarge,
@@ -309,7 +309,7 @@ public static class FilumApi
 
         if (offset > size)
         {
-            problem = $"{FilumHeaders.Offset} ({offset}) przekracza {FilumHeaders.Size} ({size}).";
+            problem = $"{FilumHeaders.Offset} ({offset}) exceeds {FilumHeaders.Size} ({size}).";
             return false;
         }
 

@@ -13,7 +13,7 @@ import java.security.MessageDigest
 import kotlin.math.min
 
 /**
- * Silnik jednego cyklu synchronizacji.
+ * The engine of one sync cycle.
  *
  * The whole thing is built around one principle: **every step saves state**. Killing the
  * process at any moment costs at most one chunk of one file, because resumability works at
@@ -176,8 +176,8 @@ class SyncEngine(
             }
 
             // Small files go in bundles, large ones on their own. Across a hundred thousand
-            // files, most of them tiny, HTTP request overhead starts to dominate
-            // nad transferem danych (ADR-008).
+            // files, most of them tiny, HTTP request overhead starts to outweigh the
+            // data transfer itself (ADR-008).
             val (small, large) = batch.partition { it.size <= config.smallFileThreshold && it.bytesSent == 0L }
 
             for (group in group(small)) {
@@ -295,7 +295,7 @@ class SyncEngine(
             is ApiResult.Failure -> {
                 // Broken framing or an exceeded limit invalidates the whole bundle.
                 entries.forEach { queue.markTransientFailure(it.canonicalPath, result.code) }
-                journal.record(JournalLevel.WARN, result.code, "Paczka odrzucona: ${result.message}")
+                journal.record(JournalLevel.WARN, result.code, "Bundle rejected: ${result.message}")
                 SendResult.FAILED
             }
         }
@@ -322,7 +322,7 @@ class SyncEngine(
             val error = result.error.orEmpty()
             if (error in PERMANENT_BUNDLE_ERRORS) {
                 queue.markPermanentFailure(result.path, error)
-                journal.record(JournalLevel.WARN, error, "${result.path}: odrzucone w paczce")
+                journal.record(JournalLevel.WARN, error, "${result.path}: rejected within a bundle")
             } else {
                 queue.markTransientFailure(result.path, error)
             }
@@ -331,7 +331,7 @@ class SyncEngine(
         // The server said nothing about a file we sent. We do not assume success - it
         // returns to the queue and resolves itself at the next manifest.
         for ((path, _) in byPath) {
-            if (path !in reported) queue.markTransientFailure(path, "brak wyniku w odpowiedzi")
+            if (path !in reported) queue.markTransientFailure(path, "no result in the response")
         }
     }
 
@@ -340,7 +340,7 @@ class SyncEngine(
 
         if (!file.isFile) {
             // The user deleted the file between the scan and the upload. That is not an error -
-            // kopia z poprzednich cykli i tak zostaje na serwerze (niezmiennik I1).
+            // the copy from earlier cycles stays on the server anyway (invariant I1).
             queue.markPermanentFailure(entry.canonicalPath, "the file no longer exists")
             return SendResult.SKIPPED
         }
@@ -427,7 +427,7 @@ class SyncEngine(
 
                         journal.record(
                             JournalLevel.INFO, "offset_corrected",
-                            "${entry.canonicalPath}: wznawiam od $expected zamiast $offset.",
+                            "${entry.canonicalPath}: resuming from $expected instead of $offset.",
                         )
                         offset = expected
                         queue.markProgress(entry.canonicalPath, expected)

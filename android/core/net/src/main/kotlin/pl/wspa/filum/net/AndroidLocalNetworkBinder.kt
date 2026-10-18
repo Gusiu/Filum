@@ -19,10 +19,9 @@ import javax.net.SocketFactory
  *
  * A caveat to verify on the target device: if the VPN blocks traffic outside the tunnel,
  * the binding will fail anyway. The local route then simply loses the race and the overlay
- * one wins - the user sees no error,
- * tylko wolniejszy transfer w domu.
+ * one wins - the user sees no error, only a slower transfer at home.
  *
- * Wymaga uprawnienia `ACCESS_NETWORK_STATE`.
+ * Requires the `ACCESS_NETWORK_STATE` permission.
  */
 class AndroidLocalNetworkBinder(context: Context) : LocalNetworkBinder, Closeable {
 

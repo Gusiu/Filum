@@ -48,7 +48,7 @@ class SyncWorker(
         val startedAt = System.currentTimeMillis()
         val deadlineAt = startedAt + remaining * 1000
 
-        setForeground(foregroundInfo("Szukam serwera…"))
+        setForeground(foregroundInfo("Looking for the server…"))
 
         // Without the lock, Wi-Fi power saving can cut throughput several times over,
         // and the budget then drains on waiting rather than on transferring.

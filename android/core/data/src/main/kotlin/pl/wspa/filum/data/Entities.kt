@@ -5,7 +5,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * Model danych klienta (§3.2 architektury).
+ * The client's data model (architecture §3.2).
  *
  * The database on the phone holds **the queue and the history**, not the truth about what
  * the backup contains. The source of truth about what the server has is the server's disk

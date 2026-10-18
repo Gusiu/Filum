@@ -10,7 +10,7 @@ import kotlinx.coroutines.delay
 import java.net.Inet4Address
 import java.util.concurrent.ConcurrentHashMap
 
-/** Serwer znaleziony w sieci lokalnej. */
+/** A server found on the local network. */
 data class DiscoveredServer(
     val host: String,
     val port: Int,
@@ -39,8 +39,8 @@ class MdnsDiscovery(context: Context) {
      * Looks for servers for a given time and returns everything it found.
      *
      * We wait out the full window rather than stopping at the first hit: several instances may
-     * be on the network and the one we want has the right key, not necessarily
-     * najszybsza.
+     * be on the network and the one we want has the right key, not necessarily the
+     * fastest answer.
      */
     suspend fun discover(timeoutMillis: Long = DEFAULT_TIMEOUT_MILLIS): List<DiscoveredServer> {
         val manager = nsd ?: return emptyList()
@@ -131,7 +131,7 @@ class MdnsDiscovery(context: Context) {
         )
 
         found["$host:${info.port}"] = server
-        Log.d(TAG, "Znaleziono serwer $server")
+        Log.d(TAG, "Found a server: $server")
     }
 
     /**

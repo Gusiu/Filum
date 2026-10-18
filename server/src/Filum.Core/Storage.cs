@@ -13,8 +13,8 @@ public sealed class FilumOptions
     public string Root { get; set; } = "";
 
     /// <summary>
-    /// Katalog na klucz prywatny serwera. Poza katalogiem backupu - patrz FilumPaths.
-    /// Pusty oznacza %LOCALAPPDATA%\Filum.
+    /// The directory for the server's private key, outside the backup directory - see
+    /// FilumPaths. Empty means %LOCALAPPDATA%\Filum.
     /// </summary>
     public string ConfigDirectory { get; set; } = "";
 
@@ -30,7 +30,7 @@ public sealed class FilumOptions
     public int BundleMaxCount { get; set; } = 256;
     public int MaxPathBytes { get; set; } = 4096;
 
-    /// <summary>Port nasluchu. Uzywany takze do zbudowania listy adresow w odpowiedzi na ping.</summary>
+    /// <summary>The listening port. Also used to build the address list in the ping response.</summary>
     public int Port { get; set; } = 8765;
 
     /// <summary>
@@ -90,7 +90,7 @@ public readonly record struct FileIdentity(long Size, long Mtime)
 /// <summary>
 /// Resolves physical paths for a device. The directory layout is described in protocol §8.1.
 /// This class is the only place that joins client-supplied data with a path on disk, which
-/// tutaj mieszka kontrola zawierania.
+/// makes it the home of the containment check.
 /// </summary>
 public sealed class StoragePaths(string root)
 {
@@ -184,7 +184,7 @@ public sealed class SpacePolicy(FilumOptions options)
 
     public long TotalBytes(string anyPathOnVolume) => DriveFor(anyPathOnVolume).TotalSize;
 
-    /// <summary>Czy po zapisaniu <paramref name="incomingBytes"/> zostanie jeszcze zapas.</summary>
+    /// <summary>Whether some margin remains after writing <paramref name="incomingBytes"/>.</summary>
     public bool HasRoomFor(string anyPathOnVolume, long incomingBytes)
     {
         var drive = DriveFor(anyPathOnVolume);

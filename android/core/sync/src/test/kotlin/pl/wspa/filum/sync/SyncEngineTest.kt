@@ -21,7 +21,7 @@ import java.io.File
 import java.nio.file.Path
 
 /**
- * Silnik jednego cyklu synchronizacji.
+ * The engine of one sync cycle.
  *
  * This is the most important suite in the whole client: the decisions taken here are what
  * to retry, what to set aside permanently and when to stop - and each of them ends either
@@ -30,8 +30,8 @@ import java.nio.file.Path
 class SyncEngineTest {
 
     private val mtime = 1_756_400_000L
-    private val nigdy = Deadline { false }
-    private val natychmiast = Deadline { true }
+    private val noDeadline = Deadline { false }
+    private val immediately = Deadline { true }
 
     private lateinit var queue: FakeQueue
     private lateinit var journal: FakeJournal
@@ -64,25 +64,25 @@ class SyncEngineTest {
      */
     private suspend fun run(
         files: List<ScannedFile>,
-        deadline: Deadline = nigdy,
+        deadline: Deadline = noDeadline,
         config: SyncConfig = SyncConfig(),
     ): SyncOutcome = engine(config.copy(smallFileThreshold = 0))
-        .run("sesja-1", ManifestRequest.MODE_DELTA, files.asSequence(), deadline)
+        .run("session-1", ManifestRequest.MODE_DELTA, files.asSequence(), deadline)
 
     // --- the basic path ---
 
     @Test
     fun `the files the server needs arrive there intact`(@TempDir dir: Path) = runTest {
         setUp()
-        val a = file(dir, "DCIM/a.jpg", "zawartosc-a")
-        val b = file(dir, "Documents/b.txt", "zawartosc-b-dluzsza")
+        val a = file(dir, "DCIM/a.jpg", "content-a")
+        val b = file(dir, "Documents/b.txt", "content-b-longer")
 
         val outcome = run(listOf(a, b))
 
         val completed = assertInstanceOf(SyncOutcome.Completed::class.java, outcome)
         assertEquals(2, completed.filesSent)
-        assertEquals("zawartosc-a", transport.content("DCIM/a.jpg"))
-        assertEquals("zawartosc-b-dluzsza", transport.content("Documents/b.txt"))
+        assertEquals("content-a", transport.content("DCIM/a.jpg"))
+        assertEquals("content-b-longer", transport.content("Documents/b.txt"))
         assertEquals(FakeQueue.State.DONE, queue.state("DCIM/a.jpg"))
     }
 
@@ -117,7 +117,7 @@ class SyncEngineTest {
         assertEquals(listOf(false, false, true), transport.requests.map { it.final })
     }
 
-    // --- wznawianie ---
+    // --- resuming ---
 
     @Test
     fun `resuming starts from the offset the server gave`(@TempDir dir: Path) = runTest {
@@ -280,14 +280,14 @@ class SyncEngineTest {
     @Test
     fun `a path rejected in the manifest is never sent at all`(@TempDir dir: Path) = runTest {
         setUp()
-        val zly = file(dir, "zly.txt", "x")
-        val dobry = file(dir, "dobry.txt", "y")
-        transport.manifestResponder = FakeTransport.manifestRejects("zly.txt")
+        val bad = file(dir, "bad.txt", "x")
+        val good = file(dir, "good.txt", "y")
+        transport.manifestResponder = FakeTransport.manifestRejects("bad.txt")
 
-        run(listOf(zly, dobry))
+        run(listOf(bad, good))
 
-        assertEquals(FakeQueue.State.PERMANENT, queue.state("zly.txt"))
-        assertEquals(0, transport.putCalls.count { it.first == "zly.txt" })
+        assertEquals(FakeQueue.State.PERMANENT, queue.state("bad.txt"))
+        assertEquals(0, transport.putCalls.count { it.first == "bad.txt" })
         assertTrue(journal.has("path_rejected"))
     }
 
@@ -335,7 +335,7 @@ class SyncEngineTest {
     fun `an unreachable server at manifest time ends the cycle in failure`(@TempDir dir: Path) = runTest {
         setUp()
         val a = file(dir, "a.txt", "x")
-        transport.manifestResponder = { ApiResult.Unreachable(java.io.IOException("brak trasy")) }
+        transport.manifestResponder = { ApiResult.Unreachable(java.io.IOException("no route")) }
 
         val outcome = run(listOf(a))
 
@@ -360,27 +360,27 @@ class SyncEngineTest {
     fun `a file changed after the scan is not spliced from two versions`(@TempDir dir: Path) = runTest {
         // Sending it now would leave a file on the server that never existed.
         setUp()
-        val a = file(dir, "rosnie.txt", "krotki")
-        File(a.absolutePath).writeText("znacznie dluzsza zawartosc")
+        val a = file(dir, "growing.txt", "short")
+        File(a.absolutePath).writeText("much longer content")
         File(a.absolutePath).setLastModified(mtime * 1000)
 
         run(listOf(a))
 
-        assertEquals(FakeQueue.State.TRANSIENT, queue.state("rosnie.txt"))
+        assertEquals(FakeQueue.State.TRANSIENT, queue.state("growing.txt"))
         assertTrue(journal.has("file_changed"))
-        assertEquals("", transport.content("rosnie.txt"))
+        assertEquals("", transport.content("growing.txt"))
     }
 
     @Test
     fun `a file stops returning after too many failed attempts`(@TempDir dir: Path) = runTest {
         setUp()
-        val a = file(dir, "uparty.txt", "x")
+        val a = file(dir, "stubborn.txt", "x")
         queue.enqueue(listOf(a))
-        queue.rows["uparty.txt"]!!.attempts = 5
+        queue.rows["stubborn.txt"]!!.attempts = 5
 
         run(listOf(a), config = SyncConfig(maxAttempts = 5))
 
-        assertEquals(FakeQueue.State.PERMANENT, queue.state("uparty.txt"))
+        assertEquals(FakeQueue.State.PERMANENT, queue.state("stubborn.txt"))
         assertTrue(journal.has("too_many_attempts"))
     }
 
@@ -391,7 +391,7 @@ class SyncEngineTest {
         setUp()
         val a = file(dir, "a.txt", "x")
 
-        val outcome = run(listOf(a), deadline = natychmiast)
+        val outcome = run(listOf(a), deadline = immediately)
 
         val interrupted = assertInstanceOf(SyncOutcome.Interrupted::class.java, outcome)
         assertEquals(InterruptReason.BUDGET, interrupted.reason)
@@ -400,7 +400,7 @@ class SyncEngineTest {
     @Test
     fun `a budget exhausted mid-queue preserves progress`(@TempDir dir: Path) = runTest {
         setUp()
-        val files = (1..5).map { file(dir, "file$it.txt", "zawartosc$it") }
+        val files = (1..5).map { file(dir, "file$it.txt", "content$it") }
 
         var sent = 0
         val deadline = Deadline { sent >= 2 }

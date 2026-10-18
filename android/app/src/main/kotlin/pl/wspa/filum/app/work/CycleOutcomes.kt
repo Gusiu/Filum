@@ -12,8 +12,7 @@ enum class WorkerDecision { SUCCESS, RETRY, FAILURE }
  *
  * Extracted from the worker so it can be tested without Android. This is not cosmetic: a
  * mistake here either has the system hammering at a switched-off server every few minutes
- * or - the other way round - quietly abandons work that needed
- * tylko ponowienia.
+ * or - the other way round - quietly abandons work that only needed a retry.
  */
 object CycleOutcomes {
 
