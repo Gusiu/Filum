@@ -11,10 +11,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import pl.wspa.filum.app.FilumApplication
 
@@ -34,8 +35,9 @@ class MainActivity : ComponentActivity() {
                 val activity by model.activity.collectAsState()
 
                 // Full storage access is granted in the system settings, outside the
-                // application, so its state has to be re-read on return.
-                LaunchedEffect(Unit) { model.refresh() }
+                // application, so its state has to be re-read on every return - not only
+                // when the screen is first composed, which a return from settings is not.
+                LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { model.refresh() }
 
                 Scaffold { insets ->
                     Box(Modifier.padding(insets)) {
