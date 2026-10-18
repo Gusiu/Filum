@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -66,24 +67,39 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
 
     init {
         refresh()
+        followProgress()
+    }
+
+    /**
+     * Keeps the last session and the queue size current while the screen is open.
+     *
+     * A cycle runs in the background and records both in the database. Following those
+     * tables updates the card when the cycle ends, without the screen having to be told.
+     */
+    private fun followProgress() {
+        viewModelScope.launch {
+            combine(
+                container.database.sessions().observeRecent(limit = 1),
+                container.database.files().observePending(),
+            ) { sessions, pending -> sessions.firstOrNull() to pending }
+                .collect { (session, pending) ->
+                    _state.value = _state.value.copy(lastSession = session, pendingFiles = pending)
+                }
+        }
     }
 
     fun refresh() {
         viewModelScope.launch {
-            val (server, settings, pending, session) = withContext(Dispatchers.IO) {
+            val (server, settings) = withContext(Dispatchers.IO) {
                 Snapshot(
                     server = container.database.pairedServers().get(),
                     settings = container.settings(),
-                    pending = container.queue.pendingCount(),
-                    session = container.database.sessions().latest(),
                 )
             }
 
             _state.value = _state.value.copy(
                 server = server,
                 settings = settings,
-                pendingFiles = pending,
-                lastSession = session,
                 hasStorageAccess = Environment.hasFullStorageAccess(),
                 screen = if (server == null) Screen.PAIRING else _state.value.screen,
             )
@@ -237,8 +253,6 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
     private data class Snapshot(
         val server: PairedServerEntity?,
         val settings: SettingsEntity,
-        val pending: Int,
-        val session: SyncSessionEntity?,
     )
 
     class Factory(private val container: AppContainer) : ViewModelProvider.Factory {
@@ -267,6 +281,10 @@ fun formatTime(epochMillis: Long): String =
 fun describe(session: SyncSessionEntity?): String = when {
     session == null -> "Jeszcze nie synchronizowano."
     session.endedAt == null -> "Cykl w toku…"
+    // Most cycles after the first find nothing new; "0 files, 0 B" would read as a fault.
+    session.result?.startsWith("completed") == true && session.filesDone == 0 ->
+        "Last run: nothing new to send."
+
     session.result?.startsWith("completed") == true ->
         "Last run: ${session.filesDone} files, ${formatBytes(session.bytesSent)}."
 
