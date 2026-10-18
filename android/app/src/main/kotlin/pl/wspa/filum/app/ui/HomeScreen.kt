@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
@@ -20,6 +22,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -139,7 +143,20 @@ fun HomeScreen(
                 Text(if (state.verifying) "Checking…" else "Check a sample")
             }
 
-            state.verification?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+            // The result appears below the button, which on a phone is often below the edge
+            // of the screen. Without scrolling it into view the check seems to end silently.
+            val result = remember { BringIntoViewRequester() }
+            LaunchedEffect(state.verification) {
+                if (state.verification != null) result.bringIntoView()
+            }
+
+            state.verification?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.bringIntoViewRequester(result),
+                )
+            }
         }
 
         HorizontalDivider()
