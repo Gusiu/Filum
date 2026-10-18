@@ -77,7 +77,7 @@ class PairingController(private val container: AppContainer) {
         // the one resource reachable without mTLS. Trust in the server rests solely on the
         // key fingerprint from the QR code.
         val bootstrapTls = FilumTls.bundle(payload.key, keyManagers = null)
-        val api = FilumApiClient(FilumHttpClients(bootstrapTls, container.networkBinder).forKind(EndpointKind.MANUAL))
+        val api = FilumApiClient(FilumHttpClients(bootstrapTls).defaultRoute)
 
         val candidates = payload.addresses.mapNotNull {
             ServerEndpoint.parse(it, EndpointKind.MANUAL, payload.port)

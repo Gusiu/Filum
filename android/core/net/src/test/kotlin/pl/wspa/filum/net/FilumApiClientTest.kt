@@ -82,7 +82,7 @@ class FilumApiClientTest {
         keyManagers: Array<KeyManager>? = clientKeyManagers(),
     ): FilumApiClient {
         val tls = FilumTls.bundle(pin, keyManagers)
-        return FilumApiClient(FilumHttpClients(tls).forKind(EndpointKind.LAN))
+        return FilumApiClient(FilumHttpClients(tls).defaultRoute)
     }
 
     private fun json(body: String) = MockResponse()

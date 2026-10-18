@@ -12,14 +12,14 @@ import javax.net.SocketFactory
 /**
  * Binding sockets to the Wi-Fi network, bypassing the VPN tunnel (protocol §4.3).
  *
- * When a VPN is running, the system pushes all of an application's traffic into the tunnel
- * by default. An overlay address then works, but `192.168.1.10` does not - the packet goes
- * to the tunnel instead of the local network. The fix is to ask for a specific [Network]
- * object and use its socket factory.
+ * When a VPN routes everything into its tunnel, an overlay address works but `192.168.1.10`
+ * does not - the packet goes to the tunnel instead of the local network. Asking for a
+ * specific [Network] object and using its socket factory gets around that.
  *
- * A caveat to verify on the target device: if the VPN blocks traffic outside the tunnel,
- * the binding will fail anyway. The local route then simply loses the race and the overlay
- * one wins - the user sees no error, only a slower transfer at home.
+ * It does not always help. A VPN that forbids bypassing (`bypassable=false`, measured with
+ * NordVPN on a Galaxy S24 Ultra) does not refuse a bound socket: the connection simply hangs.
+ * The same VPN may leave the local network out of the tunnel, so the default route works.
+ * That is why [FilumHttpClients.routesFor] races every local address both ways.
  *
  * Requires the `ACCESS_NETWORK_STATE` permission.
  */
@@ -46,11 +46,14 @@ class AndroidLocalNetworkBinder(context: Context) : LocalNetworkBinder, Closeabl
     }
 
     init {
-        // The request covers TRANSPORT_WIFI only, and VPN networks have their own transport,
-        // so we reach the physical Wi-Fi even while the tunnel is up.
+        // A VPN running over Wi-Fi reports TRANSPORT_WIFI next to TRANSPORT_VPN, so the
+        // transport alone does not tell the tunnel from the physical network. NOT_VPN is
+        // part of a new request by default; it is stated here because binding to the
+        // tunnel would defeat the whole purpose.
         val request = NetworkRequest.Builder()
             .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
             .build()
 
         try {

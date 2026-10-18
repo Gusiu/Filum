@@ -54,15 +54,13 @@ class SyncRunner(private val container: AppContainer) {
             tls = FilumTls.bundle(server.serverPin, identity),
             binder = container.networkBinder,
         )
-        val api = FilumApiClient(clients.forKind(EndpointKind.LAN))
-
         val racer = EndpointRacer(
-            probe = { endpoint -> FilumApiClient(clients.forProbe(endpoint.kind)).ping(endpoint) }
+            probe = { endpoint -> FilumApiClient(clients.forProbe(endpoint)).ping(endpoint) }
         )
 
         // Stored routes first - in the vast majority of cycles one of them answers and
         // there is no reason to pay for discovery.
-        var race = racer.fastest(loadCandidates(server))
+        var race = racer.fastest(clients.routesFor(loadCandidates(server)))
 
         if (race !is RaceOutcome.Reached) {
             if (race is RaceOutcome.AllFailed) {
@@ -76,7 +74,7 @@ class SyncRunner(private val container: AppContainer) {
 
             if (discovered.isNotEmpty()) {
                 journalDiscovery(discovered)
-                race = racer.fastest(discovered)
+                race = racer.fastest(clients.routesFor(discovered))
             }
         }
 
@@ -104,7 +102,7 @@ class SyncRunner(private val container: AppContainer) {
         )
 
         val engine = SyncEngine(
-            transport = ApiSyncTransport(FilumApiClient(clients.forKind(reached.endpoint.kind)), reached.endpoint),
+            transport = ApiSyncTransport(FilumApiClient(clients.forEndpoint(reached.endpoint)), reached.endpoint),
             queue = container.queue,
             journal = journal,
             // The limits come from the ping response; the client assumes none of its own (§5.1).

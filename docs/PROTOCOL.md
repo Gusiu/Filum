@@ -172,13 +172,20 @@ others in parallel.
 
 ### 4.3 Local routes with an active VPN
 
-When a VPN is running on the phone, traffic enters the tunnel by default and the addresses
-in §4.2 items 1-2 stop being reachable. For local routes the client SHOULD bind its socket
-to a specific `Network` object obtained from `ConnectivityManager` with `TRANSPORT_WIFI`,
-rather than using the default route.
+When a VPN is running on the phone, it may route the local network into its tunnel, and the
+addresses in §4.2 items 1-2 then stop being reachable over the default route. A socket bound
+to a specific `Network` object obtained from `ConnectivityManager` with `TRANSPORT_WIFI` and
+`NET_CAPABILITY_NOT_VPN` gets around that.
 
-If the VPN blocks traffic outside the tunnel, binding will fail - the client MUST then
-degrade silently to routes 3-4 from §4.2, without reporting an error to the user.
+Binding is not reliable either. A VPN that forbids bypassing the tunnel does not refuse a
+bound socket: the connection hangs until it times out. The same VPN may leave the local
+network out of the tunnel, so the default route works. Neither behaviour can be read in
+advance.
+
+While a Wi-Fi network is known, the client SHOULD therefore race every local address twice:
+over a socket bound to that network and over the default route. The transfer MUST use the
+way whose probe won. A way that does not answer is an ordinary lost probe, and the client
+MUST NOT report it to the user.
 
 ### 4.4 Self-updating the route set
 

@@ -34,12 +34,19 @@ data class ServerEndpoint(
     val host: String,
     val port: Int,
     val kind: EndpointKind,
+    /**
+     * Whether the connection goes over a socket bound to the Wi-Fi network rather than over
+     * the default route (§4.3). It is a property of the attempt, not of the address: the
+     * same local address is raced both ways, and only the race tells which one works.
+     */
+    val boundToWifi: Boolean = false,
 ) {
     val authority: String get() = if (host.contains(':')) "[$host]:$port" else "$host:$port"
 
     val baseUrl: String get() = "https://$authority"
 
-    override fun toString(): String = "$authority (${kind.name.lowercase()})"
+    override fun toString(): String =
+        "$authority (${kind.name.lowercase()}${if (boundToWifi) ", wifi-bound" else ""})"
 
     companion object {
         /**

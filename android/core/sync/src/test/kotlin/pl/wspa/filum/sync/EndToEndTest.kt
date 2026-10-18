@@ -58,7 +58,7 @@ class EndToEndTest {
 
     private fun api(withIdentity: Boolean): FilumApiClient {
         val tls = FilumTls.bundle(serverPin, if (withIdentity) keyManagers() else null)
-        return FilumApiClient(FilumHttpClients(tls).forKind(EndpointKind.LAN))
+        return FilumApiClient(FilumHttpClients(tls).defaultRoute)
     }
 
     @Test

@@ -60,7 +60,7 @@ class VerificationRunner(private val container: AppContainer) {
             digestOf(File(file.absolutePath))?.let { VerifyEntry(file.canonicalPath, it) }
         }
 
-        val api = FilumApiClient(clients.forKind(endpoint.kind))
+        val api = FilumApiClient(clients.forEndpoint(endpoint))
 
         return when (val result = api.verify(endpoint, entries)) {
             is ApiResult.Ok -> {
@@ -96,8 +96,8 @@ class VerificationRunner(private val container: AppContainer) {
         }
 
         return EndpointRacer(
-            probe = { endpoint -> FilumApiClient(clients.forProbe(endpoint.kind)).ping(endpoint) }
-        ).fastest(candidates)
+            probe = { endpoint -> FilumApiClient(clients.forProbe(endpoint)).ping(endpoint) }
+        ).fastest(clients.routesFor(candidates))
     }
 
     /**
