@@ -1,5 +1,6 @@
 package pl.wspa.filum.app
 
+import android.util.Log
 import pl.wspa.filum.crypto.DeviceIdentity
 import pl.wspa.filum.crypto.FilumTls
 import pl.wspa.filum.net.ApiResult
@@ -46,11 +47,14 @@ class VerificationRunner(private val container: AppContainer) {
             binder = container.networkBinder,
         )
 
-        val endpoint = findServer(clients)
-            ?: return VerificationResult.Failed("Nie znaleziono serwera.")
+        val endpoint = when (val race = findServer(clients)) {
+            is RaceOutcome.Reached -> race.endpoint
+            is RaceOutcome.AllFailed -> return failed("No route to the server answered: ${race.reasons().joinToString("; ")}")
+            RaceOutcome.NoCandidates -> return failed("No stored routes.")
+        }
 
         val sample = sample(sampleSize)
-        if (sample.isEmpty()) return VerificationResult.Failed("The scan found no files to check.")
+        if (sample.isEmpty()) return failed("The scan found no files to check.")
 
         val entries = sample.mapNotNull { file ->
             digestOf(File(file.absolutePath))?.let { VerifyEntry(file.canonicalPath, it) }
@@ -70,22 +74,30 @@ class VerificationRunner(private val container: AppContainer) {
                 VerificationResult.Done(entries.size, response.mismatch, response.missing)
             }
 
-            is ApiResult.Failure -> VerificationResult.Failed(result.message)
-            is ApiResult.Unreachable -> VerificationResult.Failed(result.message)
+            is ApiResult.Failure -> failed(result.message)
+            is ApiResult.Unreachable -> failed(result.message)
         }
     }
 
-    private suspend fun findServer(clients: FilumHttpClients): ServerEndpoint? {
+    /**
+     * A check that could not run is journalled as well as shown: the message on the screen
+     * is gone once the user leaves it, and the journal is where a failure is looked for later.
+     */
+    private suspend fun failed(reason: String): VerificationResult.Failed {
+        Log.w(TAG, "Verification failed: $reason")
+        journal(JournalLevel.WARN, "verify_failed", reason)
+        return VerificationResult.Failed(reason)
+    }
+
+    private suspend fun findServer(clients: FilumHttpClients): RaceOutcome {
         val candidates = container.database.endpoints().all().mapNotNull { entity ->
             val kind = runCatching { EndpointKind.valueOf(entity.kind) }.getOrDefault(EndpointKind.MANUAL)
             ServerEndpoint(entity.host, entity.port, kind)
         }
 
-        val race = EndpointRacer(
+        return EndpointRacer(
             probe = { endpoint -> FilumApiClient(clients.forProbe(endpoint.kind)).ping(endpoint) }
         ).fastest(candidates)
-
-        return (race as? RaceOutcome.Reached)?.endpoint
     }
 
     /**
@@ -135,6 +147,8 @@ class VerificationRunner(private val container: AppContainer) {
         RoomJournal(container.database.log()).record(level, code, message)
 
     private companion object {
+        const val TAG = "FilumVerify"
+
         /** The server's limit for one request is 256 entries (§5.5). */
         const val DEFAULT_SAMPLE = 100
 

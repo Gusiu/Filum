@@ -65,6 +65,10 @@ class SyncRunner(private val container: AppContainer) {
         var race = racer.fastest(loadCandidates(server))
 
         if (race !is RaceOutcome.Reached) {
+            if (race is RaceOutcome.AllFailed) {
+                Log.i(TAG, "Stored routes failed, trying discovery: ${race.reasons().joinToString("; ")}")
+            }
+
             // No stored route worked. This is the one situation in which the route set's
             // self-update (§4.4) has nothing to bootstrap from: the phone was away from home
             // across a router change and has no overlay network.
@@ -78,11 +82,8 @@ class SyncRunner(private val container: AppContainer) {
 
         val reached = when (race) {
             is RaceOutcome.Reached -> race
-            is RaceOutcome.AllFailed -> return CycleResult.NoRoute(
-                race.failures.map { "${it.endpoint}: ${it.reason}" }
-            )
-
-            RaceOutcome.NoCandidates -> return CycleResult.NoRoute(listOf("Brak zapisanych tras."))
+            is RaceOutcome.AllFailed -> return noRoute(race.reasons())
+            RaceOutcome.NoCandidates -> return noRoute(listOf("No stored routes."))
         }
 
         rememberRoutes(reached)
@@ -124,6 +125,18 @@ class SyncRunner(private val container: AppContainer) {
         finishSession(sessionId, outcome, usedDelta)
 
         return CycleResult.Done(outcome, reached.endpoint)
+    }
+
+    /**
+     * Records why the cycle found no server. From the outside a server that is switched off,
+     * a firewall dropping the port and a VPN swallowing local traffic all look alike; only
+     * the per-route reasons tell them apart, and only the phone sees them.
+     */
+    private suspend fun noRoute(reasons: List<String>): CycleResult.NoRoute {
+        val message = "No route to the server answered: ${reasons.joinToString("; ")}"
+        Log.w(TAG, message)
+        RoomJournal(container.database.log()).record(JournalLevel.WARN, "no_route", message)
+        return CycleResult.NoRoute(reasons)
     }
 
     private suspend fun journalDiscovery(discovered: List<ServerEndpoint>) {

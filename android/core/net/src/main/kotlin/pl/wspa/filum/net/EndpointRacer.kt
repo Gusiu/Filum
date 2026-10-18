@@ -19,7 +19,10 @@ sealed interface RaceOutcome {
         val elapsedMillis: Long,
     ) : RaceOutcome
 
-    data class AllFailed(val failures: List<EndpointFailure>) : RaceOutcome
+    data class AllFailed(val failures: List<EndpointFailure>) : RaceOutcome {
+        /** One entry per route, ready for the journal: the address and why it failed. */
+        fun reasons(): List<String> = failures.map { "${it.endpoint}: ${it.reason}" }
+    }
 
     data object NoCandidates : RaceOutcome
 }
@@ -114,7 +117,9 @@ class EndpointRacer(
 
             is ApiResult.Failure -> Evaluation.Rejected("${result.status}: ${result.code}")
 
-            is ApiResult.Unreachable -> Evaluation.Rejected(result.message)
+            // The exception type is kept: OkHttp's messages are often a single word such as
+            // "timeout", and the type tells which layer gave up.
+            is ApiResult.Unreachable -> Evaluation.Rejected("${result.cause::class.java.simpleName}: ${result.message}")
         }
 
     private sealed interface Evaluation {
