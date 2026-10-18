@@ -14,6 +14,7 @@ import kotlinx.coroutines.withContext
 import pl.wspa.filum.app.AppContainer
 import pl.wspa.filum.app.PairingResult
 import pl.wspa.filum.app.VerificationResult
+import pl.wspa.filum.app.work.SyncActivity
 import pl.wspa.filum.app.work.SyncScheduler
 import pl.wspa.filum.data.LogEventEntity
 import pl.wspa.filum.data.PairedServerEntity
@@ -25,6 +26,9 @@ import pl.wspa.filum.data.SyncSessionEntity
 import pl.wspa.filum.scan.Environment
 import pl.wspa.filum.scan.ExclusionRules
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 enum class Screen { HOME, PAIRING, LOG, FOLDERS }
 
@@ -53,12 +57,12 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
-     * Whether a cycle is running. The state comes from WorkManager, not from a field in this
-     * class: the work outlives the screen, so we ask about it where it actually lives.
+     * What the background sync is doing. The state comes from WorkManager, not from a field
+     * in this class: the work outlives the screen, so we ask about it where it actually lives.
      */
-    val running: StateFlow<Boolean> =
-        SyncScheduler.observeRunning(container.context)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+    val activity: StateFlow<SyncActivity> =
+        SyncScheduler.observeActivity(container.context)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SyncActivity.Idle)
 
     init {
         refresh()
@@ -114,7 +118,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
      * differently.
      */
     fun syncNow() {
-        SyncScheduler.runNow(container.context)
+        viewModelScope.launch { SyncScheduler.runNow(container.context) }
     }
 
     /**
@@ -255,6 +259,10 @@ fun formatBytes(bytes: Long): String {
 
     return if (unit == 0) "$bytes B" else String.format("%.1f %s", value, units[unit])
 }
+
+/** Hours and minutes are enough: WorkManager caps a retry delay at five hours. */
+fun formatTime(epochMillis: Long): String =
+    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(epochMillis))
 
 fun describe(session: SyncSessionEntity?): String = when {
     session == null -> "Jeszcze nie synchronizowano."

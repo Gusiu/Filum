@@ -23,13 +23,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import pl.wspa.filum.app.work.SyncActivity
 import pl.wspa.filum.data.Schedule
 import pl.wspa.filum.protocol.IntegrityPolicy
 
 @Composable
 fun HomeScreen(
     state: UiState,
-    running: Boolean,
+    activity: SyncActivity,
     onSyncNow: () -> Unit,
     onVerify: () -> Unit,
     onScheduleChange: (Schedule) -> Unit,
@@ -85,6 +86,8 @@ fun HomeScreen(
 
         ScheduleSelector(state.settings.schedule, onScheduleChange)
 
+        val running = activity == SyncActivity.Running
+
         Button(
             onClick = onSyncNow,
             enabled = !running && state.server != null && state.hasStorageAccess,
@@ -94,8 +97,18 @@ fun HomeScreen(
                 CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                 Text("  Working…")
             } else {
-                Text("Synchronizuj now")
+                Text("Sync now")
             }
+        }
+
+        if (activity is SyncActivity.RetryScheduled) {
+            // Without this line a failed cycle is invisible until the journal is opened.
+            Text(
+                "The last attempt did not reach the server. " +
+                    (activity.atMillis?.let { "Next try at ${formatTime(it)}. " } ?: "") +
+                    "Details are in the journal.",
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
 
         state.lastError?.let { error ->

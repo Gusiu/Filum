@@ -31,7 +31,7 @@ class MainActivity : ComponentActivity() {
                 val model: MainViewModel = viewModel(factory = MainViewModel.Factory(container))
                 val state by model.state.collectAsState()
                 val log by model.log.collectAsState()
-                val running by model.running.collectAsState()
+                val activity by model.activity.collectAsState()
 
                 // Full storage access is granted in the system settings, outside the
                 // application, so its state has to be re-read on return.
@@ -47,7 +47,7 @@ class MainActivity : ComponentActivity() {
 
                             Screen.HOME -> HomeScreen(
                                 state = state,
-                                running = running,
+                                activity = activity,
                                 onSyncNow = model::syncNow,
                                 onVerify = model::verify,
                                 onScheduleChange = model::setSchedule,
