@@ -85,7 +85,7 @@ green on both sides - because each side did exactly what its author intended.
 |---|---|
 | pairing, ping, manifest, resumable transfer | works, checked against the server |
 | screens: pairing, home, journal | work |
-| scanning: `MediaStore` and the full tree walk | implemented, not run on a phone |
+| scanning: `MediaStore` and the full tree walk | works on a phone |
 | scheduling: manual, daily, weekly | works |
 | foreground service that watches its budget | works |
 | discovery over mDNS | works, checked against the server |
@@ -97,7 +97,12 @@ green on both sides - because each side did exactly what its author intended.
 Pairing is done by pasting the `filum1:…` string from the clipboard. Camera scanning
 will land alongside the server panel, which has to draw that code anyway (stage 7).
 
-**The cycle has not yet been run on a real phone.** The protocol code is verified
-against the server, but `MediaStore`, the Android Keystore, the
-`MANAGE_EXTERNAL_STORAGE` permission and binding sockets to Wi-Fi can only be exercised
-on a device.
+**Tested on a phone.** A Galaxy S24 Ultra on Android 16 made a full backup of 7807
+files (8 GB) in 21 minutes over Wi-Fi, with the device key in StrongBox, and then
+incremental ones, also behind a VPN that forbids bypassing the tunnel. A script
+independent of this code checked the copy: the ledger chain, the digest of every file on
+disk and the set of paths against the phone's database all agree.
+
+The test found faults that no test on the JVM could show - the Keystore key refused to
+sign the TLS handshake, losing probes that ignored cancellation cost the race its winner,
+and a bound socket hung under the VPN instead of failing.

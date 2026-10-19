@@ -88,7 +88,8 @@ Stages 1-9 of the [build order table](docs/ARCHITECTURE.md#8-build-order).
 | thorough change detection (digest in the manifest) | works |
 | server as a Windows service | works, not registered |
 | **client↔server conformance test** | passes |
-| **186 server tests, 189 client tests** | green |
+| **186 server tests, 217 client tests** | green |
+| tested on a phone (Galaxy S24 Ultra, Android 16) | full backup and incremental cycles, also behind a VPN |
 | QR scanning with the phone camera | not started |
 
 `EndToEndTest` runs the real Kotlin client against the real C# server and checks that
