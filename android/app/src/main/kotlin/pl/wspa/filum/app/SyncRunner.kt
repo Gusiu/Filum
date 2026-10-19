@@ -3,7 +3,6 @@ package pl.wspa.filum.app
 import android.util.Log
 import pl.wspa.filum.crypto.DeviceIdentity
 import pl.wspa.filum.crypto.FilumTls
-import pl.wspa.filum.data.EndpointEntity
 import pl.wspa.filum.data.PairedServerEntity
 import pl.wspa.filum.data.ScanStateEntity
 import pl.wspa.filum.data.SettingsEntity
@@ -145,9 +144,8 @@ class SyncRunner(private val container: AppContainer) {
 
         // Stored immediately: on the next cycle the route is already among the
         // candidates and discovery will not be needed.
-        container.database.endpoints().upsert(
-            discovered.map { EndpointEntity(it.host, it.port, it.kind.name) }
-        )
+        val dao = container.database.endpoints()
+        dao.upsert(RouteBook.merge(dao.all(), discovered))
     }
 
     // --- routes ---
@@ -171,18 +169,19 @@ class SyncRunner(private val container: AppContainer) {
     private suspend fun rememberRoutes(reached: RaceOutcome.Reached) {
         val dao = container.database.endpoints()
 
+        val advertised = reached.ping.endpoints.mapNotNull { raw ->
+            ServerEndpoint.parse(raw, EndpointKind.MANUAL)?.classified()
+        }
+
+        if (advertised.isNotEmpty()) {
+            dao.upsert(RouteBook.merge(dao.all(), advertised))
+        }
+
+        // After the merge, which would otherwise be the last word on the winner's row.
         dao.markReached(
             reached.endpoint.host, reached.endpoint.port,
             at = System.currentTimeMillis(), rtt = reached.elapsedMillis,
         )
-
-        val advertised = reached.ping.endpoints.mapNotNull { raw ->
-            ServerEndpoint.parse(raw, EndpointKind.LAN)
-        }
-
-        if (advertised.isNotEmpty()) {
-            dao.upsert(advertised.map { EndpointEntity(it.host, it.port, it.kind.name) })
-        }
     }
 
     // --- scan ---

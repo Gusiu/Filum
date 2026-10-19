@@ -246,4 +246,35 @@ class ServerEndpointTest {
         assertTrue(!EndpointKind.OVERLAY.isLocal)
         assertTrue(!EndpointKind.MANUAL.isLocal)
     }
+
+    @Test
+    fun `the kind of a reported address follows its range`() {
+        // The pairing code lists every interface of the computer. Stored as LAN, the
+        // overlay address was bound to Wi-Fi as well, where it can never answer.
+        assertEquals(EndpointKind.LAN, EndpointKind.of("192.168.1.9"))
+        assertEquals(EndpointKind.LAN, EndpointKind.of("10.0.0.5"))
+        assertEquals(EndpointKind.LAN, EndpointKind.of("172.30.176.1"))
+        assertEquals(EndpointKind.LAN, EndpointKind.of("169.254.10.1"))
+        assertEquals(EndpointKind.OVERLAY, EndpointKind.of("100.126.252.158"))
+        assertEquals(EndpointKind.LAN, EndpointKind.of("fe80::1"))
+        assertEquals(EndpointKind.LAN, EndpointKind.of("fd12:3456::1"))
+        assertEquals(EndpointKind.OVERLAY, EndpointKind.of("fd7a:115c:a1e0::1"))
+    }
+
+    @Test
+    fun `an address outside the known ranges is not taken for local`() {
+        assertEquals(EndpointKind.MANUAL, EndpointKind.of("100.63.255.1"))
+        assertEquals(EndpointKind.MANUAL, EndpointKind.of("172.32.0.1"))
+        assertEquals(EndpointKind.MANUAL, EndpointKind.of("8.8.8.8"))
+        assertEquals(EndpointKind.MANUAL, EndpointKind.of("2001:db8::1"))
+        assertEquals(EndpointKind.MANUAL, EndpointKind.of("filum.example.org"))
+        assertEquals(EndpointKind.MANUAL, EndpointKind.of("192.168.1.300"))
+    }
+
+    @Test
+    fun `classifying keeps the address and port`() {
+        val parsed = ServerEndpoint.parse("100.126.252.158:8765", EndpointKind.MANUAL)!!.classified()
+
+        assertEquals(ServerEndpoint("100.126.252.158", 8765, EndpointKind.OVERLAY), parsed)
+    }
 }
