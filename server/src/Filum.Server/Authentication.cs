@@ -47,7 +47,7 @@ public static class DeviceContext
 /// <item><b>Phone</b> - mTLS with a pinned key (protocol §3.2). Protects the data from a
 /// stranger's device on the same network.</item>
 /// <item><b>Pairing</b> - a single-use token instead of a certificate, because the device
-/// dopiero go zdobywa (§3.3).</item>
+/// is only just obtaining one (§3.3).</item>
 /// <item><b>Panel and administrative resources</b> - loopback only. The person sitting at
 /// the computer is entitled by definition; exposing the panel on the network would let a
 /// stranger's device mint itself a pairing token or read the contents of the backup.</item>
@@ -133,7 +133,7 @@ public sealed class DeviceAuthenticationMiddleware(
     }
 
     /// <summary>
-    /// Adres nieznany traktujemy jako zdalny.
+    /// An unknown address is treated as remote.
     ///
     /// Kestrel always supplies it, but were it ever to sit behind a proxy, a missing
     /// address must not open the panel - in doubt we take the restrictive branch.

@@ -36,9 +36,9 @@ public static class Format
         return elapsed switch
         {
             { TotalMinutes: < 1 } => "just now",
-            { TotalMinutes: < 60 } => $"{(int)elapsed.TotalMinutes} min temu",
-            { TotalHours: < 24 } => $"{(int)elapsed.TotalHours} godz. temu",
-            { TotalDays: < 30 } => $"{(int)elapsed.TotalDays} dni temu",
+            { TotalMinutes: < 60 } => $"{(int)elapsed.TotalMinutes} min ago",
+            { TotalHours: < 24 } => $"{(int)elapsed.TotalHours} h ago",
+            { TotalDays: < 30 } => $"{(int)elapsed.TotalDays} days ago",
             _ => at.ToLocalTime().ToString("d MMM yyyy", CultureInfo.CurrentCulture),
         };
     }

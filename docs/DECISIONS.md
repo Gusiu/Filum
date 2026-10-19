@@ -169,6 +169,12 @@ outside the local network).
 that local routes work despite an active VPN. With a VPN that blocks traffic outside the
 tunnel, the local route becomes unavailable - the degradation must be silent.
 
+**Revised after testing on a device.** A VPN that forbids bypassing the tunnel did not make
+binding fail: connections on the bound socket hung until they timed out, while the default
+route reached the server, because the VPN left the local network out of the tunnel. Local
+addresses are therefore raced both bound and on the default route (protocol §4.3), and the
+transfer follows the winner.
+
 ---
 
 ## ADR-007 - Keeping previous versions instead of overwriting

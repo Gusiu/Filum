@@ -12,7 +12,8 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import pl.wspa.filum.data.Schedule
 import pl.wspa.filum.data.SettingsEntity
 import java.time.Duration
@@ -53,13 +54,22 @@ object SyncScheduler {
         manager.enqueueUniquePeriodicWork(PERIODIC_WORK, ExistingPeriodicWorkPolicy.UPDATE, request)
     }
 
-    fun runNow(context: Context) {
+    /**
+     * Starts a cycle now unless one is already running.
+     *
+     * Work that waits out a retry delay is replaced rather than kept: WorkManager refuses to
+     * run it before its backoff ends, and after a few failures that is hours away. Pressing
+     * the button is a deliberate decision, and it has to start something.
+     */
+    suspend fun runNow(context: Context) {
+        val manager = WorkManager.getInstance(context)
+        if (activityOf(manager).first() == SyncActivity.Running) return
+
         val request = OneTimeWorkRequestBuilder<SyncWorker>()
             .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .build()
 
-        WorkManager.getInstance(context)
-            .enqueueUniqueWork(MANUAL_WORK, ExistingWorkPolicy.KEEP, request)
+        manager.enqueueUniqueWork(MANUAL_WORK, ExistingWorkPolicy.REPLACE, request)
     }
 
     fun cancelAll(context: Context) {
@@ -69,11 +79,20 @@ object SyncScheduler {
         }
     }
 
-    /** Whether any cycle is running - used to grey out the button in the interface. */
-    fun observeRunning(context: Context): Flow<Boolean> =
-        WorkManager.getInstance(context)
-            .getWorkInfosForUniqueWorkFlow(MANUAL_WORK)
-            .map { infos -> infos.any { it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED } }
+    /** What the background sync is doing - for the button and the status line on the home screen. */
+    fun observeActivity(context: Context): Flow<SyncActivity> =
+        activityOf(WorkManager.getInstance(context))
+
+    private fun activityOf(manager: WorkManager): Flow<SyncActivity> =
+        combine(
+            manager.getWorkInfosForUniqueWorkFlow(MANUAL_WORK),
+            manager.getWorkInfosForUniqueWorkFlow(PERIODIC_WORK),
+        ) { manual, periodic ->
+            SyncActivity.of(manual.map { it.snapshot(manual = true) } + periodic.map { it.snapshot(manual = false) })
+        }
+
+    private fun WorkInfo.snapshot(manual: Boolean) =
+        WorkSnapshot(state, runAttemptCount, nextScheduleTimeMillis, manual)
 
     private fun constraintsFor(settings: SettingsEntity): Constraints = Constraints.Builder()
         .setRequiredNetworkType(if (settings.unmeteredOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)

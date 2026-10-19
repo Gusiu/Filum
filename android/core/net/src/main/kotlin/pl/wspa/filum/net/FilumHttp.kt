@@ -10,10 +10,10 @@ import javax.net.SocketFactory
 /**
  * The source of socket factories for local routes.
  *
- * When a VPN is running, all of the application's traffic enters the tunnel by default and
- * `192.168.x.x` stops being reachable (protocol §4.3). The fix is to bind the socket; the
- * gniazda do konkretnego obiektu `Network` z `ConnectivityManager`. Implementacja
- * Android implementation lives in `:core:net`, but the interface lets the race be tested without it.
+ * When a VPN is running, the application's traffic may enter the tunnel and `192.168.x.x`
+ * then stops being reachable (protocol §4.3). Binding the socket to a specific `Network`
+ * object from `ConnectivityManager` gets around that. The Android implementation lives in
+ * `:core:net`, but the interface lets the clients be tested without it.
  */
 fun interface LocalNetworkBinder {
     /** Returns a Wi-Fi-bound socket factory, or `null` when the default route must be used. */
@@ -21,11 +21,11 @@ fun interface LocalNetworkBinder {
 }
 
 /**
- * HTTP clients for the individual route kinds.
+ * HTTP clients for the two ways a route can reach the server.
  *
- * There is more than one client out of necessity rather than convenience: a local route has
- * to go over a bound socket and an overlay route over the tunnel. One client cannot do both
- * at once.
+ * There is more than one client out of necessity rather than convenience: a socket bound to
+ * the Wi-Fi network and a socket on the default route behave differently under a VPN, and
+ * which of them works depends on the VPN, not on anything the client can read in advance.
  */
 class FilumHttpClients(
     private val tls: TlsBundle,
@@ -34,24 +34,36 @@ class FilumHttpClients(
     private val connectTimeoutSeconds: Long = DEFAULT_CONNECT_TIMEOUT_SECONDS,
 ) {
 
-    private val base: OkHttpClient by lazy { build(socketFactory = null) }
+    /** The client on the default route - for overlay routes, pairing and the tests. */
+    val defaultRoute: OkHttpClient by lazy { build(socketFactory = null) }
 
-    private val localBound: OkHttpClient? by lazy {
+    // Read once per instance, so the routes offered for a race and the clients that serve
+    // them agree even if the Wi-Fi network changes in the meantime.
+    private val wifiBound: OkHttpClient? by lazy {
         binder.wifiSocketFactory()?.let { build(socketFactory = it) }
     }
 
     /**
-     * The client for a given route. For local routes we try a bound socket, and when the VPN
-     * blocks traffic outside the tunnel and the binding fails, we quietly fall back to the
-     * default route - there is nothing to inform the user about, since the overlay route is
-     * about to win anyway (§4.3).
+     * The routes to race for the given addresses (§4.3).
+     *
+     * Every local address is offered twice while a Wi-Fi network is known: bound to it and
+     * on the default route. A VPN that captures the local network leaves only the bound
+     * socket working; a VPN that forbids bypassing leaves only the default route - and it
+     * does not refuse the bound socket, it lets the connection hang. Racing both turns that
+     * difference into an ordinary lost probe.
      */
-    fun forKind(kind: EndpointKind): OkHttpClient =
-        if (kind.isLocal) localBound ?: base else base
+    fun routesFor(candidates: List<ServerEndpoint>): List<ServerEndpoint> {
+        if (wifiBound == null) return candidates
+        return candidates + candidates.filter { it.kind.isLocal }.map { it.copy(boundToWifi = true) }
+    }
+
+    /** The client a route asks for. A bound route falls back to the default one if Wi-Fi is gone. */
+    fun forEndpoint(endpoint: ServerEndpoint): OkHttpClient =
+        if (endpoint.boundToWifi) wifiBound ?: defaultRoute else defaultRoute
 
     /** The client used for probing in the race: a short timeout, no retries. */
-    fun forProbe(kind: EndpointKind): OkHttpClient =
-        forKind(kind).newBuilder()
+    fun forProbe(endpoint: ServerEndpoint): OkHttpClient =
+        forEndpoint(endpoint).newBuilder()
             .callTimeout(EndpointRacer.DEFAULT_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
             .retryOnConnectionFailure(false)
             .build()

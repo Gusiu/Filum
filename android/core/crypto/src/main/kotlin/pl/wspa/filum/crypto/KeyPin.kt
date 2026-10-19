@@ -5,7 +5,7 @@ import java.security.cert.X509Certificate
 import java.util.Base64
 
 /**
- * Odcisk klucza publicznego: `base64url(SHA-256(SubjectPublicKeyInfo))`, 43 znaki
+ * The public key fingerprint: `base64url(SHA-256(SubjectPublicKeyInfo))`, 43 characters
  * (protocol §3.1, ADR-005).
  *
  * Computed over SubjectPublicKeyInfo rather than the whole certificate. That way a pin

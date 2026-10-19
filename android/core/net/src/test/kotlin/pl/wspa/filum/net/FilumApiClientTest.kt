@@ -1,9 +1,15 @@
 package pl.wspa.filum.net
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
+import okhttp3.mockwebserver.SocketPolicy
 import okhttp3.tls.HandshakeCertificates
 import okhttp3.tls.HeldCertificate
 import org.junit.jupiter.api.AfterEach
@@ -25,6 +31,7 @@ import pl.wspa.filum.protocol.ManifestRequest
 import java.io.File
 import java.nio.file.Path
 import java.util.Base64
+import java.util.concurrent.TimeUnit
 import javax.net.ssl.KeyManager
 
 /**
@@ -67,7 +74,7 @@ class FilumApiClientTest {
         ServerEndpoint(server.hostName, server.port, EndpointKind.LAN)
 
     private fun clientKeyManagers(): Array<KeyManager> = arrayOf(
-        FixedKeyManager("telefon", clientCertificate.certificate, clientCertificate.keyPair.private)
+        FixedKeyManager("phone", clientCertificate.certificate, clientCertificate.keyPair.private)
     )
 
     private fun api(
@@ -75,7 +82,7 @@ class FilumApiClientTest {
         keyManagers: Array<KeyManager>? = clientKeyManagers(),
     ): FilumApiClient {
         val tls = FilumTls.bundle(pin, keyManagers)
-        return FilumApiClient(FilumHttpClients(tls).forKind(EndpointKind.LAN))
+        return FilumApiClient(FilumHttpClients(tls).defaultRoute)
     }
 
     private fun json(body: String) = MockResponse()
@@ -128,10 +135,10 @@ class FilumApiClientTest {
     @Test
     fun `a server with a different key is rejected at the TLS level`() = runTest {
         // A substituted server never even gets a chance to answer - that is the point of ADR-005.
-        val obcyPin = KeyPin.of(HeldCertificate.Builder().commonName("Obcy").build().certificate)
+        val foreignPin = KeyPin.of(HeldCertificate.Builder().commonName("Foreign").build().certificate)
         server.enqueue(json(pingBody))
 
-        val result = api(pin = obcyPin).ping(endpoint())
+        val result = api(pin = foreignPin).ping(endpoint())
 
         assertInstanceOf(ApiResult.Unreachable::class.java, result)
     }
@@ -154,7 +161,7 @@ class FilumApiClientTest {
         )
 
         val request = ManifestRequest(
-            session = "sesja-1",
+            session = "session-1",
             mode = ManifestRequest.MODE_DELTA,
             batch = 0,
             final = true,
@@ -178,7 +185,7 @@ class FilumApiClientTest {
     @Test
     fun `rejected paths are read from the manifest response`() = runTest {
         server.enqueue(
-            json("""{"have":0,"needed":[],"rejected":[{"p":"../uciekinier.txt","error":"traversal"}]}""")
+            json("""{"have":0,"needed":[],"rejected":[{"p":"../escapee.txt","error":"traversal"}]}""")
         )
 
         val result = api().manifest(
@@ -193,12 +200,12 @@ class FilumApiClientTest {
 
     @Test
     fun `put sends the protocol headers and the whole body`(@TempDir dir: Path) = runTest {
-        val file = File(dir.toFile(), "foto.jpg").apply { writeText("0123456789ABCDEF") }
+        val file = File(dir.toFile(), "photo.jpg").apply { writeText("0123456789ABCDEF") }
         server.enqueue(json("""{"received":16,"offset":16,"complete":true,"versioned":null}"""))
 
         val result = api().putFile(
             endpoint = endpoint(),
-            canonicalPath = "DCIM/Camera/zdjecie-lg.jpg",
+            canonicalPath = "DCIM/Camera/photo-lg.jpg",
             file = file,
             size = 16,
             mtime = 1_756_400_000,
@@ -216,7 +223,7 @@ class FilumApiClientTest {
         assertEquals("1756400000", sent.getHeader(FilumHeaders.MTIME))
         assertEquals("0", sent.getHeader(FilumHeaders.OFFSET))
         assertEquals("a".repeat(64), sent.getHeader(FilumHeaders.DIGEST))
-        assertPathHeader(sent, "DCIM/Camera/zdjecie-lg.jpg")
+        assertPathHeader(sent, "DCIM/Camera/photo-lg.jpg")
     }
 
     @Test
@@ -248,13 +255,13 @@ class FilumApiClientTest {
         val file = File(dir.toFile(), "a").apply { writeText("x") }
         server.enqueue(json("""{"received":1,"offset":1,"complete":true}"""))
 
-        api().putFile(endpoint(), "Documents/raport:v2.txt", file, 1, 1, 0, 1)
+        api().putFile(endpoint(), "Documents/report:v2.txt", file, 1, 1, 0, 1)
 
         val header = server.takeRequest().getHeader(FilumHeaders.PATH)!!
         assertTrue(!header.contains('='), "the padding has to be gone")
         assertTrue(!header.contains('+') && !header.contains('/'), "the URL variant, not plain base64")
         assertEquals(
-            "Documents/raport:v2.txt",
+            "Documents/report:v2.txt",
             String(Base64.getUrlDecoder().decode(header), Charsets.UTF_8),
         )
     }
@@ -318,23 +325,37 @@ class FilumApiClientTest {
     fun `a response that is not the Filum protocol is treated as no server`() = runTest {
         // We reached somebody else's service at this address. That is not a protocol error
         // but evidence that the server is not on this route - the race must not pick it.
-        server.enqueue(json("<html>witaj na routerze</html>"))
+        server.enqueue(json("<html>welcome to the router</html>"))
 
         val result = api().ping(endpoint())
 
         assertInstanceOf(ApiResult.Unreachable::class.java, result)
     }
 
-    // --- parowanie ---
+    @Test
+    fun `cancelling a call aborts it instead of waiting for the server`() = runBlocking {
+        // The route race cancels the probes that lost. If cancellation waited for the
+        // server or the call timeout, every dead address would hold the race open.
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
+
+        val call = async(Dispatchers.Default) { api().ping(endpoint()) }
+        assertNotNull(server.takeRequest(5, TimeUnit.SECONDS), "the request never reached the server")
+
+        val aborted = withTimeoutOrNull(2_000) { call.cancelAndJoin(); true }
+
+        assertEquals(true, aborted)
+    }
+
+    // --- pairing ---
 
     @Test
     fun `pairing sends the certificate and the token`() = runTest {
-        server.enqueue(json("""{"deviceKey":"PIN-TELEFONU","serverInstanceId":"abc","protocol":1}"""))
+        server.enqueue(json("""{"deviceKey":"PHONE-PIN","serverInstanceId":"abc","protocol":1}"""))
 
         val der = clientCertificate.certificate.encoded
         val result = api().pair(endpoint(), "TOKEN-123", der, "Galaxy S24 Ultra")
 
-        assertEquals("PIN-TELEFONU", result.expectOk().deviceKey)
+        assertEquals("PHONE-PIN", result.expectOk().deviceKey)
 
         val sent = server.takeRequest()
         assertEquals("Bearer TOKEN-123", sent.getHeader("Authorization"))

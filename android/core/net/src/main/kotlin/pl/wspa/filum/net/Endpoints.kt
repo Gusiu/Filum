@@ -3,7 +3,7 @@ package pl.wspa.filum.net
 /**
  * Where this route came from. The kind decides two things: whether the socket has to be
  * bound to a specific network (protocol §4.3) and which transfer policy applies
- * po jej wygraniu (§3.6 architektury).
+ * once it has won (architecture §3.6).
  */
 enum class EndpointKind {
     /** Found over mDNS on the current local network. */
@@ -24,6 +24,46 @@ enum class EndpointKind {
      * enter the tunnel and 192.168.x.x would become unreachable.
      */
     val isLocal: Boolean get() = this == MDNS || this == LAN
+
+    companion object {
+        /**
+         * The kind of an address the server reported about itself, judged by its range.
+         *
+         * The pairing code and the ping response list every interface of the computer
+         * together, overlay addresses among them. Taking them all for local addresses bound
+         * the overlay one to the Wi-Fi network too, where it can never answer.
+         */
+        fun of(host: String): EndpointKind {
+            val ipv4 = host.split('.').mapNotNull { it.toIntOrNull()?.takeIf { part -> part in 0..255 } }
+            if (ipv4.size == 4 && host.count { it == '.' } == 3) {
+                val (a, b) = ipv4
+                return when {
+                    // 100.64.0.0/10 - shared address space, used by Meshnet and Tailscale.
+                    a == 100 && b in 64..127 -> OVERLAY
+                    a == 10 -> LAN
+                    a == 172 && b in 16..31 -> LAN
+                    a == 192 && b == 168 -> LAN
+                    a == 169 && b == 254 -> LAN
+                    else -> MANUAL
+                }
+            }
+
+            val ipv6 = host.lowercase()
+            if (ipv6.contains(':')) {
+                return when {
+                    // Tailscale takes its IPv6 addresses from one unique local prefix.
+                    ipv6.startsWith("fd7a:115c:a1e0:") -> OVERLAY
+                    // fe80::/10 link-local and fc00::/7 unique local addresses.
+                    ipv6.take(3) in setOf("fe8", "fe9", "fea", "feb") -> LAN
+                    ipv6.startsWith("fc") || ipv6.startsWith("fd") -> LAN
+                    else -> MANUAL
+                }
+            }
+
+            // A name - a DDNS address, say - says nothing about where it leads.
+            return MANUAL
+        }
+    }
 }
 
 /**
@@ -34,16 +74,26 @@ data class ServerEndpoint(
     val host: String,
     val port: Int,
     val kind: EndpointKind,
+    /**
+     * Whether the connection goes over a socket bound to the Wi-Fi network rather than over
+     * the default route (§4.3). It is a property of the attempt, not of the address: the
+     * same local address is raced both ways, and only the race tells which one works.
+     */
+    val boundToWifi: Boolean = false,
 ) {
     val authority: String get() = if (host.contains(':')) "[$host]:$port" else "$host:$port"
 
     val baseUrl: String get() = "https://$authority"
 
-    override fun toString(): String = "$authority (${kind.name.lowercase()})"
+    override fun toString(): String =
+        "$authority (${kind.name.lowercase()}${if (boundToWifi) ", wifi-bound" else ""})"
+
+    /** The same address with the kind its range implies - see [EndpointKind.of]. */
+    fun classified(): ServerEndpoint = copy(kind = EndpointKind.of(host))
 
     companion object {
         /**
-         * Rozbiera zapis `host:port` albo `[ipv6]:port` z odpowiedzi na ping (§4.4) lub
+         * Parses `host:port` or `[ipv6]:port` from the ping response (§4.4) or
          * from the pairing code. It returns null rather than throwing, because the address list
          * comes off the network and one broken entry must not wreck the whole route refresh.
          */

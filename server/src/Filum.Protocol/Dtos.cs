@@ -191,7 +191,7 @@ public sealed record VerifyResponse(
 /// Files present on the server and no longer on the phone.
 ///
 /// The report is informational only - nothing is deleted on its basis
-/// (ADR-015, niezmiennik I1).
+/// (ADR-015, invariant I1).
 /// </summary>
 public sealed record OrphanReport(
     [property: JsonPropertyName("session")] string Session,

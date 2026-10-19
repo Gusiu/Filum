@@ -15,8 +15,8 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    // FilesystemScanner, ExclusionRules i normalizacja mtime nie dotykają API Androida,
-    // więc testujemy je na prawdziwych plikach w katalogu tymczasowym, bez emulatora.
+    // FilesystemScanner, ExclusionRules and mtime normalisation do not touch the Android
+    // API, so we test them on real files in a temporary directory, with no emulator.
     testOptions {
         unitTests.all { it.useJUnitPlatform() }
     }

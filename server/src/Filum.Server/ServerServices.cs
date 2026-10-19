@@ -7,13 +7,11 @@ using Filum.Core;
 namespace Filum.Server;
 
 /// <summary>
-/// Per-device file and byte counters, reported in the ping response
-/// i w panelu.
+/// Per-device file and byte counters, reported in the ping response and in the panel.
 ///
 /// Ping takes part in the route race (§4.2), so it has to be cheap. Walking the tree on
 /// every call would be unacceptable across a hundred thousand files, so the value comes
-/// from a cache and the refresh happens in the background
-/// i nigdy nie blokuje odpowiedzi.
+/// from a cache and the refresh happens in the background, never blocking a response.
 /// </summary>
 public sealed class DeviceStats(StoragePaths paths, ILogger<DeviceStats> logger)
 {

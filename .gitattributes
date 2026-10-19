@@ -1,10 +1,10 @@
-# Domyslnie normalizujemy do LF w repozytorium.
+# Normalise to LF in the repository by default.
 * text=auto eol=lf
 
-# Wektory testowe musza byc bajt w bajt takie same po obu stronach.
-# Zadnej konwersji koncow linii - to jest plik kontraktowy, nie zrodlo.
+# The test vectors must be byte-for-byte identical on both sides.
+# No line ending conversion - this is a contract file, not source code.
 *.tsv -text
 
-# Pliki narzedzi Visual Studio / Rider oczekuja CRLF.
+# Visual Studio and Rider expect CRLF in their project files.
 *.sln text eol=crlf
 *.csproj text eol=crlf

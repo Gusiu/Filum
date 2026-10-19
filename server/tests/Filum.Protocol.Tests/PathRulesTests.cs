@@ -21,7 +21,7 @@ public class PathRulesTests
         }
         else
         {
-            Assert.True(result.Ok, $"oczekiwano powodzenia, odrzucono z powodem {result.Reason}");
+            Assert.True(result.Ok, $"expected success, rejected with reason {result.Reason}");
             Assert.Equal(vector.Expected, result.Stored);
         }
     }
@@ -39,7 +39,7 @@ public class PathRulesTests
     [Fact]
     public void TheVectorFileIsComplete()
     {
-        // Zabezpieczenie przed cichym okrojeniem pliku, np. przez edytor
+        // A guard against the file being silently cut short, e.g. by an editor
         // stripping trailing whitespace, or a badly resolved merge.
         Assert.True(TestVectors.Load().Count >= 30);
     }
@@ -62,7 +62,7 @@ public class PathRulesTests
     public void Encoding_IsInjective_ForTextThatLooksEncoded()
     {
         // If '%' were not encoded first, both names would collide
-        // po dekodowaniu.
+        // after decoding.
         var a = PathRules.Sanitize("Documents/a%3Ab.txt").Stored;
         var b = PathRules.Sanitize("Documents/a:b.txt").Stored;
 
@@ -94,8 +94,8 @@ public class PathRulesTests
     public void TheCollisionSuffix_DiffersByLetterCase()
     {
         Assert.NotEqual(
-            PathRules.CaseCollisionSuffix("Pictures/foto.jpg"),
-            PathRules.CaseCollisionSuffix("Pictures/Foto.jpg"));
+            PathRules.CaseCollisionSuffix("Pictures/photo.jpg"),
+            PathRules.CaseCollisionSuffix("Pictures/Photo.jpg"));
     }
 
     // --- component length limit (§5 rule 6) ---
@@ -158,10 +158,10 @@ public class PathRulesTests
     }
 
     [Theory]
-    [InlineData("plik.", "plik%2E")]
-    [InlineData("plik ", "plik%20")]
-    [InlineData("plik..", "plik.%2E")]
-    [InlineData("plik  ", "plik %20")]
+    [InlineData("file.", "file%2E")]
+    [InlineData("file ", "file%20")]
+    [InlineData("file..", "file.%2E")]
+    [InlineData("file  ", "file %20")]
     [InlineData("a.b.c", "a.b.c")]
     public void TrailingDotsAndSpaces_EncodeOnlyTheLastCharacter(string input, string expected)
     {

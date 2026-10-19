@@ -47,7 +47,7 @@ fun FoldersScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Foldery", style = MaterialTheme.typography.headlineMedium)
+            Text("Folders", style = MaterialTheme.typography.headlineMedium)
             TextButton(onClick = onBack) { Text("Back") }
         }
 
@@ -59,7 +59,7 @@ fun FoldersScreen(
         )
 
         if (loading) {
-            Text("Czytam katalogi…", style = MaterialTheme.typography.bodyMedium)
+            Text("Reading folders…", style = MaterialTheme.typography.bodyMedium)
         } else if (folders.isEmpty()) {
             Text("The storage directories could not be read.", style = MaterialTheme.typography.bodyMedium)
         } else {
@@ -94,7 +94,7 @@ fun FoldersScreen(
 
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Zawsze pomijane", style = MaterialTheme.typography.titleSmall)
+                Text("Always skipped", style = MaterialTheme.typography.titleSmall)
                 Text(
                     "Android/data and Android/obb have been inaccessible to applications since " +
                         "Android 11 and we do not try to work around that. Thumbnails, trash and " +

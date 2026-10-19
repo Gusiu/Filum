@@ -8,12 +8,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import pl.wspa.filum.app.AppContainer
 import pl.wspa.filum.app.PairingResult
 import pl.wspa.filum.app.VerificationResult
+import pl.wspa.filum.app.work.SyncActivity
 import pl.wspa.filum.app.work.SyncScheduler
 import pl.wspa.filum.data.LogEventEntity
 import pl.wspa.filum.data.PairedServerEntity
@@ -25,6 +27,9 @@ import pl.wspa.filum.data.SyncSessionEntity
 import pl.wspa.filum.scan.Environment
 import pl.wspa.filum.scan.ExclusionRules
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 enum class Screen { HOME, PAIRING, LOG, FOLDERS }
 
@@ -53,33 +58,48 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
-     * Whether a cycle is running. The state comes from WorkManager, not from a field in this
-     * class: the work outlives the screen, so we ask about it where it actually lives.
+     * What the background sync is doing. The state comes from WorkManager, not from a field
+     * in this class: the work outlives the screen, so we ask about it where it actually lives.
      */
-    val running: StateFlow<Boolean> =
-        SyncScheduler.observeRunning(container.context)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+    val activity: StateFlow<SyncActivity> =
+        SyncScheduler.observeActivity(container.context)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SyncActivity.Idle)
 
     init {
         refresh()
+        followProgress()
+    }
+
+    /**
+     * Keeps the last session and the queue size current while the screen is open.
+     *
+     * A cycle runs in the background and records both in the database. Following those
+     * tables updates the card when the cycle ends, without the screen having to be told.
+     */
+    private fun followProgress() {
+        viewModelScope.launch {
+            combine(
+                container.database.sessions().observeRecent(limit = 1),
+                container.database.files().observePending(),
+            ) { sessions, pending -> sessions.firstOrNull() to pending }
+                .collect { (session, pending) ->
+                    _state.value = _state.value.copy(lastSession = session, pendingFiles = pending)
+                }
+        }
     }
 
     fun refresh() {
         viewModelScope.launch {
-            val (server, settings, pending, session) = withContext(Dispatchers.IO) {
+            val (server, settings) = withContext(Dispatchers.IO) {
                 Snapshot(
                     server = container.database.pairedServers().get(),
                     settings = container.settings(),
-                    pending = container.queue.pendingCount(),
-                    session = container.database.sessions().latest(),
                 )
             }
 
             _state.value = _state.value.copy(
                 server = server,
                 settings = settings,
-                pendingFiles = pending,
-                lastSession = session,
                 hasStorageAccess = Environment.hasFullStorageAccess(),
                 screen = if (server == null) Screen.PAIRING else _state.value.screen,
             )
@@ -114,7 +134,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
      * differently.
      */
     fun syncNow() {
-        SyncScheduler.runNow(container.context)
+        viewModelScope.launch { SyncScheduler.runNow(container.context) }
     }
 
     /**
@@ -134,7 +154,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
                 verification = when (result) {
                     is VerificationResult.Done -> when {
                         result.corrupted.isNotEmpty() ->
-                            "Uszkodzone kopie: ${result.corrupted.size} z ${result.checked}. " +
+                            "Corrupted copies: ${result.corrupted.size} of ${result.checked}. " +
                                 "They will be re-sent at the next full sync."
 
                         result.missing.isNotEmpty() ->
@@ -233,8 +253,6 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
     private data class Snapshot(
         val server: PairedServerEntity?,
         val settings: SettingsEntity,
-        val pending: Int,
-        val session: SyncSessionEntity?,
     )
 
     class Factory(private val container: AppContainer) : ViewModelProvider.Factory {
@@ -256,14 +274,22 @@ fun formatBytes(bytes: Long): String {
     return if (unit == 0) "$bytes B" else String.format("%.1f %s", value, units[unit])
 }
 
+/** Hours and minutes are enough: WorkManager caps a retry delay at five hours. */
+fun formatTime(epochMillis: Long): String =
+    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(epochMillis))
+
 fun describe(session: SyncSessionEntity?): String = when {
-    session == null -> "Jeszcze nie synchronizowano."
-    session.endedAt == null -> "Cykl w toku…"
+    session == null -> "Not synced yet."
+    session.endedAt == null -> "A cycle is in progress…"
+    // Most cycles after the first find nothing new; "0 files, 0 B" would read as a fault.
+    session.result?.startsWith("completed") == true && session.filesDone == 0 ->
+        "Last run: nothing new to send."
+
     session.result?.startsWith("completed") == true ->
         "Last run: ${session.filesDone} files, ${formatBytes(session.bytesSent)}."
 
     session.result?.startsWith("interrupted") == true ->
-        "Przerwano po ${session.filesDone} plikach, ${formatBytes(session.bytesSent)}."
+        "Interrupted after ${session.filesDone} files, ${formatBytes(session.bytesSent)}."
 
     else -> "The last attempt did not succeed."
 }

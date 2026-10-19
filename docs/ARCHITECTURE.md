@@ -148,8 +148,10 @@ Both paths record `mtime` **in seconds**, normalised in one place (ADR-011).
 protocol §4 happens - a parallel `ping` to every candidate, first correct pin wins, the
 result lands in `Endpoint` together with its response time.
 
-Local routes are bound to a `Network` object with `TRANSPORT_WIFI` so they work despite an
-active VPN. Overlay-network routes go over the default route. Both attempts run at once.
+Local routes are raced twice: over a socket bound to the Wi-Fi `Network` object and over the
+default route, because which of the two survives a VPN depends on the VPN (protocol §4.3).
+Overlay-network routes go over the default route. All attempts run at once, and the
+transfer follows the one that won.
 
 ### 3.5 Scheduling and the six-hour budget
 

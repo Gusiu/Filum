@@ -1,8 +1,9 @@
 package pl.wspa.filum.net
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.json.Json
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -28,6 +29,8 @@ import pl.wspa.filum.protocol.VerifyResponse
 import java.io.File
 import java.io.IOException
 import java.util.Base64
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /**
  * The protocol's resources wrapped in typed calls (§5 of PROTOCOL.md).
@@ -145,13 +148,38 @@ class FilumApiClient(
 
     private fun ServerEndpoint.url(resource: String): String = "$baseUrl${Protocol.PREFIX}$resource"
 
+    /**
+     * Runs the call on OkHttp's own threads and ties it to the calling coroutine.
+     *
+     * A blocking `execute()` does not see coroutine cancellation: a cancelled probe to a dead
+     * address would keep its thread until the call timeout. Cancelling the call instead
+     * closes the socket, so the wait ends at once - in the route race and in a cycle that
+     * WorkManager stops alike.
+     */
     private suspend fun <T> execute(request: Request, parse: (String) -> T): ApiResult<T> =
-        withContext(Dispatchers.IO) {
-            try {
-                http.newCall(request).execute().use { response -> interpret(response, parse) }
-            } catch (e: IOException) {
-                ApiResult.Unreachable(e)
-            }
+        suspendCancellableCoroutine { continuation ->
+            val call = http.newCall(request)
+            continuation.invokeOnCancellation { call.cancel() }
+
+            call.enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    continuation.resume(ApiResult.Unreachable(e))
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    // The body is read here, still on OkHttp's thread, so a cancellation
+                    // that arrives while it is being read aborts the read too.
+                    val result = try {
+                        response.use { interpret(it, parse) }
+                    } catch (e: IOException) {
+                        ApiResult.Unreachable(e)
+                    } catch (e: Exception) {
+                        continuation.resumeWithException(e)
+                        return
+                    }
+                    continuation.resume(result)
+                }
+            })
         }
 
     private fun <T> interpret(response: Response, parse: (String) -> T): ApiResult<T> {

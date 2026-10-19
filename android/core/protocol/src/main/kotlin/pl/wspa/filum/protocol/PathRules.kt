@@ -23,7 +23,7 @@ sealed interface SanitizeResult {
 /**
  * Maps a canonical path from the phone onto a storage path under NTFS.
  *
- * Implementacja normatywna dla docs/PATH-RULES.md. Lustrzanym odbiciem jest klasa
+ * The normative implementation of docs/PATH-RULES.md. Its mirror image is the class
  * `Filum.Protocol.PathRules` on the server side - both pass the same
  * docs/testvectors/paths.tsv.
  *

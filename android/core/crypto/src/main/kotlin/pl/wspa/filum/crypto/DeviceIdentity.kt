@@ -30,15 +30,15 @@ import javax.security.auth.x500.X500Principal
  * neither BouncyCastle nor any other library for building X.509.
  */
 /**
- * Gdzie fizycznie mieszka klucz prywatny.
+ * Where the private key physically lives.
  *
  * The distinction is practical, not merely descriptive. StrongBox is a separate chip
- * scalony odporny na atak fizyczny; TEE to wydzielony tryb tego samego procesora -
+ * hardened against physical attack; a TEE is an isolated mode of the same processor -
  * far better than nothing, but exposed to a class of attacks StrongBox is not.
  * Lower-end devices usually have only a TEE.
  */
 enum class KeySecurity {
-    /** Osobny element bezpieczny (Samsung Knox Vault i podobne). */
+    /** A separate secure element (Samsung Knox Vault and the like). */
     STRONGBOX,
 
     /** The processor's trusted execution environment. */
@@ -103,7 +103,7 @@ class DeviceIdentity private constructor(
 
             if (certificate == null || key == null) {
                 // The entry is incomplete - the Keystore can end up like this after a failed
-                // aktualizacji systemu. Odtwarzamy od zera; skutkiem jest ponowne parowanie.
+                // system update. We start again from scratch; the cost is pairing again.
                 Log.w(TAG, "Incomplete Keystore entry for $alias, regenerating")
                 store.deleteEntry(alias)
                 return generate(alias)
@@ -162,9 +162,13 @@ class DeviceIdentity private constructor(
 
             return KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_SIGN)
                 .setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
-                // TLS 1.3 signs with ecdsa_secp256r1_sha256; the other digests are added
-                // so we do not fall over on an older version negotiation.
+                // Conscrypt hashes the TLS handshake itself and hands the key a finished
+                // digest to sign, which the Keystore treats as DIGEST_NONE. Without it the
+                // key refuses every signature and the client certificate is never presented.
+                // The named digests keep the key usable by code that signs whole messages
+                // through the standard Signature API.
                 .setDigests(
+                    KeyProperties.DIGEST_NONE,
                     KeyProperties.DIGEST_SHA256,
                     KeyProperties.DIGEST_SHA384,
                     KeyProperties.DIGEST_SHA512,
@@ -173,7 +177,7 @@ class DeviceIdentity private constructor(
                 .setCertificateSerialNumber(BigInteger.valueOf(System.currentTimeMillis()))
                 .setCertificateNotBefore(notBefore.time)
                 .setCertificateNotAfter(notAfter.time)
-                // Synchronizacja idzie w tle, w nocy, przy zablokowanym ekranie -
+                // The sync runs in the background, at night, with the screen locked -
                 // requiring user authentication would stop it at the first file.
                 .setUserAuthenticationRequired(false)
                 .setIsStrongBoxBacked(useStrongBox)

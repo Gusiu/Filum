@@ -18,12 +18,12 @@ import java.util.Base64
  * The values are hardcoded on purpose. Were the test to generate a certificate on the fly
  * and compute its fingerprint the same way the production code does, it would only confirm
  * that the code agrees with itself - not that it computes what the rest of the world calls
- * odciskiem SubjectPublicKeyInfo.
+ * the SubjectPublicKeyInfo fingerprint.
  */
 object TestCertificates {
 
     /**
-     * Odcisk policzony poleceniem:
+     * The fingerprint as computed by:
      * `openssl x509 -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl base64`
      */
     const val SERVER_PIN = "gjumiJPxlKAE-qwj42AHJcNeusG5O8ZuCpojUP1CAgA"
@@ -89,7 +89,7 @@ class KeyPinTest {
     fun `the fingerprint format is validated`() {
         assertTrue(KeyPin.isWellFormed(TestCertificates.SERVER_PIN))
         assertTrue(KeyPin.isWellFormed(TestCertificates.FOREIGN_PIN), "a fingerprint may start with '-'")
-        assertFalse(KeyPin.isWellFormed("za krotki"))
+        assertFalse(KeyPin.isWellFormed("too short"))
         assertFalse(KeyPin.isWellFormed("!".repeat(KeyPin.LENGTH)))
     }
 }
@@ -156,6 +156,6 @@ class PinnedTrustManagerTest {
 
     @Test
     fun `a malformed fingerprint is rejected at construction`() {
-        assertThrows(IllegalArgumentException::class.java) { PinnedTrustManager("bzdura") }
+        assertThrows(IllegalArgumentException::class.java) { PinnedTrustManager("nonsense") }
     }
 }

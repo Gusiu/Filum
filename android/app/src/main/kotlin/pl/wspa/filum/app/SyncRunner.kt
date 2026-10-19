@@ -3,7 +3,6 @@ package pl.wspa.filum.app
 import android.util.Log
 import pl.wspa.filum.crypto.DeviceIdentity
 import pl.wspa.filum.crypto.FilumTls
-import pl.wspa.filum.data.EndpointEntity
 import pl.wspa.filum.data.PairedServerEntity
 import pl.wspa.filum.data.ScanStateEntity
 import pl.wspa.filum.data.SettingsEntity
@@ -54,17 +53,19 @@ class SyncRunner(private val container: AppContainer) {
             tls = FilumTls.bundle(server.serverPin, identity),
             binder = container.networkBinder,
         )
-        val api = FilumApiClient(clients.forKind(EndpointKind.LAN))
-
         val racer = EndpointRacer(
-            probe = { endpoint -> FilumApiClient(clients.forProbe(endpoint.kind)).ping(endpoint) }
+            probe = { endpoint -> FilumApiClient(clients.forProbe(endpoint)).ping(endpoint) }
         )
 
         // Stored routes first - in the vast majority of cycles one of them answers and
         // there is no reason to pay for discovery.
-        var race = racer.fastest(loadCandidates(server))
+        var race = racer.fastest(clients.routesFor(loadCandidates(server)))
 
         if (race !is RaceOutcome.Reached) {
+            if (race is RaceOutcome.AllFailed) {
+                Log.i(TAG, "Stored routes failed, trying discovery: ${race.reasons().joinToString("; ")}")
+            }
+
             // No stored route worked. This is the one situation in which the route set's
             // self-update (§4.4) has nothing to bootstrap from: the phone was away from home
             // across a router change and has no overlay network.
@@ -72,17 +73,14 @@ class SyncRunner(private val container: AppContainer) {
 
             if (discovered.isNotEmpty()) {
                 journalDiscovery(discovered)
-                race = racer.fastest(discovered)
+                race = racer.fastest(clients.routesFor(discovered))
             }
         }
 
         val reached = when (race) {
             is RaceOutcome.Reached -> race
-            is RaceOutcome.AllFailed -> return CycleResult.NoRoute(
-                race.failures.map { "${it.endpoint}: ${it.reason}" }
-            )
-
-            RaceOutcome.NoCandidates -> return CycleResult.NoRoute(listOf("Brak zapisanych tras."))
+            is RaceOutcome.AllFailed -> return noRoute(race.reasons())
+            RaceOutcome.NoCandidates -> return noRoute(listOf("No stored routes."))
         }
 
         rememberRoutes(reached)
@@ -94,7 +92,7 @@ class SyncRunner(private val container: AppContainer) {
         )
 
         // Default settings until the user changes anything - the first cycle after
-        // po instalacji nie ma jeszcze wiersza w bazie.
+        // installation has no row in the database yet.
         val settings = container.database.settings().get() ?: SettingsEntity()
 
         val sessionId = UUID.randomUUID().toString()
@@ -103,7 +101,7 @@ class SyncRunner(private val container: AppContainer) {
         )
 
         val engine = SyncEngine(
-            transport = ApiSyncTransport(FilumApiClient(clients.forKind(reached.endpoint.kind)), reached.endpoint),
+            transport = ApiSyncTransport(FilumApiClient(clients.forEndpoint(reached.endpoint)), reached.endpoint),
             queue = container.queue,
             journal = journal,
             // The limits come from the ping response; the client assumes none of its own (§5.1).
@@ -126,20 +124,31 @@ class SyncRunner(private val container: AppContainer) {
         return CycleResult.Done(outcome, reached.endpoint)
     }
 
+    /**
+     * Records why the cycle found no server. From the outside a server that is switched off,
+     * a firewall dropping the port and a VPN swallowing local traffic all look alike; only
+     * the per-route reasons tell them apart, and only the phone sees them.
+     */
+    private suspend fun noRoute(reasons: List<String>): CycleResult.NoRoute {
+        val message = "No route to the server answered: ${reasons.joinToString("; ")}"
+        Log.w(TAG, message)
+        RoomJournal(container.database.log()).record(JournalLevel.WARN, "no_route", message)
+        return CycleResult.NoRoute(reasons)
+    }
+
     private suspend fun journalDiscovery(discovered: List<ServerEndpoint>) {
         RoomJournal(container.database.log()).record(
             JournalLevel.INFO, "mdns_found",
-            "Znaleziono serwer w sieci lokalnej: ${discovered.joinToString { it.toString() }}",
+            "Found the server on the local network: ${discovered.joinToString { it.toString() }}",
         )
 
         // Stored immediately: on the next cycle the route is already among the
         // candidates and discovery will not be needed.
-        container.database.endpoints().upsert(
-            discovered.map { EndpointEntity(it.host, it.port, it.kind.name) }
-        )
+        val dao = container.database.endpoints()
+        dao.upsert(RouteBook.merge(dao.all(), discovered))
     }
 
-    // --- trasy ---
+    // --- routes ---
 
     private suspend fun loadCandidates(server: PairedServerEntity): List<ServerEndpoint> {
         val stored = container.database.endpoints().all().mapNotNull { entity ->
@@ -160,21 +169,22 @@ class SyncRunner(private val container: AppContainer) {
     private suspend fun rememberRoutes(reached: RaceOutcome.Reached) {
         val dao = container.database.endpoints()
 
+        val advertised = reached.ping.endpoints.mapNotNull { raw ->
+            ServerEndpoint.parse(raw, EndpointKind.MANUAL)?.classified()
+        }
+
+        if (advertised.isNotEmpty()) {
+            dao.upsert(RouteBook.merge(dao.all(), advertised))
+        }
+
+        // After the merge, which would otherwise be the last word on the winner's row.
         dao.markReached(
             reached.endpoint.host, reached.endpoint.port,
             at = System.currentTimeMillis(), rtt = reached.elapsedMillis,
         )
-
-        val advertised = reached.ping.endpoints.mapNotNull { raw ->
-            ServerEndpoint.parse(raw, EndpointKind.LAN)
-        }
-
-        if (advertised.isNotEmpty()) {
-            dao.upsert(advertised.map { EndpointEntity(it.host, it.port, it.kind.name) })
-        }
     }
 
-    // --- skan ---
+    // --- scan ---
 
     /** Returns the files and whether the fast path could be used. */
     private suspend fun collectFiles(mode: String): Pair<Sequence<ScannedFile>, Boolean> {

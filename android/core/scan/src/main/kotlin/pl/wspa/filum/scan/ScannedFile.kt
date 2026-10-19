@@ -13,14 +13,14 @@ data class ScannedFile(
     val canonicalPath: String,
     val absolutePath: String,
     val size: Long,
-    /** Zawsze w **sekundach** od epoki, UTC. Patrz [Mtime]. */
+    /** Always in **seconds** since the epoch, UTC. See [Mtime]. */
     val mtimeSeconds: Long,
 )
 
 /**
  * The one place where we convert a modification time into the protocol's form (ADR-011).
  *
- * `MediaStore.DATE_MODIFIED` podaje **sekundy**, a `File.lastModified()` **milisekundy**.
+ * `MediaStore.DATE_MODIFIED` gives **seconds** and `File.lastModified()` **milliseconds**.
  * If the same file reached the manifest from one source at one time and the other at
  * another, its identity would change between cycles and it would be uploaded over and over.
  * On a library of any size that is a failure rather than an inconvenience - all that

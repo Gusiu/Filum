@@ -7,9 +7,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -20,16 +23,22 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import pl.wspa.filum.app.work.SyncActivity
 import pl.wspa.filum.data.Schedule
 import pl.wspa.filum.protocol.IntegrityPolicy
 
 @Composable
 fun HomeScreen(
     state: UiState,
-    running: Boolean,
+    activity: SyncActivity,
     onSyncNow: () -> Unit,
     onVerify: () -> Unit,
     onScheduleChange: (Schedule) -> Unit,
@@ -57,7 +66,7 @@ fun HomeScreen(
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(server.label, style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "Klucz serwera: ${server.serverPin.take(12)}…",
+                        "Server key: ${server.serverPin.take(12)}…",
                         style = MaterialTheme.typography.bodySmall,
                         fontFamily = FontFamily.Monospace,
                     )
@@ -85,6 +94,8 @@ fun HomeScreen(
 
         ScheduleSelector(state.settings.schedule, onScheduleChange)
 
+        val running = activity == SyncActivity.Running
+
         Button(
             onClick = onSyncNow,
             enabled = !running && state.server != null && state.hasStorageAccess,
@@ -94,8 +105,18 @@ fun HomeScreen(
                 CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                 Text("  Working…")
             } else {
-                Text("Synchronizuj now")
+                Text("Sync now")
             }
+        }
+
+        if (activity is SyncActivity.RetryScheduled) {
+            // Without this line a failed cycle is invisible until the journal is opened.
+            Text(
+                "The last attempt did not reach the server. " +
+                    (activity.atMillis?.let { "Next try at ${formatTime(it)}. " } ?: "") +
+                    "Details are in the journal.",
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
 
         state.lastError?.let { error ->
@@ -126,23 +147,70 @@ fun HomeScreen(
                 Text(if (state.verifying) "Checking…" else "Check a sample")
             }
 
-            state.verification?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+            // The result appears below the button, which on a phone is often below the edge
+            // of the screen. Without scrolling it into view the check seems to end silently.
+            val result = remember { BringIntoViewRequester() }
+            LaunchedEffect(state.verification) {
+                if (state.verification != null) result.bringIntoView()
+            }
+
+            state.verification?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.bringIntoViewRequester(result),
+                )
+            }
         }
 
         HorizontalDivider()
 
+        var confirmingUnpair by remember { mutableStateOf(false) }
+
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onOpenFolders) { Text("Foldery") }
-            OutlinedButton(onClick = onOpenLog) { Text("Dziennik") }
-            TextButton(onClick = onUnpair) { Text("Rozparuj") }
+            OutlinedButton(onClick = onOpenFolders) { Text("Folders") }
+            OutlinedButton(onClick = onOpenLog) { Text("Journal") }
+            TextButton(onClick = { confirmingUnpair = true }) { Text("Unpair") }
+        }
+
+        if (confirmingUnpair) {
+            UnpairDialog(
+                serverLabel = state.server?.label ?: "the server",
+                onConfirm = {
+                    confirmingUnpair = false
+                    onUnpair()
+                },
+                onDismiss = { confirmingUnpair = false },
+            )
         }
     }
+}
+
+/**
+ * Unpairing deletes the device key from the Keystore, and a key cannot be brought back. A
+ * single tap next to "Journal" is too easy to hit by accident for an operation like that.
+ */
+@Composable
+private fun UnpairDialog(serverLabel: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Unpair from $serverLabel?") },
+        text = {
+            Text(
+                "The phone deletes its key and forgets this server. The copy on the computer " +
+                    "stays as it is, but backing up again needs a new pairing, and the server " +
+                    "will treat the phone as a new device with a new directory."
+            )
+        },
+        confirmButton = { TextButton(onClick = onConfirm) { Text("Unpair") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable
 private fun ScheduleSelector(current: Schedule, onChange: (Schedule) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Harmonogram", style = MaterialTheme.typography.titleSmall)
+        Text("Schedule", style = MaterialTheme.typography.titleSmall)
 
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -178,7 +246,7 @@ private fun ScheduleSelector(current: Schedule, onChange: (Schedule) -> Unit) {
 @Composable
 private fun IntegrityPolicySelector(current: IntegrityPolicy, onChange: (IntegrityPolicy) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Wykrywanie zmian", style = MaterialTheme.typography.titleSmall)
+        Text("Change detection", style = MaterialTheme.typography.titleSmall)
 
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -212,12 +280,12 @@ private fun IntegrityPolicySelector(current: IntegrityPolicy, onChange: (Integri
 }
 
 private fun label(policy: IntegrityPolicy): String = when (policy) {
-    IntegrityPolicy.FAST -> "Szybkie"
+    IntegrityPolicy.FAST -> "Fast"
     IntegrityPolicy.THOROUGH -> "Thorough"
 }
 
 private fun label(schedule: Schedule): String = when (schedule) {
     Schedule.MANUAL -> "Manual"
-    Schedule.DAILY -> "Codziennie"
+    Schedule.DAILY -> "Daily"
     Schedule.WEEKLY -> "Weekly"
 }

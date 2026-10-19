@@ -15,15 +15,15 @@ import java.util.Base64
  */
 class PairingCodeTest {
 
-    private val poprawnyPin = "A".repeat(43)
+    private val validPin = "A".repeat(43)
 
     private fun code(json: String): String =
         PairingCode.PREFIX + Base64.getUrlEncoder().withoutPadding()
             .encodeToString(json.toByteArray(Charsets.UTF_8))
 
     private fun payload(
-        key: String = poprawnyPin,
-        token: String = "TOKEN-PAROWANIA",
+        key: String = validPin,
+        token: String = "PAIRING-TOKEN",
         port: Int = 8765,
         addresses: String = """["192.168.1.10:8765","100.64.10.20:8765"]""",
     ) = code(
@@ -41,8 +41,8 @@ class PairingCodeTest {
 
         val ok = assertInstanceOf(PairingCode.Result.Ok::class.java, result)
         assertEquals("DESKTOP-PC", ok.payload.name)
-        assertEquals(poprawnyPin, ok.payload.key)
-        assertEquals("TOKEN-PAROWANIA", ok.payload.token)
+        assertEquals(validPin, ok.payload.key)
+        assertEquals("PAIRING-TOKEN", ok.payload.token)
         assertEquals(8765, ok.payload.port)
         assertEquals(2, ok.payload.addresses.size)
         assertEquals("filum-abcd1234", ok.payload.service)
@@ -61,7 +61,7 @@ class PairingCodeTest {
         // A newer server may add a field; an older client has to survive that, or updating
         // the server would break pairing on every phone at once.
         val withExtra = code(
-            """{"n":"DESKTOP-PC","k":"$poprawnyPin","t":"T","p":8765,"a":["10.0.0.1:8765"],"s":"x","nowe":42}"""
+            """{"n":"DESKTOP-PC","k":"$validPin","t":"T","p":8765,"a":["10.0.0.1:8765"],"s":"x","future":42}"""
         )
 
         assertInstanceOf(PairingCode.Result.Ok::class.java, PairingCode.parse(withExtra))
@@ -112,7 +112,7 @@ class HttpStatusTest {
     @Test
     fun `transient errors are worth retrying`() {
         for (code in listOf(HttpStatus.TOO_MANY_REQUESTS, HttpStatus.SERVICE_UNAVAILABLE, 500, 502)) {
-            assertEquals(FailureKind.TRANSIENT, HttpStatus.classify(code), "kod $code")
+            assertEquals(FailureKind.TRANSIENT, HttpStatus.classify(code), "code $code")
         }
     }
 
@@ -120,7 +120,7 @@ class HttpStatusTest {
     fun `permanent errors do not return to the queue`() {
         // A file rejected with 422 would return forever were it not for this distinction.
         for (code in listOf(HttpStatus.BAD_REQUEST, HttpStatus.UNPROCESSABLE, HttpStatus.FORBIDDEN)) {
-            assertEquals(FailureKind.PERMANENT, HttpStatus.classify(code), "kod $code")
+            assertEquals(FailureKind.PERMANENT, HttpStatus.classify(code), "code $code")
         }
     }
 

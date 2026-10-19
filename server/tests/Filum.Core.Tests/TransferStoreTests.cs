@@ -88,9 +88,9 @@ public class TransferStoreTests
     public async Task Commit_WithACorrectDigest_Succeeds()
     {
         using var h = new Harness();
-        var content = Harness.Bytes("dane do sprawdzenia");
+        var content = Harness.Bytes("data to check");
 
-        var outcome = await h.WriteWholeAsync("Documents/plik.txt", content, Mtime, withDigest: true);
+        var outcome = await h.WriteWholeAsync("Documents/file.txt", content, Mtime, withDigest: true);
 
         Assert.Equal(ChunkStatus.Ok, outcome.Status);
         Assert.True(outcome.Complete);
@@ -100,14 +100,14 @@ public class TransferStoreTests
     public async Task Commit_WithAWrongDigest_DropsThePartAndCreatesNoFile()
     {
         using var h = new Harness();
-        var content = Harness.Bytes("dane do sprawdzenia");
+        var content = Harness.Bytes("data to check");
         var wrongDigest = Harness.Digest(Harness.Bytes("something else entirely"));
 
-        var outcome = await h.WriteAsync("Documents/plik.txt", content, content.Length, Mtime, 0, wrongDigest);
+        var outcome = await h.WriteAsync("Documents/file.txt", content, content.Length, Mtime, 0, wrongDigest);
 
         Assert.Equal(ChunkStatus.DigestMismatch, outcome.Status);
-        Assert.False(h.StoredExists("Documents/plik.txt"));
-        Assert.Equal(-1, h.PartLength("Documents/plik.txt"));
+        Assert.False(h.StoredExists("Documents/file.txt"));
+        Assert.Equal(-1, h.PartLength("Documents/file.txt"));
     }
 
     [Fact]
@@ -117,19 +117,19 @@ public class TransferStoreTests
         var content = Harness.Bytes("0123456789");
 
         // declare 5 bytes, send 10
-        var outcome = await h.WriteAsync("Documents/plik.txt", content, 5, Mtime, 0);
+        var outcome = await h.WriteAsync("Documents/file.txt", content, 5, Mtime, 0);
 
         Assert.Equal(ChunkStatus.TooMuchData, outcome.Status);
-        Assert.False(h.StoredExists("Documents/plik.txt"));
+        Assert.False(h.StoredExists("Documents/file.txt"));
     }
 
-    // --- niezmiennik I2: nigdy nie nadpisujemy ---
+    // --- invariant I2: we never overwrite ---
 
     [Fact]
     public async Task ANewVersion_FilesTheOldCopyIntoVersions()
     {
         using var h = new Harness();
-        var oldContent = Harness.Bytes("wersja pierwsza");
+        var oldContent = Harness.Bytes("first version");
         var updated = Harness.Bytes("second version, longer");
 
         h.Seed("Documents/note.txt", oldContent, Mtime);
@@ -166,12 +166,12 @@ public class TransferStoreTests
     {
         using var h = new Harness();
 
-        h.Seed("Documents/note.txt", Harness.Bytes("pierwsza"), Mtime);
-        await h.WriteWholeAsync("Documents/note.txt", Harness.Bytes("druga"), Mtime + 100);
-        await h.WriteWholeAsync("Documents/note.txt", Harness.Bytes("trzecia"), Mtime + 200);
+        h.Seed("Documents/note.txt", Harness.Bytes("first"), Mtime);
+        await h.WriteWholeAsync("Documents/note.txt", Harness.Bytes("second"), Mtime + 100);
+        await h.WriteWholeAsync("Documents/note.txt", Harness.Bytes("third"), Mtime + 200);
 
         Assert.Equal(2, h.VersionFiles().Count);
-        Assert.Equal(Harness.Bytes("trzecia"), h.ReadStored("Documents/note.txt"));
+        Assert.Equal(Harness.Bytes("third"), h.ReadStored("Documents/note.txt"));
     }
 
     [Fact]
@@ -198,7 +198,7 @@ public class TransferStoreTests
     {
         using var h = new Harness();
 
-        var outcome = await h.WriteWholeAsync("../../ucieczka.txt", Harness.Bytes("x"), Mtime);
+        var outcome = await h.WriteWholeAsync("../../escape.txt", Harness.Bytes("x"), Mtime);
 
         Assert.Equal(ChunkStatus.PathRejected, outcome.Status);
         Assert.Equal(PathRejection.Traversal, outcome.Rejection);
@@ -209,10 +209,10 @@ public class TransferStoreTests
     {
         using var h = new Harness(o => o.MinFreeBytes = long.MaxValue / 2);
 
-        var outcome = await h.WriteWholeAsync("Documents/plik.txt", Harness.Bytes("x"), Mtime);
+        var outcome = await h.WriteWholeAsync("Documents/file.txt", Harness.Bytes("x"), Mtime);
 
         Assert.Equal(ChunkStatus.InsufficientStorage, outcome.Status);
-        Assert.False(h.StoredExists("Documents/plik.txt"));
+        Assert.False(h.StoredExists("Documents/file.txt"));
     }
 
     [Fact]

@@ -8,7 +8,7 @@ namespace Filum.Server;
 public sealed record PairingCode(string Payload, string QrSvg, int ExpiresInSeconds);
 
 /// <summary>
-/// Dane i operacje panelu.
+/// The panel's data and operations.
 ///
 /// Everything here requires a loopback connection - the panel issues pairing tokens and
 /// shows the contents of the backup, so the person at the computer is the only entitled
@@ -52,7 +52,7 @@ public sealed class AdminService(
             Devices: devices);
     }
 
-    /// <summary>Wydaje jednorazowy token i rysuje kod QR do zeskanowania telefonem.</summary>
+    /// <summary>Issues a one-time token and draws a QR code for the phone to scan.</summary>
     public PairingCode IssuePairingCode()
     {
         var payload = PairingService.Encode(new QrPayload(

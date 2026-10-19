@@ -6,19 +6,19 @@ plugins {
 android {
     namespace = "pl.wspa.filum.app"
 
-    // compileSdk i targetSdk to dwie różne rzeczy. Kompilujemy wobec 37, bo tego
-    // wymagają nowsze biblioteki AndroidX, ale zachowanie systemu wybiera targetSdk
-    // niżej - i to on zostaje na 36 zgodnie z ADR-013.
+    // compileSdk and targetSdk are two different things. We compile against 37 because
+    // newer AndroidX libraries require it, but the system behaviour is chosen by the
+    // lower targetSdk - and that stays at 36, as ADR-013 sets out.
     compileSdk = 37
 
     defaultConfig {
         applicationId = "pl.wspa.filum"
         minSdk = 30
 
-        // targetSdk 36, a nie 37, celowo (ADR-013): pozwala na razie ominąć wymóg
-        // ACCESS_LOCAL_NETWORK z Androida 17. Dystrybucja i tak odbywa się poza
-        // sklepem, bo Google Play nie dopuszcza MANAGE_EXTERNAL_STORAGE dla
-        // aplikacji tego rodzaju.
+        // targetSdk 36 rather than 37, deliberately (ADR-013): for now it avoids the
+        // ACCESS_LOCAL_NETWORK requirement of Android 17. Distribution happens outside the
+        // store anyway, because Google Play does not allow MANAGE_EXTERNAL_STORAGE for
+        // applications of this kind.
         targetSdk = 36
 
         versionCode = 1
@@ -44,8 +44,8 @@ android {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
 
-    // Decyzja o ponawianiu pracy w tle nie dotyka API Androida, więc testuje się
-    // na zwykłej maszynie wirtualnej.
+    // The retry decision does not touch the Android API, so it is tested on an
+    // ordinary JVM.
     testOptions {
         unitTests.all { it.useJUnitPlatform() }
     }

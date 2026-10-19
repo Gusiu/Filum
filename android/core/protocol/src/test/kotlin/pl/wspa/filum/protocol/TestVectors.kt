@@ -44,7 +44,7 @@ object TestVectors {
             .map { line ->
                 val columns = line.split('\t')
                 check(columns.size == 3) {
-                    "$RELATIVE_PATH: oczekiwano 3 kolumn, jest ${columns.size}: $line"
+                    "$RELATIVE_PATH: expected 3 columns, got ${columns.size}: $line"
                 }
                 PathVector(unescape(columns[0]), unescape(columns[1]), columns[2])
             }
@@ -56,7 +56,7 @@ object TestVectors {
     /**
      * Decodes the escapes described in the file header: \xHH is a byte, \\ a literal
      * backslash. Without them, non-printing characters and trailing spaces would not survive
-     * w pliku tekstowym.
+     * in a text file.
      */
     fun unescape(value: String): String {
         val builder = StringBuilder(value.length)

@@ -32,11 +32,11 @@ public sealed class CertificateStore
 
     public string Path { get; }
 
-    /// <summary>Odcisk klucza publicznego serwera: base64url(SHA-256(SPKI)), 43 znaki.</summary>
+    /// <summary>The server's public key fingerprint: base64url(SHA-256(SPKI)), 43 characters.</summary>
     public string Pin { get; }
 
     /// <summary>
-    /// Wczytuje certyfikat albo tworzy go przy pierwszym uruchomieniu.
+    /// Loads the certificate, or creates it on the first run.
     ///
     /// The file does NOT live in the backup directory - that gets copied to another disk
     /// or restored from a copy, so the private key would travel with the data.

@@ -9,7 +9,7 @@ import pl.wspa.filum.sync.InterruptReason
 import pl.wspa.filum.sync.SyncOutcome
 
 /**
- * Decyzja o ponowieniu pracy w tle.
+ * The decision whether to retry background work.
  *
  * Each of these cases has a concrete price when confused with another: retrying where it
  * is not needed hammers at a switched-off server and eats the battery; not retrying where
@@ -61,7 +61,7 @@ class CycleOutcomesTest {
         // backoff keeps the subsequent attempts cheap.
         assertEquals(
             WorkerDecision.RETRY,
-            CycleOutcomes.decide(CycleResult.NoRoute(listOf("192.168.1.10:8765: brak odpowiedzi"))),
+            CycleOutcomes.decide(CycleResult.NoRoute(listOf("192.168.1.10:8765: no answer"))),
         )
     }
 

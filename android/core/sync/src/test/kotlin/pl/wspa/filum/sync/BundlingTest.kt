@@ -29,7 +29,7 @@ import java.nio.file.Path
 class BundlingTest {
 
     private val mtime = 1_756_400_000L
-    private val nigdy = Deadline { false }
+    private val noDeadline = Deadline { false }
 
     private lateinit var queue: FakeQueue
     private lateinit var journal: FakeJournal
@@ -51,7 +51,7 @@ class BundlingTest {
 
     private suspend fun run(files: List<ScannedFile>, config: SyncConfig): SyncOutcome =
         SyncEngine(transport, queue, journal, config)
-            .run("sesja", ManifestRequest.MODE_DELTA, files.asSequence(), nigdy)
+            .run("session", ManifestRequest.MODE_DELTA, files.asSequence(), noDeadline)
 
     // --- splitting into bundles and individual requests ---
 
@@ -97,16 +97,16 @@ class BundlingTest {
         // A bundle sends a file whole, from zero. Putting a file the server already holds
         // part of into one would overwrite the progress and waste the transfer so far.
         setUp()
-        val file = file(dir, "przerwany.bin", 500)
-        transport.received["przerwany.bin"] = StringBuilder("x".repeat(200))
+        val file = file(dir, "interrupted.bin", 500)
+        transport.received["interrupted.bin"] = StringBuilder("x".repeat(200))
         transport.manifestResponder = {
-            ApiResult.Ok(ManifestResponse(0, listOf(NeededFile("przerwany.bin", 200))))
+            ApiResult.Ok(ManifestResponse(0, listOf(NeededFile("interrupted.bin", 200))))
         }
 
         run(listOf(file), SyncConfig(smallFileThreshold = 1_000))
 
         assertTrue(transport.bundles.isEmpty(), "a file with a resume point has to go by PUT")
-        assertEquals(listOf(Triple("przerwany.bin", 200L, 300L)), transport.putCalls)
+        assertEquals(listOf(Triple("interrupted.bin", 200L, 300L)), transport.putCalls)
     }
 
     @Test
@@ -126,20 +126,20 @@ class BundlingTest {
     @Test
     fun `a rejected path inside a bundle is a permanent error`(@TempDir dir: Path) = runTest {
         setUp()
-        val a = file(dir, "zly.txt", 10)
-        val b = file(dir, "dobry.txt", 10)
+        val a = file(dir, "bad.txt", 10)
+        val b = file(dir, "good.txt", 10)
 
         transport.bundleResponder = {
             ApiResult.Ok(BundleResponse(listOf(
-                BundleFileResult("zly.txt", ok = false, error = "traversal"),
-                BundleFileResult("dobry.txt", ok = true),
+                BundleFileResult("bad.txt", ok = false, error = "traversal"),
+                BundleFileResult("good.txt", ok = true),
             )))
         }
 
         run(listOf(a, b), SyncConfig(smallFileThreshold = 1_000))
 
-        assertEquals(FakeQueue.State.PERMANENT, queue.state("zly.txt"))
-        assertEquals(FakeQueue.State.DONE, queue.state("dobry.txt"))
+        assertEquals(FakeQueue.State.PERMANENT, queue.state("bad.txt"))
+        assertEquals(FakeQueue.State.DONE, queue.state("good.txt"))
         assertTrue(journal.has("traversal"))
     }
 
@@ -175,7 +175,7 @@ class BundlingTest {
 
         assertEquals(FakeQueue.State.DONE, queue.state("a.txt"))
         assertEquals(FakeQueue.State.TRANSIENT, queue.state("b.txt"))
-        assertEquals("brak wyniku w odpowiedzi", queue.error("b.txt"))
+        assertEquals("no result in the response", queue.error("b.txt"))
     }
 
     @Test
@@ -184,7 +184,7 @@ class BundlingTest {
         // nothing, because the manifest will sift out the ones that arrived.
         setUp()
         val files = (1..4).map { file(dir, "p$it.txt", 10) }
-        transport.bundleResponder = { ApiResult.Unreachable(IOException("zerwane")) }
+        transport.bundleResponder = { ApiResult.Unreachable(IOException("connection reset")) }
 
         val outcome = run(files, SyncConfig(smallFileThreshold = 1_000))
 
@@ -198,7 +198,7 @@ class BundlingTest {
         setUp()
         val files = (1..3).map { file(dir, "p$it.txt", 10) }
         transport.bundleResponder = {
-            ApiResult.failure(HttpStatus.BAD_REQUEST, ErrorResponse("bad_request", "uszkodzone ramkowanie"))
+            ApiResult.failure(HttpStatus.BAD_REQUEST, ErrorResponse("bad_request", "broken framing"))
         }
 
         run(files, SyncConfig(smallFileThreshold = 1_000))
@@ -211,13 +211,13 @@ class BundlingTest {
     fun `a file deleted before bundling does not abort the bundle`(@TempDir dir: Path) = runTest {
         setUp()
         val vanishing = file(dir, "vanishing.txt", 10)
-        val zostaje = file(dir, "zostaje.txt", 10)
+        val staying = file(dir, "staying.txt", 10)
         File(vanishing.absolutePath).delete()
 
-        run(listOf(vanishing, zostaje), SyncConfig(smallFileThreshold = 1_000))
+        run(listOf(vanishing, staying), SyncConfig(smallFileThreshold = 1_000))
 
         assertEquals(FakeQueue.State.PERMANENT, queue.state("vanishing.txt"))
-        assertEquals(FakeQueue.State.DONE, queue.state("zostaje.txt"))
-        assertEquals(listOf(listOf("zostaje.txt")), transport.bundles)
+        assertEquals(FakeQueue.State.DONE, queue.state("staying.txt"))
+        assertEquals(listOf(listOf("staying.txt")), transport.bundles)
     }
 }

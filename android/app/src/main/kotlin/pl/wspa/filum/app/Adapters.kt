@@ -31,7 +31,7 @@ import java.io.File
  */
 
 /**
- * Kolejka oparta o Room.
+ * The queue, backed by Room.
  *
  * The canonical path is the primary key, so adding the same file again
  * in a new version overwrites the entry: that is the same file after a change, not a second one.

@@ -10,7 +10,7 @@ import kotlinx.coroutines.delay
 import java.net.Inet4Address
 import java.util.concurrent.ConcurrentHashMap
 
-/** Serwer znaleziony w sieci lokalnej. */
+/** A server found on the local network. */
 data class DiscoveredServer(
     val host: String,
     val port: Int,
@@ -39,8 +39,8 @@ class MdnsDiscovery(context: Context) {
      * Looks for servers for a given time and returns everything it found.
      *
      * We wait out the full window rather than stopping at the first hit: several instances may
-     * be on the network and the one we want has the right key, not necessarily
-     * najszybsza.
+     * be on the network and the one we want has the right key, not necessarily the
+     * fastest answer.
      */
     suspend fun discover(timeoutMillis: Long = DEFAULT_TIMEOUT_MILLIS): List<DiscoveredServer> {
         val manager = nsd ?: return emptyList()
@@ -120,32 +120,38 @@ class MdnsDiscovery(context: Context) {
     }
 
     private fun record(info: NsdServiceInfo, found: ConcurrentHashMap<String, DiscoveredServer>) {
-        val host = addressOf(info) ?: return
         if (info.port !in 1..65_535) return
 
-        val server = DiscoveredServer(
-            host = host,
-            port = info.port,
-            pin = attribute(info, "k"),
-            name = attribute(info, "n"),
-        )
+        for (host in addressesOf(info)) {
+            val server = DiscoveredServer(
+                host = host,
+                port = info.port,
+                pin = attribute(info, "k"),
+                name = attribute(info, "n"),
+            )
 
-        found["$host:${info.port}"] = server
-        Log.d(TAG, "Znaleziono serwer $server")
+            found["$host:${info.port}"] = server
+            Log.d(TAG, "Found a server: $server")
+        }
     }
 
     /**
-     * We take IPv4 addresses only. The server listens on both families anyway, and a
-     * link-local IPv6 address needs an interface identifier that we would lose on the way
-     * through the route set.
+     * Every IPv4 address the server announced. The computer announces all its interfaces,
+     * virtual switches and hotspots among them, and the first one is often not reachable
+     * from the phone at all - on the test computer it was the Hyper-V switch. The race
+     * picks the one that works.
+     *
+     * IPv4 only: the server listens on both families anyway, and a link-local IPv6 address
+     * needs an interface identifier that we would lose on the way through the route set.
      */
-    private fun addressOf(info: NsdServiceInfo): String? {
+    private fun addressesOf(info: NsdServiceInfo): List<String> {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            return info.hostAddresses.filterIsInstance<Inet4Address>().firstOrNull()?.hostAddress
+            return info.hostAddresses.filterIsInstance<Inet4Address>().mapNotNull { it.hostAddress }
         }
 
+        // Before Android 14 the resolver reports a single address.
         @Suppress("DEPRECATION")
-        return (info.host as? Inet4Address)?.hostAddress
+        return listOfNotNull((info.host as? Inet4Address)?.hostAddress)
     }
 
     private fun attribute(info: NsdServiceInfo, key: String): String? =
