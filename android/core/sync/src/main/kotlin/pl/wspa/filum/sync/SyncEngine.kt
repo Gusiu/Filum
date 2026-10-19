@@ -61,7 +61,14 @@ class SyncEngine(
         var index = 0
 
         if (!batches.hasNext()) {
-            journal.record(JournalLevel.INFO, "manifest_empty", "The scan found no files.")
+            // An incremental scan that finds nothing is the ordinary night after the first
+            // backup; worded like the full scan's message it read as a failed scan.
+            val message = if (mode == ManifestRequest.MODE_DELTA) {
+                "No files changed since the last scan."
+            } else {
+                "The scan found no files."
+            }
+            journal.record(JournalLevel.INFO, "manifest_empty", message)
             return null
         }
 
