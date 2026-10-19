@@ -12,6 +12,7 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -23,7 +24,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -161,12 +165,46 @@ fun HomeScreen(
 
         HorizontalDivider()
 
+        var confirmingUnpair by remember { mutableStateOf(false) }
+
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onOpenFolders) { Text("Folders") }
             OutlinedButton(onClick = onOpenLog) { Text("Journal") }
-            TextButton(onClick = onUnpair) { Text("Unpair") }
+            TextButton(onClick = { confirmingUnpair = true }) { Text("Unpair") }
+        }
+
+        if (confirmingUnpair) {
+            UnpairDialog(
+                serverLabel = state.server?.label ?: "the server",
+                onConfirm = {
+                    confirmingUnpair = false
+                    onUnpair()
+                },
+                onDismiss = { confirmingUnpair = false },
+            )
         }
     }
+}
+
+/**
+ * Unpairing deletes the device key from the Keystore, and a key cannot be brought back. A
+ * single tap next to "Journal" is too easy to hit by accident for an operation like that.
+ */
+@Composable
+private fun UnpairDialog(serverLabel: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Unpair from $serverLabel?") },
+        text = {
+            Text(
+                "The phone deletes its key and forgets this server. The copy on the computer " +
+                    "stays as it is, but backing up again needs a new pairing, and the server " +
+                    "will treat the phone as a new device with a new directory."
+            )
+        },
+        confirmButton = { TextButton(onClick = onConfirm) { Text("Unpair") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable
