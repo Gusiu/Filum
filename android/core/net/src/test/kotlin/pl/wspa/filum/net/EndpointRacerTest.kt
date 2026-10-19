@@ -4,6 +4,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import pl.wspa.filum.protocol.DeviceInfo
+import pl.wspa.filum.protocol.ErrorResponse
 import pl.wspa.filum.protocol.PingResponse
 import pl.wspa.filum.protocol.Protocol
 import pl.wspa.filum.protocol.ServerInfo
@@ -193,6 +195,59 @@ class EndpointRacerTest {
     @Test
     fun `an empty candidate set is its own outcome`() = runTest {
         assertEquals(RaceOutcome.NoCandidates, EndpointRacer(probe = { ApiResult.Ok(ping()) }).fastest(emptyList()))
+    }
+
+    // --- before pairing (§3.3) ---
+
+    @Test
+    fun `before pairing any answer through the pinned key proves the route`() = runTest {
+        // Without a client certificate the server answers 401. The TLS handshake has already
+        // checked its key, so even a refusal says the route leads to the right server.
+        val racer = EndpointRacer(probe = { endpoint ->
+            if (endpoint == lan) {
+                delay(30)
+                ApiResult.failure(401, ErrorResponse("unauthorized", "No client certificate."))
+            } else {
+                delay(10)
+                ApiResult.Unreachable(IOException("handshake failed"))
+            }
+        })
+
+        val outcome = racer.firstAnswering(listOf(dead, lan))
+
+        assertEquals(lan, assertInstanceOf(Reachability.Answered::class.java, outcome).endpoint)
+    }
+
+    @Test
+    fun `a dead address first in the pairing code costs no timeout`() = runTest {
+        // Found on the test phone: pairing took 16 s, because the code listed the overlay
+        // address first and the addresses were tried one after another.
+        val racer = EndpointRacer(probe = { endpoint ->
+            if (endpoint == overlay) {
+                delay(10_000)
+                ApiResult.Unreachable(IOException("timeout"))
+            } else {
+                delay(40)
+                ApiResult.failure(401, null)
+            }
+        })
+
+        val started = currentTime
+        val outcome = racer.firstAnswering(listOf(overlay, lan))
+
+        assertInstanceOf(Reachability.Answered::class.java, outcome)
+        assertEquals(40, currentTime - started)
+    }
+
+    @Test
+    fun `when no address answers before pairing we return the reasons`() = runTest {
+        val racer = EndpointRacer(probe = { ApiResult.Unreachable(IOException("connection refused")) })
+
+        val outcome = racer.firstAnswering(listOf(lan, overlay))
+
+        val silent = assertInstanceOf(Reachability.Silent::class.java, outcome)
+        assertEquals(2, silent.failures.size)
+        assertTrue(silent.reasons().all { it.contains("connection refused") })
     }
 }
 

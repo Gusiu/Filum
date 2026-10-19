@@ -12,8 +12,10 @@ import pl.wspa.filum.data.SettingsEntity
 import pl.wspa.filum.net.AndroidLocalNetworkBinder
 import pl.wspa.filum.net.ApiResult
 import pl.wspa.filum.net.EndpointKind
+import pl.wspa.filum.net.EndpointRacer
 import pl.wspa.filum.net.FilumApiClient
 import pl.wspa.filum.net.FilumHttpClients
+import pl.wspa.filum.net.Reachability
 import pl.wspa.filum.net.ServerEndpoint
 import pl.wspa.filum.protocol.PairingCode
 import pl.wspa.filum.protocol.QrPayload
@@ -77,44 +79,54 @@ class PairingController(private val container: AppContainer) {
         // the one resource reachable without mTLS. Trust in the server rests solely on the
         // key fingerprint from the QR code.
         val bootstrapTls = FilumTls.bundle(payload.key, keyManagers = null)
-        val api = FilumApiClient(FilumHttpClients(bootstrapTls).defaultRoute)
+        val clients = FilumHttpClients(bootstrapTls, container.networkBinder)
 
         val candidates = payload.addresses.mapNotNull {
-            ServerEndpoint.parse(it, EndpointKind.MANUAL, payload.port)
+            ServerEndpoint.parse(it, EndpointKind.MANUAL, payload.port)?.classified()
         }
         if (candidates.isEmpty()) {
             return PairingResult.Rejected("The pairing code contains no server address.")
         }
 
-        var lastProblem = "Could not connect to the server."
+        // The code lists every interface of the computer, and asking them one after another
+        // made a single unreachable address cost a whole timeout. The routes are raced first;
+        // the single-use token then goes to the one that answered.
+        val reach = EndpointRacer(
+            probe = { endpoint -> FilumApiClient(clients.forProbe(endpoint)).ping(endpoint) }
+        ).firstAnswering(clients.routesFor(candidates))
 
-        for (endpoint in candidates) {
-            when (val result = api.pair(endpoint, payload.token, identity.certificateDer, deviceLabel)) {
-                is ApiResult.Ok -> {
-                    persist(payload, result.value.serverInstanceId, identity, candidates)
-
-                    // The key's security level goes into the journal at pairing time:
-                    // this is the only moment it is created, and when diagnosing it helps to
-                    // know whether the key sits in a separate chip or only in a TEE.
-                    RoomJournal(container.database.log()).record(
-                        JournalLevel.INFO, "paired",
-                        "Paired with ${payload.name}. Device key: ${describe(identity.security)}.",
-                    )
-
-                    return PairingResult.Paired(payload.name, endpoint)
-                }
-
-                is ApiResult.Failure -> {
-                    // The token is single-use: a failed attempt consumed it, so the remaining
-                    // addresses have nothing to try. We stop with a legible reason.
-                    return PairingResult.Rejected(result.message)
-                }
-
-                is ApiResult.Unreachable -> lastProblem = "$endpoint - ${result.message}"
-            }
+        val answered = when (reach) {
+            is Reachability.Answered -> reach
+            is Reachability.Silent -> return PairingResult.Rejected(
+                "No address from the pairing code answered. ${reach.reasons().joinToString("; ")}"
+            )
         }
 
-        return PairingResult.Rejected(lastProblem)
+        val endpoint = answered.endpoint
+        val api = FilumApiClient(clients.forEndpoint(endpoint))
+
+        return when (val result = api.pair(endpoint, payload.token, identity.certificateDer, deviceLabel)) {
+            is ApiResult.Ok -> {
+                persist(payload, result.value.serverInstanceId, identity, candidates)
+
+                // The key's security level goes into the journal at pairing time:
+                // this is the only moment it is created, and when diagnosing it helps to
+                // know whether the key sits in a separate chip or only in a TEE.
+                RoomJournal(container.database.log()).record(
+                    JournalLevel.INFO, "paired",
+                    "Paired with ${payload.name} over $endpoint in ${answered.elapsedMillis} ms. " +
+                        "Device key: ${describe(identity.security)}.",
+                )
+
+                PairingResult.Paired(payload.name, endpoint)
+            }
+
+            // The token is single-use, so a refusal is final - another address would only
+            // be refused again. We stop with a legible reason.
+            is ApiResult.Failure -> PairingResult.Rejected(result.message)
+
+            is ApiResult.Unreachable -> PairingResult.Rejected("$endpoint - ${result.message}")
+        }
     }
 
     private suspend fun persist(
@@ -134,7 +146,7 @@ class PairingController(private val container: AppContainer) {
         )
 
         container.database.endpoints().upsert(
-            candidates.map { EndpointEntity(it.host, it.port, EndpointKind.LAN.name) }
+            candidates.map { EndpointEntity(it.host, it.port, it.kind.name) }
         )
     }
 
