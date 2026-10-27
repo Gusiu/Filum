@@ -2,6 +2,7 @@ using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using Filum.Core;
 using Filum.Protocol;
+using Microsoft.AspNetCore.Server.Kestrel.Https;
 
 namespace Filum.Server;
 
@@ -20,6 +21,27 @@ public interface IClientCertificateProvider
 public sealed class ConnectionClientCertificateProvider : IClientCertificateProvider
 {
     public X509Certificate2? Get(HttpContext context) => context.Connection.ClientCertificate;
+}
+
+/// <summary>
+/// The TLS settings of the listener. Kept apart from Program.cs so the tests can put them
+/// on a real Kestrel listener - TestServer does not speak TLS at all.
+/// </summary>
+public static class ServerTls
+{
+    public static void Configure(HttpsConnectionAdapterOptions https, X509Certificate2 certificate)
+    {
+        https.ServerCertificate = certificate;
+
+        // AllowCertificate, not RequireCertificate: /api/v1/pair has to be reachable
+        // before the device has anything to introduce itself with.
+        https.ClientCertificateMode = ClientCertificateMode.AllowCertificate;
+
+        // The trust chain is of no interest - the certificates are self-signed by
+        // definition (ADR-005). The real verification is comparing the key fingerprint
+        // against the list of paired devices, in DeviceAuthenticationMiddleware.
+        https.ClientCertificateValidation = (_, _, _) => true;
+    }
 }
 
 public static class DeviceContext
