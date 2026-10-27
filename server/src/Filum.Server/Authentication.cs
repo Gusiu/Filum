@@ -1,4 +1,5 @@
 using System.Net;
+using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using Filum.Core;
 using Filum.Protocol;
@@ -32,6 +33,10 @@ public static class ServerTls
     public static void Configure(HttpsConnectionAdapterOptions https, X509Certificate2 certificate)
     {
         https.ServerCertificate = certificate;
+
+        // Protocol §2: TLS 1.3, with TLS 1.2 as a fallback. Left at its default, the
+        // listener accepts whatever Windows allows, which can still include TLS 1.0 and 1.1.
+        https.SslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13;
 
         // AllowCertificate, not RequireCertificate: /api/v1/pair has to be reachable
         // before the device has anything to introduce itself with.
