@@ -83,13 +83,17 @@ jobs:
         working-directory: android
         run: ./gradlew.bat :core:sync:compileDebugUnitTestKotlin
 
-      - name: Start an isolated server
+      - name: Build the server
+        run: dotnet build server/src/Filum.Server/Filum.Server.csproj --configuration Release
+
+      # The server and the test share one step: a server started in a step of its own
+      # was gone by the time the next step ran, and the client found nothing listening.
+      - name: Run the conformance test against an isolated server
         shell: pwsh
         run: |
-          dotnet build server/src/Filum.Server/Filum.Server.csproj --configuration Release
           $work = Join-Path $env:RUNNER_TEMP 'filum'
           New-Item -ItemType Directory -Force $work | Out-Null
-          Start-Process -FilePath dotnet -ArgumentList @(
+          $server = Start-Process -PassThru -FilePath dotnet -ArgumentList @(
               'server/src/Filum.Server/bin/Release/net9.0/Filum.Server.dll',
               "--Filum:Root=$work/backup",
               "--Filum:ConfigDirectory=$work/config",
@@ -99,25 +103,31 @@ jobs:
               '--Logging:LogLevel:Microsoft.AspNetCore.Server.Kestrel=Debug'
           ) -RedirectStandardOutput "$work/server.log" -RedirectStandardError "$work/server.err.log"
 
-          $offer = $null
-          foreach ($attempt in 1..60) {
-              try {
-                  $offer = Invoke-RestMethod https://127.0.0.1:8766/api/v1/pair/new -SkipCertificateCheck
-                  break
-              } catch {
-                  Start-Sleep -Seconds 1
+          try {
+              $offer = $null
+              foreach ($attempt in 1..60) {
+                  try {
+                      $offer = Invoke-RestMethod https://127.0.0.1:8766/api/v1/pair/new -SkipCertificateCheck
+                      break
+                  } catch {
+                      Start-Sleep -Seconds 1
+                  }
               }
+              if (-not $offer) { throw 'The server did not start within a minute.' }
+
+              $env:FILUM_HOST = '127.0.0.1'
+              $env:FILUM_PORT = '8766'
+              $env:FILUM_PIN = $offer.payload.k
+              $env:FILUM_TOKEN = $offer.payload.t
+
+              Push-Location android
+              ./gradlew.bat :core:sync:testDebugUnitTest --tests "*EndToEndTest*"
+              $result = $LASTEXITCODE
+              Pop-Location
+          } finally {
+              Stop-Process -Id $server.Id -ErrorAction SilentlyContinue
           }
-          if (-not $offer) { throw 'The server did not start within a minute.' }
-
-          "FILUM_HOST=127.0.0.1" >> $env:GITHUB_ENV
-          "FILUM_PORT=8766" >> $env:GITHUB_ENV
-          "FILUM_PIN=$($offer.payload.k)" >> $env:GITHUB_ENV
-          "FILUM_TOKEN=$($offer.payload.t)" >> $env:GITHUB_ENV
-
-      - name: Run the conformance test
-        working-directory: android
-        run: ./gradlew.bat :core:sync:testDebugUnitTest --tests "*EndToEndTest*"
+          exit $result
 
       # The test is skipped, not failed, when the server variables are missing; a green
       # job must not hide that it never ran.
