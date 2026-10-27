@@ -1,5 +1,7 @@
 # Filum
 
+[![CI](https://github.com/Gusiu/Filum/actions/workflows/ci.yml/badge.svg?branch=maister)](https://github.com/Gusiu/Filum/actions/workflows/ci.yml)
+
 One-way file backup from an Android phone to a Windows PC, with no cloud and no
 intermediary holding the data.
 
