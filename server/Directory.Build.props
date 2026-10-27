@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <!-- One version for every server project. The release workflow checks it against the
+         tag and against the Android app's versionName, and ping reports it to the phone. -->
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+</Project>
