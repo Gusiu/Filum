@@ -1,0 +1,145 @@
+name: CI
+
+on:
+  push:
+    branches: [maister]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server:
+    name: Server tests
+    # The tray icon targets net9.0-windows, so the solution builds on Windows only.
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 9.0.x
+      - run: dotnet test Filum.sln --configuration Release
+
+  android:
+    name: Android tests and APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v4
+        with:
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          # The open-source cache instead of the default proprietary service.
+          cache-provider: basic
+      # :core:protocol is a plain JVM module: its tests run under "test", and
+      # testDebugUnitTest alone would leave them out without a word.
+      - run: ./gradlew testDebugUnitTest :core:protocol:test assembleDebug
+      - uses: actions/upload-artifact@v7
+        with:
+          name: filum-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+
+  conformance:
+    name: Client against server
+    # The Kotlin client against the C# server over real mTLS - the one test that checks
+    # the two implementations agree (android/README.md).
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 9.0.x
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v4
+        with:
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          # The open-source cache instead of the default proprietary service.
+          cache-provider: basic
+
+      # Compiled before the server starts: the pairing token expires after ten
+      # minutes, and a cold Gradle build on Windows can take longer than that.
+      - name: Compile the client tests
+        working-directory: android
+        run: ./gradlew.bat :core:sync:compileDebugUnitTestKotlin
+
+      - name: Build the server
+        run: dotnet build server/src/Filum.Server/Filum.Server.csproj --configuration Release
+
+      # The server and the test share one step: a server started in a step of its own
+      # was gone by the time the next step ran, and the client found nothing listening.
+      - name: Run the conformance test against an isolated server
+        shell: pwsh
+        run: |
+          $work = Join-Path $env:RUNNER_TEMP 'filum'
+          New-Item -ItemType Directory -Force $work | Out-Null
+          $server = Start-Process -PassThru -FilePath dotnet -ArgumentList @(
+              'server/src/Filum.Server/bin/Release/net9.0/Filum.Server.dll',
+              "--Filum:Root=$work/backup",
+              "--Filum:ConfigDirectory=$work/config",
+              '--Filum:Bind=127.0.0.1',
+              '--Filum:Port=8766',
+              # Kestrel reports a failed TLS handshake only at Debug level.
+              '--Logging:LogLevel:Microsoft.AspNetCore.Server.Kestrel=Debug'
+          ) -RedirectStandardOutput "$work/server.log" -RedirectStandardError "$work/server.err.log"
+
+          try {
+              $offer = $null
+              foreach ($attempt in 1..60) {
+                  try {
+                      $offer = Invoke-RestMethod https://127.0.0.1:8766/api/v1/pair/new -SkipCertificateCheck
+                      break
+                  } catch {
+                      Start-Sleep -Seconds 1
+                  }
+              }
+              if (-not $offer) { throw 'The server did not start within a minute.' }
+
+              $env:FILUM_HOST = '127.0.0.1'
+              $env:FILUM_PORT = '8766'
+              $env:FILUM_PIN = $offer.payload.k
+              $env:FILUM_TOKEN = $offer.payload.t
+
+              Push-Location android
+              ./gradlew.bat :core:sync:testDebugUnitTest --tests "*EndToEndTest*"
+              $result = $LASTEXITCODE
+              Pop-Location
+          } finally {
+              Stop-Process -Id $server.Id -ErrorAction SilentlyContinue
+          }
+          exit $result
+
+      # The test is skipped, not failed, when the server variables are missing; a green
+      # job must not hide that it never ran.
+      - name: Check that it ran
+        shell: pwsh
+        run: |
+          $report = [xml](Get-Content android/core/sync/build/test-results/testDebugUnitTest/TEST-pl.wspa.filum.sync.EndToEndTest.xml)
+          if ($report.testsuite.tests -ne '1' -or $report.testsuite.skipped -ne '0') {
+              throw "The conformance test did not run: tests=$($report.testsuite.tests), skipped=$($report.testsuite.skipped)."
+          }
+
+      - name: Server log
+        if: failure()
+        shell: pwsh
+        run: Get-Content (Join-Path $env:RUNNER_TEMP 'filum/server.log'), (Join-Path $env:RUNNER_TEMP 'filum/server.err.log') -ErrorAction SilentlyContinue

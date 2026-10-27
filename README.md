@@ -1,12 +1,14 @@
 # Filum
 
+[![CI](https://github.com/Gusiu/Filum/actions/workflows/ci.yml/badge.svg?branch=maister)](https://github.com/Gusiu/Filum/actions/workflows/ci.yml)
+
 One-way file backup from an Android phone to a Windows PC, with no cloud and no
 intermediary holding the data.
 
 Engineering thesis, WSPA.
 
-> The design documents under `docs/` are written in Polish, as the thesis itself is.
-> They remain normative: this file summarises them, it does not replace them.
+> The design documents under `docs/` are normative: this file summarises them, it does
+> not replace them.
 
 ---
 

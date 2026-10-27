@@ -73,7 +73,10 @@ class EndToEndTest {
             certificateDer = clientCertificate.certificate.encoded,
             label = "Test client",
         )
-        val pairResponse = assertInstanceOf(ApiResult.Ok::class.java, paired)
+        // The result goes into every message: a conformance test that says only "wrong
+        // type" leaves you guessing which side diverged - and that is the one piece of
+        // information you come here for.
+        val pairResponse = assertInstanceOf(ApiResult.Ok::class.java, paired, paired.toString())
         println("paired, deviceKey=${(pairResponse.value as pl.wspa.filum.protocol.PairResponse).deviceKey}")
 
         val client = api(withIdentity = true)
@@ -81,7 +84,7 @@ class EndToEndTest {
         // --- ping: from here on every resource requires mTLS ---
 
         val ping = client.ping(endpoint)
-        val pingOk = assertInstanceOf(ApiResult.Ok::class.java, ping)
+        val pingOk = assertInstanceOf(ApiResult.Ok::class.java, ping, ping.toString())
         val limits = (pingOk.value as pl.wspa.filum.protocol.PingResponse).limits
         println("server answered, manifestBatch=${limits.manifestBatch}")
 
@@ -135,9 +138,6 @@ class EndToEndTest {
 
         val outcome = engine.run("e2e-1", ManifestRequest.MODE_FULL, scanned.asSequence(), Deadline { false })
 
-        // The reason goes into the message: a conformance test that says only "wrong type"
-        // leaves you guessing which side diverged - and that is the one piece of
-        // information you come here for.
         val completed = assertInstanceOf(SyncOutcome.Completed::class.java, outcome, outcome.toString())
         println("sent ${completed.filesSent} files, ${completed.bytesSent} B")
         assertEquals(4, completed.filesSent)
@@ -154,7 +154,7 @@ class EndToEndTest {
                 files = scanned.map { ManifestEntry(it.canonicalPath, it.size, it.mtimeSeconds) },
             ),
         )
-        val manifest = assertInstanceOf(ApiResult.Ok::class.java, second)
+        val manifest = assertInstanceOf(ApiResult.Ok::class.java, second, second.toString())
         val response = manifest.value as pl.wspa.filum.protocol.ManifestResponse
 
         // This is the crux: the server recognises files by the (path, size, mtime) triple
