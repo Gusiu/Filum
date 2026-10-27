@@ -94,7 +94,9 @@ jobs:
               "--Filum:Root=$work/backup",
               "--Filum:ConfigDirectory=$work/config",
               '--Filum:Bind=127.0.0.1',
-              '--Filum:Port=8766'
+              '--Filum:Port=8766',
+              # Kestrel reports a failed TLS handshake only at Debug level.
+              '--Logging:LogLevel:Microsoft.AspNetCore.Server.Kestrel=Debug'
           ) -RedirectStandardOutput "$work/server.log" -RedirectStandardError "$work/server.err.log"
 
           $offer = $null
