@@ -18,7 +18,7 @@ jobs:
     outputs:
       version: ${{ steps.read.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: read
         name: The tag, the app and the server agree
         run: |
@@ -40,8 +40,8 @@ jobs:
     needs: version
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 9.0.x
       - name: Publish the service and the tray icon
@@ -52,7 +52,7 @@ jobs:
                   --runtime win-x64 --self-contained false --output publish
           }
           Compress-Archive -Path publish/* -DestinationPath "filum-server-${{ needs.version.outputs.version }}-win-x64.zip"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: server
           path: filum-server-*.zip
@@ -62,17 +62,22 @@ jobs:
     needs: version
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
-      - uses: android-actions/setup-android@v3
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: android-actions/setup-android@v4
+        with:
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          # The open-source cache instead of the default proprietary service.
+          cache-provider: basic
       - working-directory: android
         run: ./gradlew assembleDebug
       - run: cp android/app/build/outputs/apk/debug/app-debug.apk "filum-${{ needs.version.outputs.version }}-debug.apk"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: android
           path: filum-*-debug.apk
@@ -85,7 +90,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
