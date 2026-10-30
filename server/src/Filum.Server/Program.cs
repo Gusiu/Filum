@@ -2,7 +2,6 @@ using System.Net;
 using Filum.Core;
 using Filum.Server;
 using Filum.Server.Components;
-using Microsoft.AspNetCore.Server.Kestrel.Https;
 using Microsoft.Extensions.Hosting.WindowsServices;
 using Microsoft.Extensions.Options;
 
@@ -62,21 +61,7 @@ builder.WebHost.ConfigureKestrel(kestrel =>
     kestrel.Limits.MaxRequestBodySize = null;
 
     kestrel.Listen(IPAddress.Parse(options.Bind), options.Port, listen =>
-    {
-        listen.UseHttps(https =>
-        {
-            https.ServerCertificate = certificates.Certificate;
-
-            // AllowCertificate, not RequireCertificate: /api/v1/pair has to be reachable
-            // before the device has anything to introduce itself with.
-            https.ClientCertificateMode = ClientCertificateMode.AllowCertificate;
-
-            // The trust chain is of no interest - the certificates are self-signed by
-            // definition (ADR-005). The real verification is comparing the key fingerprint
-            // against the list of paired devices, in DeviceAuthenticationMiddleware.
-            https.ClientCertificateValidation = (_, _, _) => true;
-        });
-    });
+        listen.UseHttps(https => ServerTls.Configure(https, certificates.Certificate)));
 });
 
 var app = builder.Build();

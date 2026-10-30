@@ -35,7 +35,11 @@ The invariants the rest of this specification rests on:
 
 ## 2. Transport layer
 
-- HTTP/1.1 over TLS 1.3 (TLS 1.2 acceptable as a fallback).
+- HTTP over TLS 1.3 (TLS 1.2 acceptable as a fallback). Both HTTP/1.1 and HTTP/2 are
+  allowed: the version is negotiated by ALPN in the TLS handshake, and nothing in this
+  protocol depends on which one is chosen. In the conformance test the reference
+  implementations (OkHttp and Kestrel) settle on HTTP/2. Header names are
+  case-insensitive, as in any HTTP - HTTP/2 sends `X-Filum-Path` as `x-filum-path`.
 - The server MUST listen on `0.0.0.0` - never on a single chosen address. This follows
   from §4: the same process has to be reachable over the LAN, over an overlay network,
   and over `localhost`.
