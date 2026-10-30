@@ -100,8 +100,10 @@ That test earns its keep: a disagreement over whether an empty optional field is
 omitted or written as null passed the full unit suite on both sides and only surfaced
 there.
 
-The cycle has not yet been run on a real phone: `MediaStore`, the Android Keystore
-and the storage permission can only be exercised on a device.
+`MediaStore`, the Android Keystore and the storage permission can only be exercised on
+a device, and the phone found what no test could: with its key in the Android Keystore,
+the client could not authenticate at all. The unit tests and the conformance test use
+JVM keys, so that path exists only on a device.
 
 ## Building
 
