@@ -1,0 +1,35 @@
+name: Dependency graph
+
+# GitHub reads the server's NuGet packages from the project files but cannot see the
+# Android client's Gradle dependencies. Without them Dependabot would raise no alert for
+# OkHttp, Room or anything else the phone runs, so every push to maister submits them.
+on:
+  push:
+    branches: [maister]
+
+permissions:
+  contents: read
+
+jobs:
+  gradle:
+    name: Submit Gradle dependencies
+    runs-on: ubuntu-latest
+    # The submission API needs write access. This workflow runs only on pushes to maister,
+    # never on a pull request, so no outside change runs with that permission.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v4
+        with:
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/dependency-submission@v6
+        with:
+          build-root-directory: android
+          # The open-source cache instead of the default proprietary service.
+          cache-provider: basic
+          dependency-graph: generate-and-submit
