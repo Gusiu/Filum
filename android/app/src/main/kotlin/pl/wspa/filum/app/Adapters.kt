@@ -114,8 +114,7 @@ class RoomSyncQueue(
             )
         }
 
-    override suspend fun pendingCount(): Int =
-        dao.countByState(FileState.PENDING) + dao.countByState(FileState.FAILED_TRANSIENT)
+    override suspend fun pendingCount(): Int = dao.countWaiting()
 }
 
 /** The journal in the database, trimmed to the last two hundred events. */

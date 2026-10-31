@@ -133,7 +133,7 @@ class FakeQueue : SyncQueue {
     }
 
     /** The states `FileEntryDao.nextBatch` and `RoomSyncQueue.pendingCount` take. */
-    private val waiting = setOf(State.PENDING, State.TRANSIENT)
+    private val waiting = setOf(State.PENDING, State.IN_PROGRESS, State.TRANSIENT)
 
     override suspend fun nextBatch(limit: Int): List<QueuedFile> =
         rows.values

@@ -464,6 +464,25 @@ class SyncEngineTest {
     }
 
     @Test
+    fun `a file cut off mid-transfer comes back in the next cycle without a rescan`(@TempDir dir: Path) = runTest {
+        // The next night's scan is incremental and lists only what changed. A file stopped
+        // halfway has not changed, so only the queue can bring it back (B30).
+        setUp()
+        val big = file(dir, "video.mp4", "0123456789")
+        var chunks = 0
+        transport.putInterceptor = { _, _, _ -> chunks++; null }
+        val config = SyncConfig(chunkBytes = 4)
+
+        val first = run(listOf(big), deadline = Deadline { chunks >= 1 }, config = config)
+        assertInstanceOf(SyncOutcome.Interrupted::class.java, first)
+
+        val second = run(emptyList(), config = config)
+
+        assertEquals(1, assertInstanceOf(SyncOutcome.Completed::class.java, second).filesSent)
+        assertEquals("0123456789", transport.content("video.mp4"))
+    }
+
+    @Test
     fun `an empty scan ends in success, not in an error`() = runTest {
         setUp()
 
