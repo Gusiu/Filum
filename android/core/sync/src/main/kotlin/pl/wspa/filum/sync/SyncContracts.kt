@@ -155,11 +155,30 @@ sealed interface SyncOutcome {
     /**
      * Everything this cycle could send has gone. Files that failed for now wait in the queue
      * for the next cycle.
+     *
+     * The counts have no defaults on purpose: the session record is built from them, and a
+     * count nobody sets reads as zero (B28).
      */
-    data class Completed(val filesSent: Int, val bytesSent: Long) : SyncOutcome
+    data class Completed(
+        val filesSent: Int,
+        val bytesSent: Long,
+        /** Files waiting in the queue when uploading began. */
+        val filesQueued: Int,
+        /** Files the cycle tried to send and could not - set aside, or left for another try. */
+        val filesFailed: Int,
+    ) : SyncOutcome
 
-    /** We stopped by ourselves, at a moment of our choosing. */
-    data class Interrupted(val reason: InterruptReason, val filesSent: Int, val bytesSent: Long) : SyncOutcome
+    /**
+     * We stopped by ourselves, at a moment of our choosing. The counts mean what they do in
+     * [Completed]; [filesQueued] is zero when the cycle stopped before uploading began.
+     */
+    data class Interrupted(
+        val reason: InterruptReason,
+        val filesSent: Int,
+        val bytesSent: Long,
+        val filesQueued: Int,
+        val filesFailed: Int,
+    ) : SyncOutcome
 
     /** The manifest could not even be agreed. */
     data class Failed(val reason: String) : SyncOutcome

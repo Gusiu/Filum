@@ -224,6 +224,26 @@ class BundlingTest {
     }
 
     @Test
+    fun `files that fail within a bundle are counted as failed`(@TempDir dir: Path) = runTest {
+        setUp()
+        val files = (1..3).map { file(dir, "p$it.txt", 10) }
+        // p3.txt is left out of the response altogether.
+        transport.bundleResponder = {
+            ApiResult.Ok(BundleResponse(listOf(
+                BundleFileResult("p1.txt", ok = true),
+                BundleFileResult("p2.txt", ok = false, error = "digest_mismatch"),
+            )))
+        }
+
+        val outcome = run(files, SyncConfig(smallFileThreshold = 1_000))
+
+        val completed = assertInstanceOf(SyncOutcome.Completed::class.java, outcome)
+        assertEquals(3, completed.filesQueued)
+        assertEquals(1, completed.filesSent)
+        assertEquals(2, completed.filesFailed)
+    }
+
+    @Test
     fun `a bundled file that keeps failing is set aside after the attempt limit`(@TempDir dir: Path) = runTest {
         // A file sent on its own is set aside after the limit; one in a bundle was retried
         // in every cycle for ever.
