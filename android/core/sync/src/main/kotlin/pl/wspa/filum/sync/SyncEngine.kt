@@ -32,6 +32,8 @@ class SyncEngine(
 
     private var filesSent = 0
     private var bytesSent = 0L
+    private var filesQueued = 0
+    private var filesFailed = 0
 
     /**
      * Files that failed, or had to be skipped, during this cycle. They stay in the queue, and
@@ -49,6 +51,8 @@ class SyncEngine(
     ): SyncOutcome {
         filesSent = 0
         bytesSent = 0
+        filesQueued = 0
+        filesFailed = 0
         deferred.clear()
 
         val reconciled = reconcile(sessionId, mode, files, deadline)
@@ -121,7 +125,7 @@ class SyncEngine(
                     JournalLevel.INFO, "deadline_manifest",
                     "Budget exhausted while agreeing the manifest, batch $index.",
                 )
-                return SyncOutcome.Interrupted(InterruptReason.BUDGET, filesSent, bytesSent)
+                return interrupted(InterruptReason.BUDGET)
             }
         }
 
@@ -183,6 +187,9 @@ class SyncEngine(
     // --- uploading ---
 
     private suspend fun upload(deadline: Deadline): SyncOutcome {
+        // Taken once, before anything is sent: it includes what earlier cycles left behind.
+        filesQueued = queue.pendingCount()
+
         while (true) {
             if (deadline.reached()) return stopOnBudget()
 
@@ -190,7 +197,7 @@ class SyncEngine(
             // files deferred in this cycle, nothing untried is left behind it.
             val batch = queue.nextBatch(UPLOAD_BATCH).filterNot { it.canonicalPath in deferred }
             if (batch.isEmpty()) {
-                return SyncOutcome.Completed(filesSent, bytesSent)
+                return SyncOutcome.Completed(filesSent, bytesSent, filesQueued, filesFailed)
             }
 
             // Small files go in bundles, large ones on their own. Across a hundred thousand
@@ -202,8 +209,7 @@ class SyncEngine(
                 if (deadline.reached()) return stopOnBudget()
 
                 when (sendBundle(group)) {
-                    SendResult.INTERRUPTED ->
-                        return SyncOutcome.Interrupted(InterruptReason.CONNECTION, filesSent, bytesSent)
+                    SendResult.INTERRUPTED -> return interrupted(InterruptReason.CONNECTION)
 
                     else -> Unit
                 }
@@ -214,16 +220,22 @@ class SyncEngine(
 
                 when (send(entry, deadline)) {
                     SendResult.SENT -> filesSent++
-                    SendResult.INTERRUPTED ->
-                        return SyncOutcome.Interrupted(InterruptReason.CONNECTION, filesSent, bytesSent)
+                    SendResult.INTERRUPTED -> return interrupted(InterruptReason.CONNECTION)
 
                     SendResult.OUT_OF_BUDGET -> return stopOnBudget()
 
-                    SendResult.SKIPPED, SendResult.FAILED -> deferred += entry.canonicalPath
+                    SendResult.SKIPPED -> deferred += entry.canonicalPath
+                    SendResult.FAILED -> {
+                        deferred += entry.canonicalPath
+                        filesFailed++
+                    }
                 }
             }
         }
     }
+
+    private fun interrupted(reason: InterruptReason) =
+        SyncOutcome.Interrupted(reason, filesSent, bytesSent, filesQueued, filesFailed)
 
     /**
      * Ending because of the budget. Always through this one path, because a night cycle with
@@ -235,7 +247,7 @@ class SyncEngine(
             JournalLevel.INFO, "deadline_upload",
             "Budget exhausted; stopping cleanly after $filesSent files ($bytesSent B).",
         )
-        return SyncOutcome.Interrupted(InterruptReason.BUDGET, filesSent, bytesSent)
+        return interrupted(InterruptReason.BUDGET)
     }
 
     /**
@@ -294,6 +306,7 @@ class SyncEngine(
             }
             if (setAsideIfExhausted(queued)) {
                 deferred += queued.canonicalPath
+                filesFailed++
                 continue
             }
 
@@ -329,6 +342,7 @@ class SyncEngine(
                     queue.markTransientFailure(it.canonicalPath, result.code)
                     deferred += it.canonicalPath
                 }
+                filesFailed += entries.size
                 journal.record(JournalLevel.WARN, result.code, "Bundle rejected: ${result.message}")
                 SendResult.FAILED
             }
@@ -361,6 +375,7 @@ class SyncEngine(
                 queue.markTransientFailure(result.path, error)
             }
             deferred += result.path
+            filesFailed++
         }
 
         // The server said nothing about a file we sent. We do not assume success - it
@@ -369,6 +384,7 @@ class SyncEngine(
             if (path !in reported) {
                 queue.markTransientFailure(path, "no result in the response")
                 deferred += path
+                filesFailed++
             }
         }
     }

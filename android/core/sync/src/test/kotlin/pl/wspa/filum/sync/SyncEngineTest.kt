@@ -331,6 +331,28 @@ class SyncEngineTest {
     }
 
     @Test
+    fun `the outcome counts the files queued and the files that failed`(@TempDir dir: Path) = runTest {
+        // The session row is built from these counts (B28).
+        setUp()
+        val ok = file(dir, "ok.txt", "x")
+        val refused = file(dir, "refused.txt", "y")
+        val busy = file(dir, "busy.txt", "z")
+        transport.putInterceptor = { _, path, _ ->
+            when (path) {
+                "refused.txt" -> FakeTransport.rejected()
+                "busy.txt" -> FakeTransport.outOfSpace()
+                else -> null
+            }
+        }
+
+        val completed = assertInstanceOf(SyncOutcome.Completed::class.java, run(listOf(ok, refused, busy)))
+
+        assertEquals(3, completed.filesQueued)
+        assertEquals(1, completed.filesSent)
+        assertEquals(2, completed.filesFailed)
+    }
+
+    @Test
     fun `the attempt limit counts cycles, not retries within one`(@TempDir dir: Path) = runTest {
         setUp()
         val a = file(dir, "a.txt", "x")

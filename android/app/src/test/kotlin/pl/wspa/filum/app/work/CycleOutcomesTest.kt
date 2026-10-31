@@ -25,7 +25,7 @@ class CycleOutcomesTest {
     fun `a completed cycle finishes the work`() {
         assertEquals(
             WorkerDecision.SUCCESS,
-            CycleOutcomes.decide(done(SyncOutcome.Completed(filesSent = 12, bytesSent = 4096))),
+            CycleOutcomes.decide(done(SyncOutcome.Completed(filesSent = 12, bytesSent = 4096, filesQueued = 12, filesFailed = 0))),
         )
     }
 
@@ -35,7 +35,7 @@ class CycleOutcomesTest {
         // queue waits for the next window anyway.
         assertEquals(
             WorkerDecision.SUCCESS,
-            CycleOutcomes.decide(done(SyncOutcome.Interrupted(InterruptReason.BUDGET, 40, 900))),
+            CycleOutcomes.decide(done(SyncOutcome.Interrupted(InterruptReason.BUDGET, 40, 900, filesQueued = 100, filesFailed = 0))),
         )
     }
 
@@ -43,7 +43,7 @@ class CycleOutcomesTest {
     fun `a dropped connection deserves a retry`() {
         assertEquals(
             WorkerDecision.RETRY,
-            CycleOutcomes.decide(done(SyncOutcome.Interrupted(InterruptReason.CONNECTION, 3, 120))),
+            CycleOutcomes.decide(done(SyncOutcome.Interrupted(InterruptReason.CONNECTION, 3, 120, filesQueued = 10, filesFailed = 0))),
         )
     }
 

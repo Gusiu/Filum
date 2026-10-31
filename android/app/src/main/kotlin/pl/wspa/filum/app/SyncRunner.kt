@@ -220,19 +220,8 @@ class SyncRunner(private val container: AppContainer) {
     private suspend fun finishSession(sessionId: String, outcome: SyncOutcome, usedDelta: Boolean) {
         val session = container.database.sessions().get(sessionId) ?: return
 
-        val (files, bytes, result) = when (outcome) {
-            is SyncOutcome.Completed -> Triple(outcome.filesSent, outcome.bytesSent, "completed")
-            is SyncOutcome.Interrupted -> Triple(outcome.filesSent, outcome.bytesSent, "interrupted:${outcome.reason.name.lowercase()}")
-            is SyncOutcome.Failed -> Triple(0, 0L, "failed:${outcome.reason}")
-        }
-
         container.database.sessions().save(
-            session.copy(
-                endedAt = System.currentTimeMillis(),
-                filesDone = files,
-                bytesSent = bytes,
-                result = if (usedDelta) result else "$result (full scan)",
-            )
+            SessionRecords.finished(session, outcome, usedDelta, endedAt = System.currentTimeMillis())
         )
     }
 
