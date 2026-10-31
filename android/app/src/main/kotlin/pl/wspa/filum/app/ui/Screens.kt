@@ -12,6 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -38,6 +39,20 @@ fun PairingScreen(
 ) {
     var code by rememberSaveable { mutableStateOf("") }
     var label by rememberSaveable { mutableStateOf(android.os.Build.MODEL ?: "Phone") }
+    var scanning by rememberSaveable { mutableStateOf(false) }
+
+    if (scanning) {
+        // A scanned code only fills in the field: pairing still waits for the Pair button,
+        // so the user sees what was read before the phone acts on it.
+        QrScanner(
+            onCode = { scanned ->
+                code = scanned
+                scanning = false
+            },
+            onCancel = { scanning = false },
+        )
+        return
+    }
 
     Column(
         modifier = Modifier
@@ -49,9 +64,13 @@ fun PairingScreen(
         Text("Pairing", style = MaterialTheme.typography.headlineMedium)
         Text(
             "On the computer, open the Filum panel and get a pairing code, " +
-                "then paste it below. The code is valid for 10 minutes and works once.",
+                "then scan it or paste it below. The code is valid for 10 minutes and works once.",
             style = MaterialTheme.typography.bodyMedium,
         )
+
+        OutlinedButton(onClick = { scanning = true }, modifier = Modifier.fillMaxWidth()) {
+            Text("Scan the QR code")
+        }
 
         OutlinedTextField(
             value = code,

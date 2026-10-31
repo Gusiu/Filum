@@ -14,6 +14,13 @@
     <!-- Wi-Fi lock: without it, adapter power saving cuts throughput. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!--
+      The camera reads the pairing code from the server panel. It is not required: on a
+      device without one, the code is pasted instead.
+    -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+
     <application
         android:name="pl.wspa.filum.app.FilumApplication"
         android:allowBackup="false"

@@ -101,10 +101,11 @@ green on both sides - because each side did exactly what its author intended.
 | integrity check over a sample of files | works |
 | fast/thorough change-detection toggle | works |
 | exclusions screen (Folders) | works |
-| QR scanning with the camera | not started |
+| QR scanning with the camera | works, checked on a phone |
 
-Pairing is done by pasting the `filum1:…` string from the clipboard. Camera scanning
-will land alongside the server panel, which has to draw that code anyway (stage 7).
+Pairing reads the QR code in the server panel with the camera, or takes the `filum1:…`
+string pasted from the clipboard. A scanned code only fills in the field: pairing still
+waits for the Pair button (ADR-018).
 
 **Tested on a phone.** A Galaxy S24 Ultra on Android 16 made a full backup of 7807
 files (8 GB) in 21 minutes over Wi-Fi, with the device key in StrongBox, and then
