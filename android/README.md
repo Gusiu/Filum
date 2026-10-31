@@ -13,6 +13,15 @@ cd android && ./gradlew :app:assembleDebug
 cd android && ./gradlew test
 ```
 
+Device tests and the measurements for the thesis use the `qa` build type: debuggable,
+signed with the debug key and installed as `pl.wspa.filum.qa` next to the regular app.
+Its key, pairing and database are its own, so testing never touches an installation
+that holds a real backup.
+
+```bash
+cd android && ./gradlew :app:assembleQa
+```
+
 Requires Android Studio (Gradle, the Kotlin compiler, the SDK). Tool versions:
 AGP 9.3.2, Gradle 9.5, Kotlin 2.3.10, `compileSdk 37`, `targetSdk 36`.
 
