@@ -92,7 +92,7 @@ Stages 1-9 of the [build order table](docs/ARCHITECTURE.md#8-build-order).
 | **client↔server conformance test** | passes |
 | **191 server tests, 217 client tests** | green |
 | tested on a phone (Galaxy S24 Ultra, Android 16) | full backup and incremental cycles, also behind a VPN |
-| QR scanning with the phone camera | not started |
+| QR scanning with the phone camera | works, checked on a phone |
 
 `EndToEndTest` runs the real Kotlin client against the real C# server and checks that
 both compute the same file identity - details in [android/README.md](android/README.md).
