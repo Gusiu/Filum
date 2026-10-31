@@ -224,6 +224,24 @@ class BundlingTest {
     }
 
     @Test
+    fun `a bundled file that keeps failing is set aside after the attempt limit`(@TempDir dir: Path) = runTest {
+        // A file sent on its own is set aside after the limit; one in a bundle was retried
+        // in every cycle for ever.
+        setUp()
+        val a = file(dir, "a.txt", 10)
+        transport.bundleResponder = {
+            ApiResult.Ok(BundleResponse(listOf(BundleFileResult("a.txt", ok = false, error = "digest_mismatch"))))
+        }
+        val config = SyncConfig(smallFileThreshold = 1_000, maxAttempts = 2)
+
+        repeat(3) { run(listOf(a), config) }
+
+        assertEquals(FakeQueue.State.PERMANENT, queue.state("a.txt"))
+        assertEquals(2, transport.bundles.size)
+        assertTrue(journal.has("too_many_attempts"))
+    }
+
+    @Test
     fun `a file deleted before bundling does not abort the bundle`(@TempDir dir: Path) = runTest {
         setUp()
         val vanishing = file(dir, "vanishing.txt", 10)

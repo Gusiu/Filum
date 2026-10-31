@@ -292,6 +292,10 @@ class SyncEngine(
                 deferred += queued.canonicalPath
                 continue
             }
+            if (setAsideIfExhausted(queued)) {
+                deferred += queued.canonicalPath
+                continue
+            }
 
             entries += BundleEntry(
                 canonicalPath = queued.canonicalPath,
@@ -391,16 +395,24 @@ class SyncEngine(
             return SendResult.SKIPPED
         }
 
-        if (entry.attempts >= config.maxAttempts) {
-            queue.markPermanentFailure(entry.canonicalPath, "attempt limit exceeded")
-            journal.record(
-                JournalLevel.ERROR, "too_many_attempts",
-                "${entry.canonicalPath}: ${config.maxAttempts} failed attempts, setting it aside.",
-            )
-            return SendResult.FAILED
-        }
+        if (setAsideIfExhausted(entry)) return SendResult.FAILED
 
         return transfer(entry, file, deadline)
+    }
+
+    /**
+     * A file that failed in [SyncConfig.maxAttempts] cycles is set aside rather than tried
+     * again - alike whether it travels on its own or in a bundle.
+     */
+    private suspend fun setAsideIfExhausted(entry: QueuedFile): Boolean {
+        if (entry.attempts < config.maxAttempts) return false
+
+        queue.markPermanentFailure(entry.canonicalPath, "attempt limit exceeded")
+        journal.record(
+            JournalLevel.ERROR, "too_many_attempts",
+            "${entry.canonicalPath}: ${config.maxAttempts} failed attempts, setting it aside.",
+        )
+        return true
     }
 
     private suspend fun transfer(entry: QueuedFile, file: File, deadline: Deadline): SendResult {
