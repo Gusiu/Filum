@@ -452,3 +452,26 @@ one figure made it false everywhere that figure does not hold.
 **Rejected.** Naming a different number instead of 200 GB (the same mistake with a different
 value), scaling the thresholds to library size (this would require knowing it before the first
 scan, i.e. before we know anything).
+
+## ADR-018 - Reading the pairing code with the camera, decoded on the device
+
+**Status:** accepted
+
+**Context.** Pairing worked by pasting the `filum1:` string, while the server panel draws the
+same string as a QR code and the phone has a camera. The code carries a one-time token and the
+server's key fingerprint - the two things that decide which computer the phone will trust.
+
+**Decision.** CameraX supplies the frames and ZXing decodes them, inside the app. The scanner
+takes only a code that parses as a Filum pairing code, and a scanned code only fills in the
+field: pairing still waits for the user to press Pair. The camera runs only while the scanner
+is on screen.
+
+**Rationale.** ZXing is a single Java library with no network code, and it needs no Google
+Play services, which a sideloaded device may lack. The data never leaves the phone, which is
+what this project promises about everything else too.
+
+**Rejected.** Google ML Kit (by its own data-disclosure notice it sends Google metrics on how
+its APIs are used, and its smaller variant depends on Play services). The system camera's QR
+recognition with a `filum1:` link (the link would have to be openable from a browser, so any
+web page could put an attacker's pairing code one tap away from the user). A separate scanner
+app called through an intent (another application would see the token).
