@@ -33,3 +33,8 @@ jobs:
           # The open-source cache instead of the default proprietary service.
           cache-provider: basic
           dependency-graph: generate-and-submit
+          # Only the classpaths that end up in an APK. Unfiltered, the build's own tooling -
+          # the Android and Kotlin Gradle plugins and what they pull in - accounted for all 52
+          # alerts of the first submission, none of them for code that reaches a phone, and
+          # an alert that does matter would drown among them.
+          dependency-graph-include-configurations: '^(debug|release|qa)?[Rr]untimeClasspath$'
