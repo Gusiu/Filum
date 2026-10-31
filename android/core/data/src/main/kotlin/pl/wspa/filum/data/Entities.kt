@@ -49,6 +49,12 @@ data class EndpointEntity(
 
 enum class FileState {
     PENDING,
+
+    /**
+     * Part of the file is on the server. It waits like PENDING: one cycle runs at a time, so
+     * an entry still in progress when a cycle starts was cut off by the budget or by the
+     * process being killed, and resumes from its offset.
+     */
     IN_PROGRESS,
     DONE,
 

@@ -68,11 +68,14 @@ interface FileEntryDao {
     /**
      * The next batch to send. Oldest entries first, so that a file which once lost its
      * place in a batch does not wait forever.
+     *
+     * The three waiting states are the same in every query below: leaving IN_PROGRESS out
+     * hid a file cut off mid-transfer until the next full scan (B30).
      */
     @Query(
         """
         SELECT * FROM file_entry
-        WHERE state IN ('PENDING', 'FAILED_TRANSIENT')
+        WHERE state IN ('PENDING', 'IN_PROGRESS', 'FAILED_TRANSIENT')
         ORDER BY updatedAt ASC
         LIMIT :limit
         """
@@ -82,11 +85,14 @@ interface FileEntryDao {
     @Query("SELECT COUNT(*) FROM file_entry WHERE state = :state")
     suspend fun countByState(state: FileState): Int
 
-    @Query("SELECT COUNT(*) FROM file_entry WHERE state IN ('PENDING', 'FAILED_TRANSIENT')")
+    @Query("SELECT COUNT(*) FROM file_entry WHERE state IN ('PENDING', 'IN_PROGRESS', 'FAILED_TRANSIENT')")
     fun observePending(): Flow<Int>
 
-    @Query("SELECT COALESCE(SUM(size - bytesSent), 0) FROM file_entry WHERE state IN ('PENDING', 'FAILED_TRANSIENT')")
+    @Query("SELECT COALESCE(SUM(size - bytesSent), 0) FROM file_entry WHERE state IN ('PENDING', 'IN_PROGRESS', 'FAILED_TRANSIENT')")
     suspend fun remainingBytes(): Long
+
+    @Query("SELECT COUNT(*) FROM file_entry WHERE state IN ('PENDING', 'IN_PROGRESS', 'FAILED_TRANSIENT')")
+    suspend fun countWaiting(): Int
 
     @Query("UPDATE file_entry SET state = :state, bytesSent = :bytesSent, updatedAt = :at WHERE path = :path")
     suspend fun updateProgress(path: String, state: FileState, bytesSent: Long, at: Long)

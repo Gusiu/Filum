@@ -316,6 +316,38 @@ class SyncEngineTest {
     }
 
     @Test
+    fun `a transient error gets one attempt per cycle`(@TempDir dir: Path) = runTest {
+        // The queue hands a file that failed for now straight back. Trying it again in the
+        // same cycle only repeats the failure: with the server's disk full, five quick
+        // attempts would set every file aside before anyone could free the space (B29).
+        setUp()
+        val a = file(dir, "a.txt", "x")
+        transport.putInterceptor = { _, _, _ -> FakeTransport.outOfSpace() }
+
+        run(listOf(a))
+
+        assertEquals(1, transport.putCalls.count { it.first == "a.txt" })
+        assertEquals(FakeQueue.State.TRANSIENT, queue.state("a.txt"))
+    }
+
+    @Test
+    fun `the attempt limit counts cycles, not retries within one`(@TempDir dir: Path) = runTest {
+        setUp()
+        val a = file(dir, "a.txt", "x")
+        transport.putInterceptor = { _, _, _ -> FakeTransport.outOfSpace() }
+        val config = SyncConfig(maxAttempts = 3)
+
+        repeat(3) { run(listOf(a), config = config) }
+        assertEquals(FakeQueue.State.TRANSIENT, queue.state("a.txt"), "three cycles, three attempts")
+
+        run(listOf(a), config = config)
+
+        assertEquals(FakeQueue.State.PERMANENT, queue.state("a.txt"))
+        assertEquals(3, transport.putCalls.count { it.first == "a.txt" })
+        assertTrue(journal.has("too_many_attempts"))
+    }
+
+    @Test
     fun `a dropped connection ends the cycle, not the file`(@TempDir dir: Path) = runTest {
         setUp()
         val a = file(dir, "a.txt", "x")
@@ -413,6 +445,41 @@ class SyncEngineTest {
         // The rest waits in the queue; the next cycle picks it up without rescanning.
         assertEquals(3, queue.pendingCount())
         assertTrue(journal.has("deadline_upload"))
+    }
+
+    @Test
+    fun `a budget that runs out mid-file is a budget stop`(@TempDir dir: Path) = runTest {
+        // Reported as a dropped connection, it had WorkManager retry a cycle with nothing left
+        // to spend, and the night left no journal entry saying why it stopped (B31).
+        setUp()
+        val big = file(dir, "video.mp4", "0123456789")
+        var chunks = 0
+        transport.putInterceptor = { _, _, _ -> chunks++; null }
+
+        val outcome = run(listOf(big), deadline = Deadline { chunks >= 1 }, config = SyncConfig(chunkBytes = 4))
+
+        val interrupted = assertInstanceOf(SyncOutcome.Interrupted::class.java, outcome)
+        assertEquals(InterruptReason.BUDGET, interrupted.reason)
+        assertTrue(journal.has("deadline_upload"))
+    }
+
+    @Test
+    fun `a file cut off mid-transfer comes back in the next cycle without a rescan`(@TempDir dir: Path) = runTest {
+        // The next night's scan is incremental and lists only what changed. A file stopped
+        // halfway has not changed, so only the queue can bring it back (B30).
+        setUp()
+        val big = file(dir, "video.mp4", "0123456789")
+        var chunks = 0
+        transport.putInterceptor = { _, _, _ -> chunks++; null }
+        val config = SyncConfig(chunkBytes = 4)
+
+        val first = run(listOf(big), deadline = Deadline { chunks >= 1 }, config = config)
+        assertInstanceOf(SyncOutcome.Interrupted::class.java, first)
+
+        val second = run(emptyList(), config = config)
+
+        assertEquals(1, assertInstanceOf(SyncOutcome.Completed::class.java, second).filesSent)
+        assertEquals("0123456789", transport.content("video.mp4"))
     }
 
     @Test

@@ -208,6 +208,40 @@ class BundlingTest {
     }
 
     @Test
+    fun `a bundle the server keeps refusing is sent once per cycle`(@TempDir dir: Path) = runTest {
+        // The queue hands the refused files straight back, and nothing limited bundle retries:
+        // the cycle resent the same bundle until the budget ran out (B29).
+        setUp()
+        val files = (1..3).map { file(dir, "p$it.txt", 10) }
+        transport.bundleResponder = {
+            ApiResult.failure(HttpStatus.BAD_REQUEST, ErrorResponse("bad_request", "broken framing"))
+        }
+
+        val outcome = run(files, SyncConfig(smallFileThreshold = 1_000))
+
+        assertInstanceOf(SyncOutcome.Completed::class.java, outcome)
+        assertEquals(1, transport.bundles.size)
+    }
+
+    @Test
+    fun `a bundled file that keeps failing is set aside after the attempt limit`(@TempDir dir: Path) = runTest {
+        // A file sent on its own is set aside after the limit; one in a bundle was retried
+        // in every cycle for ever.
+        setUp()
+        val a = file(dir, "a.txt", 10)
+        transport.bundleResponder = {
+            ApiResult.Ok(BundleResponse(listOf(BundleFileResult("a.txt", ok = false, error = "digest_mismatch"))))
+        }
+        val config = SyncConfig(smallFileThreshold = 1_000, maxAttempts = 2)
+
+        repeat(3) { run(listOf(a), config) }
+
+        assertEquals(FakeQueue.State.PERMANENT, queue.state("a.txt"))
+        assertEquals(2, transport.bundles.size)
+        assertTrue(journal.has("too_many_attempts"))
+    }
+
+    @Test
     fun `a file deleted before bundling does not abort the bundle`(@TempDir dir: Path) = runTest {
         setUp()
         val vanishing = file(dir, "vanishing.txt", 10)
