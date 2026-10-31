@@ -199,6 +199,12 @@ class FakeTransport : SyncTransport {
     var putInterceptor: ((call: Int, path: String, offset: Long) -> ApiResult<FileChunkResponse>?) =
         { _, _, _ -> null }
 
+    /**
+     * Runs as every upload arrives, before the fake answers. A test sets it to hold transfers
+     * open - a delay in virtual time - and see how many overlap.
+     */
+    var beforeUpload: (suspend (path: String) -> Unit)? = null
+
     private var putCount = 0
 
     /**
@@ -234,6 +240,7 @@ class FakeTransport : SyncTransport {
         putCount++
         putCalls += Triple(canonicalPath, offset, length)
         digestsPerCall += digest
+        beforeUpload?.invoke(canonicalPath)
 
         putInterceptor(putCount, canonicalPath, offset)?.let { return it }
 
@@ -263,6 +270,7 @@ class FakeTransport : SyncTransport {
     override suspend fun putBundle(entries: List<BundleEntry>): ApiResult<BundleResponse> {
         countUpload()
         bundles += entries.map { it.canonicalPath }
+        beforeUpload?.invoke(entries.first().canonicalPath)
 
         bundleResponder?.let { return it(entries) }
 

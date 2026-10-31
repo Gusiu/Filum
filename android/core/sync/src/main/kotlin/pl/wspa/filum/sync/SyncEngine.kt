@@ -1,5 +1,9 @@
 package pl.wspa.filum.sync
 
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import pl.wspa.filum.net.ApiResult
 import pl.wspa.filum.net.BundleEntry
 import pl.wspa.filum.protocol.FailureKind
@@ -10,6 +14,10 @@ import pl.wspa.filum.scan.ScannedFile
 import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.min
 
 /**
@@ -30,10 +38,12 @@ class SyncEngine(
     private val config: SyncConfig = SyncConfig(),
 ) {
 
-    private var filesSent = 0
-    private var bytesSent = 0L
+    // Transfers may run at once on several threads (SyncConfig.parallelTransfers), so all
+    // they update is atomic. filesQueued is set before any of them starts.
+    private val filesSent = AtomicInteger()
+    private val bytesSent = AtomicLong()
     private var filesQueued = 0
-    private var filesFailed = 0
+    private val filesFailed = AtomicInteger()
 
     /**
      * Files that failed, or had to be skipped, during this cycle. They stay in the queue, which
@@ -41,7 +51,7 @@ class SyncEngine(
      * file changed after the scan would be skipped over and over until the budget ran out.
      * They get their next attempt in the next cycle.
      */
-    private val deferred = HashSet<String>()
+    private val deferred: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     suspend fun run(
         sessionId: String,
@@ -49,10 +59,10 @@ class SyncEngine(
         files: Sequence<ScannedFile>,
         deadline: Deadline,
     ): SyncOutcome {
-        filesSent = 0
-        bytesSent = 0
+        filesSent.set(0)
+        bytesSent.set(0)
         filesQueued = 0
-        filesFailed = 0
+        filesFailed.set(0)
         deferred.clear()
 
         val reconciled = reconcile(sessionId, mode, files, deadline)
@@ -197,45 +207,86 @@ class SyncEngine(
             // files deferred in this cycle, nothing untried is left behind it.
             val batch = queue.nextBatch(UPLOAD_BATCH).filterNot { it.canonicalPath in deferred }
             if (batch.isEmpty()) {
-                return SyncOutcome.Completed(filesSent, bytesSent, filesQueued, filesFailed)
+                return SyncOutcome.Completed(filesSent.get(), bytesSent.get(), filesQueued, filesFailed.get())
             }
 
             // Small files go in bundles, large ones on their own. Across a hundred thousand
             // files, most of them tiny, HTTP request overhead starts to outweigh the
             // data transfer itself (ADR-008).
             val (small, large) = batch.partition { it.size <= config.smallFileThreshold && it.bytesSent == 0L }
+            val transfers = group(small).map { Transfer.Bundle(it) } + large.map { Transfer.Single(it) }
 
-            for (group in group(small)) {
-                if (deadline.reached()) return stopOnBudget()
-
-                when (sendBundle(group)) {
-                    SendResult.INTERRUPTED -> return interrupted(InterruptReason.CONNECTION)
-
-                    else -> Unit
-                }
+            when (sendAll(transfers, deadline)) {
+                InterruptReason.CONNECTION -> return interrupted(InterruptReason.CONNECTION)
+                InterruptReason.BUDGET -> return stopOnBudget()
+                null -> Unit
             }
+        }
+    }
 
-            for (entry in large) {
-                if (deadline.reached()) return stopOnBudget()
+    /** One transfer: a bundle of small files, or a file sent on its own. */
+    private sealed interface Transfer {
+        data class Bundle(val files: List<QueuedFile>) : Transfer
+        data class Single(val file: QueuedFile) : Transfer
+    }
 
-                when (send(entry, deadline)) {
-                    SendResult.SENT -> filesSent++
-                    SendResult.INTERRUPTED -> return interrupted(InterruptReason.CONNECTION)
+    /**
+     * Sends one batch with up to [SyncConfig.parallelTransfers] transfers in flight, and says
+     * why the cycle has to stop - or null once the whole batch has been dealt with.
+     *
+     * When one transfer loses the connection or finds the budget gone, those already running
+     * are let finish - the server keeps whatever it confirmed either way - but none starts.
+     */
+    private suspend fun sendAll(transfers: List<Transfer>, deadline: Deadline): InterruptReason? {
+        val stop = AtomicReference<InterruptReason?>(null)
+        val slots = Semaphore(config.parallelTransfers)
 
-                    SendResult.OUT_OF_BUDGET -> return stopOnBudget()
-
-                    SendResult.SKIPPED -> deferred += entry.canonicalPath
-                    SendResult.FAILED -> {
-                        deferred += entry.canonicalPath
-                        filesFailed++
+        coroutineScope {
+            for (transfer in transfers) {
+                launch {
+                    slots.withPermit {
+                        if (stop.get() != null) return@withPermit
+                        if (deadline.reached()) {
+                            stop.compareAndSet(null, InterruptReason.BUDGET)
+                            return@withPermit
+                        }
+                        perform(transfer, deadline)?.let { stop.compareAndSet(null, it) }
                     }
                 }
+            }
+        }
+
+        return stop.get()
+    }
+
+    /** Sends one transfer; returns the reason to stop the cycle if it brings one. */
+    private suspend fun perform(transfer: Transfer, deadline: Deadline): InterruptReason? = when (transfer) {
+        is Transfer.Bundle -> when (sendBundle(transfer.files)) {
+            SendResult.INTERRUPTED -> InterruptReason.CONNECTION
+            else -> null
+        }
+
+        is Transfer.Single -> when (send(transfer.file, deadline)) {
+            SendResult.SENT -> {
+                filesSent.incrementAndGet()
+                null
+            }
+            SendResult.INTERRUPTED -> InterruptReason.CONNECTION
+            SendResult.OUT_OF_BUDGET -> InterruptReason.BUDGET
+            SendResult.SKIPPED -> {
+                deferred += transfer.file.canonicalPath
+                null
+            }
+            SendResult.FAILED -> {
+                deferred += transfer.file.canonicalPath
+                filesFailed.incrementAndGet()
+                null
             }
         }
     }
 
     private fun interrupted(reason: InterruptReason) =
-        SyncOutcome.Interrupted(reason, filesSent, bytesSent, filesQueued, filesFailed)
+        SyncOutcome.Interrupted(reason, filesSent.get(), bytesSent.get(), filesQueued, filesFailed.get())
 
     /**
      * Ending because of the budget. Always through this one path, because a night cycle with
@@ -245,7 +296,7 @@ class SyncEngine(
     private suspend fun stopOnBudget(): SyncOutcome {
         journal.record(
             JournalLevel.INFO, "deadline_upload",
-            "Budget exhausted; stopping cleanly after $filesSent files ($bytesSent B).",
+            "Budget exhausted; stopping cleanly after ${filesSent.get()} files (${bytesSent.get()} B).",
         )
         return interrupted(InterruptReason.BUDGET)
     }
@@ -306,7 +357,7 @@ class SyncEngine(
             }
             if (setAsideIfExhausted(queued)) {
                 deferred += queued.canonicalPath
-                filesFailed++
+                filesFailed.incrementAndGet()
                 continue
             }
 
@@ -342,7 +393,7 @@ class SyncEngine(
                     queue.markTransientFailure(it.canonicalPath, result.code)
                     deferred += it.canonicalPath
                 }
-                filesFailed += entries.size
+                filesFailed.addAndGet(entries.size)
                 journal.record(JournalLevel.WARN, result.code, "Bundle rejected: ${result.message}")
                 SendResult.FAILED
             }
@@ -360,8 +411,8 @@ class SyncEngine(
 
             if (result.ok) {
                 queue.markDone(result.path)
-                filesSent++
-                bytesSent += queued.size
+                filesSent.incrementAndGet()
+                bytesSent.addAndGet(queued.size)
                 continue
             }
 
@@ -375,7 +426,7 @@ class SyncEngine(
                 queue.markTransientFailure(result.path, error)
             }
             deferred += result.path
-            filesFailed++
+            filesFailed.incrementAndGet()
         }
 
         // The server said nothing about a file we sent. We do not assume success - it
@@ -384,7 +435,7 @@ class SyncEngine(
             if (path !in reported) {
                 queue.markTransientFailure(path, "no result in the response")
                 deferred += path
-                filesFailed++
+                filesFailed.incrementAndGet()
             }
         }
     }
@@ -460,7 +511,7 @@ class SyncEngine(
 
             when (result) {
                 is ApiResult.Ok -> {
-                    bytesSent += result.value.received
+                    bytesSent.addAndGet(result.value.received)
                     offset = result.value.offset
                     queue.markProgress(entry.canonicalPath, offset)
 

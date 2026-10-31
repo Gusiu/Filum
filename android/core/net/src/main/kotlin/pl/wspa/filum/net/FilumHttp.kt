@@ -1,6 +1,7 @@
 package pl.wspa.filum.net
 
 import okhttp3.ConnectionSpec
+import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import pl.wspa.filum.crypto.PinnedHostnameVerifier
 import pl.wspa.filum.crypto.TlsBundle
@@ -83,6 +84,10 @@ class FilumHttpClients(
             .writeTimeout(WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
+            // OkHttp holds back more than five calls to one host by default. Parallel
+            // transfers beyond that would queue inside the client without a trace, and a
+            // measurement of eight would measure five.
+            .dispatcher(Dispatcher().apply { maxRequestsPerHost = MAX_REQUESTS_PER_HOST })
 
         if (socketFactory != null) builder.socketFactory(socketFactory)
 
@@ -95,5 +100,8 @@ class FilumHttpClients(
         const val DEFAULT_CONNECT_TIMEOUT_SECONDS = 10L
         const val WRITE_TIMEOUT_SECONDS = 120L
         const val READ_TIMEOUT_SECONDS = 60L
+
+        /** Calls to one server that may run at once - the ceiling for parallel transfers. */
+        const val MAX_REQUESTS_PER_HOST = 16
     }
 }
