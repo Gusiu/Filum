@@ -29,6 +29,16 @@ android {
         release {
             isMinifyEnabled = false
         }
+        // A debuggable build that installs next to the regular app. Its own application id
+        // gives it its own device key, pairing and database, so device tests and the
+        // measurements for the thesis never touch an installation holding a real backup.
+        create("qa") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".qa"
+            versionNameSuffix = "-qa"
+            // The library modules have no qa build type and supply their debug variant.
+            matchingFallbacks += "debug"
+        }
     }
 
     buildFeatures {

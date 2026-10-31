@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tells the qa build apart from the regular app on the launcher and in notifications. -->
+    <string name="app_name">Filum QA</string>
+</resources>
