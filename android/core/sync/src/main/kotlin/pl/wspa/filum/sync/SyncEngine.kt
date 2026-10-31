@@ -33,6 +33,14 @@ class SyncEngine(
     private var filesSent = 0
     private var bytesSent = 0L
 
+    /**
+     * Files that failed, or had to be skipped, during this cycle. They stay in the queue, and
+     * the queue hands them straight back - without this set the cycle retried them at once,
+     * and a file that changed after the scan was skipped over and over until the budget ran
+     * out (B29). They get their next attempt in the next cycle.
+     */
+    private val deferred = HashSet<String>()
+
     suspend fun run(
         sessionId: String,
         mode: String,
@@ -41,6 +49,7 @@ class SyncEngine(
     ): SyncOutcome {
         filesSent = 0
         bytesSent = 0
+        deferred.clear()
 
         val reconciled = reconcile(sessionId, mode, files, deadline)
         if (reconciled != null) return reconciled
@@ -177,7 +186,9 @@ class SyncEngine(
         while (true) {
             if (deadline.reached()) return stopOnBudget()
 
-            val batch = queue.nextBatch(UPLOAD_BATCH)
+            // The queue returns the files tried longest ago first, so once a batch holds only
+            // files deferred in this cycle, nothing untried is left behind it.
+            val batch = queue.nextBatch(UPLOAD_BATCH).filterNot { it.canonicalPath in deferred }
             if (batch.isEmpty()) {
                 return SyncOutcome.Completed(filesSent, bytesSent)
             }
@@ -206,7 +217,7 @@ class SyncEngine(
                     SendResult.INTERRUPTED ->
                         return SyncOutcome.Interrupted(InterruptReason.CONNECTION, filesSent, bytesSent)
 
-                    SendResult.SKIPPED, SendResult.FAILED -> Unit
+                    SendResult.SKIPPED, SendResult.FAILED -> deferred += entry.canonicalPath
                 }
             }
         }
@@ -266,10 +277,12 @@ class SyncEngine(
 
             if (!file.isFile) {
                 queue.markPermanentFailure(queued.canonicalPath, "the file no longer exists")
+                deferred += queued.canonicalPath
                 continue
             }
             if (file.length() != queued.size || Math.floorDiv(file.lastModified(), 1000L) != queued.mtime) {
                 queue.markTransientFailure(queued.canonicalPath, "the file changed after the scan")
+                deferred += queued.canonicalPath
                 continue
             }
 
@@ -301,7 +314,10 @@ class SyncEngine(
 
             is ApiResult.Failure -> {
                 // Broken framing or an exceeded limit invalidates the whole bundle.
-                entries.forEach { queue.markTransientFailure(it.canonicalPath, result.code) }
+                entries.forEach {
+                    queue.markTransientFailure(it.canonicalPath, result.code)
+                    deferred += it.canonicalPath
+                }
                 journal.record(JournalLevel.WARN, result.code, "Bundle rejected: ${result.message}")
                 SendResult.FAILED
             }
@@ -333,12 +349,16 @@ class SyncEngine(
             } else {
                 queue.markTransientFailure(result.path, error)
             }
+            deferred += result.path
         }
 
         // The server said nothing about a file we sent. We do not assume success - it
         // returns to the queue and resolves itself at the next manifest.
         for ((path, _) in byPath) {
-            if (path !in reported) queue.markTransientFailure(path, "no result in the response")
+            if (path !in reported) {
+                queue.markTransientFailure(path, "no result in the response")
+                deferred += path
+            }
         }
     }
 

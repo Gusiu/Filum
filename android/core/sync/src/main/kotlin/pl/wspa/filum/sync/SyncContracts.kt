@@ -70,6 +70,11 @@ interface SyncQueue {
 
     suspend fun markPermanentFailure(path: String, error: String)
 
+    /**
+     * Files waiting to be sent, including those that failed for now - least recently updated
+     * first. The engine relies on that order: a file that failed during this cycle comes
+     * after every file not yet tried.
+     */
     suspend fun nextBatch(limit: Int): List<QueuedFile>
 
     suspend fun pendingCount(): Int
@@ -147,7 +152,10 @@ enum class InterruptReason {
 
 sealed interface SyncOutcome {
 
-    /** The queue is empty - everything there was to send has gone. */
+    /**
+     * Everything this cycle could send has gone. Files that failed for now wait in the queue
+     * for the next cycle.
+     */
     data class Completed(val filesSent: Int, val bytesSent: Long) : SyncOutcome
 
     /** We stopped by ourselves, at a moment of our choosing. */

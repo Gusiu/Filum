@@ -20,10 +20,16 @@ import java.io.IOException
  *
  * It behaves like Room - writes persist within the test - so we check real state
  * transitions rather than whether the engine called the right method.
+ *
+ * "Like Room" means like `RoomSyncQueue` and `FileEntryDao` in every detail the engine can
+ * observe: which states a batch takes, in what order, and what a progress report does to
+ * the state. An earlier version handed out pending files only, while the real queue also
+ * hands back files that failed for now - so no test could see the engine retry a failure
+ * within the same cycle (B29).
  */
 class FakeQueue : SyncQueue {
 
-    enum class State { PENDING, DONE, TRANSIENT, PERMANENT }
+    enum class State { PENDING, IN_PROGRESS, DONE, TRANSIENT, PERMANENT }
 
     data class Row(
         val file: ScannedFile,
@@ -31,9 +37,25 @@ class FakeQueue : SyncQueue {
         var bytesSent: Long = 0,
         var attempts: Int = 0,
         var lastError: String? = null,
+        var updatedAt: Long = 0,
     )
 
     val rows = linkedMapOf<String, Row>()
+
+    /** Stands in for the wall clock behind `updatedAt`: every write is later than the one before. */
+    private var clock = 0L
+
+    private fun Row.touch() {
+        updatedAt = ++clock
+        // A cycle can circle without sending anything - skipping the same changed file over
+        // and over - so the transport's guard alone would not stop it.
+        check(clock <= MAX_WRITES) { "more than $MAX_WRITES queue writes in one test - the cycle is going round in circles" }
+    }
+
+    private companion object {
+        /** Far above what any test writes legitimately. */
+        const val MAX_WRITES = 10_000L
+    }
 
     override suspend fun enqueue(files: List<ScannedFile>) {
         for (file in files) {
@@ -41,14 +63,19 @@ class FakeQueue : SyncQueue {
             if (existing != null && existing.file.size == file.size && existing.file.mtime() == file.mtime()) {
                 continue
             }
-            rows[file.canonicalPath] = Row(file)
+            rows[file.canonicalPath] = Row(file).apply { touch() }
         }
     }
 
     private fun ScannedFile.mtime() = mtimeSeconds
 
     override suspend fun markAlreadyOnServer(paths: List<String>) {
-        paths.forEach { rows[it]?.state = State.DONE }
+        paths.forEach { path ->
+            rows[path]?.apply {
+                state = State.DONE
+                touch()
+            }
+        }
     }
 
     override suspend fun markNeeded(offsets: Map<String, Long>) {
@@ -56,6 +83,7 @@ class FakeQueue : SyncQueue {
             rows[path]?.apply {
                 state = State.PENDING
                 bytesSent = offset
+                touch()
             }
         }
     }
@@ -63,18 +91,26 @@ class FakeQueue : SyncQueue {
     override suspend fun markRejected(path: String, error: String) {
         rows[path]?.apply {
             state = State.PERMANENT
+            attempts++
             lastError = error
+            touch()
         }
     }
 
     override suspend fun markProgress(path: String, bytesSent: Long) {
-        rows[path]?.bytesSent = bytesSent
+        rows[path]?.apply {
+            state = State.IN_PROGRESS
+            this.bytesSent = bytesSent
+            touch()
+        }
     }
 
     override suspend fun markDone(path: String) {
         rows[path]?.apply {
             state = State.DONE
+            bytesSent = file.size
             lastError = null
+            touch()
         }
     }
 
@@ -83,6 +119,7 @@ class FakeQueue : SyncQueue {
             state = State.TRANSIENT
             attempts++
             lastError = error
+            touch()
         }
     }
 
@@ -91,12 +128,17 @@ class FakeQueue : SyncQueue {
             state = State.PERMANENT
             attempts++
             lastError = error
+            touch()
         }
     }
 
+    /** The states `FileEntryDao.nextBatch` and `RoomSyncQueue.pendingCount` take. */
+    private val waiting = setOf(State.PENDING, State.TRANSIENT)
+
     override suspend fun nextBatch(limit: Int): List<QueuedFile> =
         rows.values
-            .filter { it.state == State.PENDING }
+            .filter { it.state in waiting }
+            .sortedBy { it.updatedAt }
             .take(limit)
             .map {
                 QueuedFile(
@@ -109,7 +151,7 @@ class FakeQueue : SyncQueue {
                 )
             }
 
-    override suspend fun pendingCount(): Int = rows.values.count { it.state == State.PENDING }
+    override suspend fun pendingCount(): Int = rows.values.count { it.state in waiting }
 
     fun state(path: String): State? = rows[path]?.state
     fun error(path: String): String? = rows[path]?.lastError
@@ -159,6 +201,17 @@ class FakeTransport : SyncTransport {
 
     private var putCount = 0
 
+    /**
+     * A cycle that keeps sending the same thing never ends by itself; this turns it into a
+     * failed test rather than a hung build.
+     */
+    private var uploads = 0
+
+    private fun countUpload() {
+        uploads++
+        check(uploads <= MAX_UPLOADS) { "more than $MAX_UPLOADS uploads in one test - the cycle is going round in circles" }
+    }
+
     override suspend fun manifest(request: ManifestRequest): ApiResult<ManifestResponse> {
         requests += request
         for (entry in request.files) manifestDigests[entry.path] = entry.digest
@@ -177,6 +230,7 @@ class FakeTransport : SyncTransport {
         length: Long,
         digest: String?,
     ): ApiResult<FileChunkResponse> {
+        countUpload()
         putCount++
         putCalls += Triple(canonicalPath, offset, length)
         digestsPerCall += digest
@@ -207,6 +261,7 @@ class FakeTransport : SyncTransport {
     var bundleResponder: ((List<BundleEntry>) -> ApiResult<BundleResponse>)? = null
 
     override suspend fun putBundle(entries: List<BundleEntry>): ApiResult<BundleResponse> {
+        countUpload()
         bundles += entries.map { it.canonicalPath }
 
         bundleResponder?.let { return it(entries) }
@@ -231,6 +286,9 @@ class FakeTransport : SyncTransport {
     fun content(path: String): String = received[path]?.toString().orEmpty()
 
     companion object {
+        /** Far above what any test sends legitimately - none needs more than a handful. */
+        const val MAX_UPLOADS = 1000
+
         fun unreachable(): ApiResult<FileChunkResponse> =
             ApiResult.Unreachable(IOException("connection dropped"))
 

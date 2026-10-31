@@ -316,6 +316,38 @@ class SyncEngineTest {
     }
 
     @Test
+    fun `a transient error gets one attempt per cycle`(@TempDir dir: Path) = runTest {
+        // The queue hands a file that failed for now straight back. Trying it again in the
+        // same cycle only repeats the failure: with the server's disk full, five quick
+        // attempts would set every file aside before anyone could free the space (B29).
+        setUp()
+        val a = file(dir, "a.txt", "x")
+        transport.putInterceptor = { _, _, _ -> FakeTransport.outOfSpace() }
+
+        run(listOf(a))
+
+        assertEquals(1, transport.putCalls.count { it.first == "a.txt" })
+        assertEquals(FakeQueue.State.TRANSIENT, queue.state("a.txt"))
+    }
+
+    @Test
+    fun `the attempt limit counts cycles, not retries within one`(@TempDir dir: Path) = runTest {
+        setUp()
+        val a = file(dir, "a.txt", "x")
+        transport.putInterceptor = { _, _, _ -> FakeTransport.outOfSpace() }
+        val config = SyncConfig(maxAttempts = 3)
+
+        repeat(3) { run(listOf(a), config = config) }
+        assertEquals(FakeQueue.State.TRANSIENT, queue.state("a.txt"), "three cycles, three attempts")
+
+        run(listOf(a), config = config)
+
+        assertEquals(FakeQueue.State.PERMANENT, queue.state("a.txt"))
+        assertEquals(3, transport.putCalls.count { it.first == "a.txt" })
+        assertTrue(journal.has("too_many_attempts"))
+    }
+
+    @Test
     fun `a dropped connection ends the cycle, not the file`(@TempDir dir: Path) = runTest {
         setUp()
         val a = file(dir, "a.txt", "x")
