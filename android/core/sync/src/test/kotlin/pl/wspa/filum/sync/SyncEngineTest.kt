@@ -448,6 +448,22 @@ class SyncEngineTest {
     }
 
     @Test
+    fun `a budget that runs out mid-file is a budget stop`(@TempDir dir: Path) = runTest {
+        // Reported as a dropped connection, it had WorkManager retry a cycle with nothing left
+        // to spend, and the night left no journal entry saying why it stopped (B31).
+        setUp()
+        val big = file(dir, "video.mp4", "0123456789")
+        var chunks = 0
+        transport.putInterceptor = { _, _, _ -> chunks++; null }
+
+        val outcome = run(listOf(big), deadline = Deadline { chunks >= 1 }, config = SyncConfig(chunkBytes = 4))
+
+        val interrupted = assertInstanceOf(SyncOutcome.Interrupted::class.java, outcome)
+        assertEquals(InterruptReason.BUDGET, interrupted.reason)
+        assertTrue(journal.has("deadline_upload"))
+    }
+
+    @Test
     fun `an empty scan ends in success, not in an error`() = runTest {
         setUp()
 

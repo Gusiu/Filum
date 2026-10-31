@@ -217,6 +217,8 @@ class SyncEngine(
                     SendResult.INTERRUPTED ->
                         return SyncOutcome.Interrupted(InterruptReason.CONNECTION, filesSent, bytesSent)
 
+                    SendResult.OUT_OF_BUDGET -> return stopOnBudget()
+
                     SendResult.SKIPPED, SendResult.FAILED -> deferred += entry.canonicalPath
                 }
             }
@@ -236,7 +238,12 @@ class SyncEngine(
         return SyncOutcome.Interrupted(InterruptReason.BUDGET, filesSent, bytesSent)
     }
 
-    private enum class SendResult { SENT, SKIPPED, FAILED, INTERRUPTED }
+    /**
+     * INTERRUPTED is a lost connection; OUT_OF_BUDGET is the budget running out mid-file.
+     * Told apart, because one is worth an early retry and the other has to wait for the next
+     * window - and only the budget stop leaves its entry in the journal (B31).
+     */
+    private enum class SendResult { SENT, SKIPPED, FAILED, INTERRUPTED, OUT_OF_BUDGET }
 
     /**
      * Splits files into bundles fitting the limits from the ping response.
@@ -406,7 +413,7 @@ class SyncEngine(
         val digest = sha256(file)
 
         while (offset < entry.size) {
-            if (deadline.reached()) return SendResult.INTERRUPTED
+            if (deadline.reached()) return SendResult.OUT_OF_BUDGET
 
             val length = min(config.chunkBytes, entry.size - offset)
 
