@@ -41,9 +41,21 @@ sealed interface CycleResult {
  */
 class SyncRunner(private val container: AppContainer) {
 
+    /**
+     * What a measurement replaces in one cycle - used by the qa build's bench only. Everything
+     * else, from the route race to the queue and the HTTP client, stays the code the phone
+     * runs for a real backup, which is what makes the numbers worth reporting.
+     */
+    data class Override(
+        /** The directory to scan instead of the shared storage. */
+        val root: File,
+        val parallelTransfers: Int,
+    )
+
     suspend fun runOnce(
         mode: String = ManifestRequest.MODE_DELTA,
         deadline: Deadline = Deadline { false },
+        override: Override? = null,
     ): CycleResult {
         val server = container.database.pairedServers().get()
             ?: return CycleResult.NotPaired()
@@ -113,10 +125,17 @@ class SyncRunner(private val container: AppContainer) {
                 bundleMaxBytes = reached.ping.limits.bundleMaxBytes.toLong(),
                 bundleMaxCount = reached.ping.limits.bundleMaxCount,
                 integrityPolicy = settings.integrityPolicy,
+                parallelTransfers = override?.parallelTransfers ?: SyncConfig().parallelTransfers,
             ),
         )
 
-        val (files, usedDelta) = collectFiles(mode)
+        // A measurement walks its own directory and leaves the scan state of the shared
+        // storage alone, so the next real cycle neither skips nor repeats anything.
+        val (files, usedDelta) = if (override != null) {
+            FilesystemScanner(override.root).walk() to false
+        } else {
+            collectFiles(mode)
+        }
         val outcome = engine.run(sessionId, if (usedDelta) mode else ManifestRequest.MODE_FULL, files, deadline)
 
         finishSession(sessionId, outcome, usedDelta)
