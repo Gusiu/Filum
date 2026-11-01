@@ -475,3 +475,36 @@ its APIs are used, and its smaller variant depends on Play services). The system
 recognition with a `filum1:` link (the link would have to be openable from a browser, so any
 web page could put an attacker's pairing code one tap away from the user). A separate scanner
 app called through an intent (another application would see the token).
+
+## ADR-019 - The phone as the ledger's witness
+
+**Status:** accepted
+
+**Context.** The acceptance ledger (ADR-016, protocol §9.2) shows partial tampering, but
+someone with access to the server's disk can rebuild it from scratch, consistent with itself,
+and the server's own signature on the ledger would not help: the key sits on the same disk.
+What is missing is a copy of the ledger's head kept where that disk does not reach.
+
+**Decision.** The phone is the witness. After every completed cycle it fetches its ledger
+from the last head it witnessed and accepts the new head only if the old line is unchanged
+and the new lines chain onto it (§9.5). The server signs each statement of length and head,
+and the phone keeps the statements.
+
+**Rationale.** The phone is a second device outside the server operator's reach, it talks to
+the server after every cycle anyway, and checking costs one read of the lines added since
+the last cycle. A hash chain needs nothing more: line `n` carries its predecessor's digest, so
+an unchanged line `n` proves an unchanged prefix. The signature turns the phone's record into
+evidence for a third party - without it, the phone's list of heads would be only the phone's
+word.
+
+**Rejected.** A public timestamping service or a transparency log (an outside party holding
+data about the backup, and a network dependency for a system that needs only the local
+network - against ADR-001's premise). Anchoring heads in a blockchain (the same, at a cost).
+A second server (another machine to run, and in one household usually under the same
+control as the first). Merkle-tree consistency proofs (logarithmic proofs pay off for
+millions of entries and many clients; one phone reading the few thousand lines added per
+cycle needs no more than the chain).
+
+**Consequences.** The window between cycles stays open: lines accepted after the last
+witnessed head can still be changed until the next cycle. And the phone's database now holds
+evidence, so its migrations must never discard data.

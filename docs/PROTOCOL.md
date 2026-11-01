@@ -404,6 +404,43 @@ The resource is available only for a session closed with `mode: "full"` and `fin
 The report is **informational only**. Neither the server nor the client deletes anything on
 its basis (I1). The decision belongs to the user and is made by hand in the panel.
 
+### 5.7 `GET /api/v1/ledger?from=<n>`
+
+The calling device's own acceptance ledger (§9.2), from line `n` on, with the server's signed
+statement of the ledger's current length and head - the material for witnessing it (§9.5).
+
+`from` is a line number, 1 or more, and defaults to 1. The server returns as many lines as it
+chooses (this implementation: at most 5000); the client asks again from the line after the
+last one received until it has reached `entries`.
+
+Response `200`:
+```jsonc
+{
+  "entries": 32800,
+  "head": "<digest of line 32800>",
+  "from": 32700,
+  "lines": ["{\"n\":32700,\"at\":1793499000,...}", "..."],
+  "at": 1793500000,
+  "key": "<base64url SubjectPublicKeyInfo>",
+  "signature": "<base64url signature>"
+}
+```
+
+- `lines` holds each line's **exact stored text**; the client hashes it as received.
+- `head` is the digest of line `entries`, or `genesis` when the ledger is empty.
+- A `from` beyond `entries` is not an error. `lines` is then empty - and a client that
+  witnessed more lines than the server now reports learns exactly that.
+- `signature` is the server's ECDSA P-256 signature with SHA-256, DER-encoded, over the UTF-8
+  text of the statement
+
+  ```
+  filum-ledger-head/1\n<server pin>\n<device pin>\n<entries>\n<head>\n<at>\n
+  ```
+
+  made with the key behind its TLS certificate. `key` is that key's SubjectPublicKeyInfo. Its
+  SHA-256 in base64url is the server pin (§3.1), so the client checks it against the pin it
+  holds before trusting it.
+
 ---
 
 ## 6. Error codes
@@ -546,12 +583,12 @@ Checking needs nothing from this project. `tools/verify_ledger.py` follows this 
 file under `files/` against its path's latest entry and every previous version against the
 path's history.
 
-**What this does not give.** The chain detects partial tampering. It does not protect
-against someone with access to the server's disk rebuilding the ledger from scratch. Signing
-it with the server key would change nothing, since that key sits on the same machine. The
-honest guarantee reads: **detectability of partial tampering, not impossibility of
-tampering**. Raising it would require a trusted external witness and falls outside the scope
-of the project (§11).
+**What this does not give.** The chain detects partial tampering. On its own it does not
+protect against someone with access to the server's disk rebuilding the ledger from scratch,
+and signing the ledger with the server key would change nothing, since that key sits on the
+same machine. The chain alone gives **detectability of partial tampering, not impossibility
+of tampering**. Raising that takes a copy of the head kept where the server's disk does not
+reach - the phone keeps one (§9.5).
 
 ### 9.3 Client-side change detection
 
@@ -578,6 +615,47 @@ is better than an interrupted sync.
 A full check of the copy against the original is performed via `POST /verify` (§5.5),
 started deliberately by the user. The sample MUST span files of all sizes: excluding large
 files "for speed" leaves the largest and hardest-to-reproduce data permanently unchecked.
+
+### 9.5 Witnessing the ledger
+
+Answers the question: is the ledger still the one the phone saw.
+
+A ledger rebuilt from scratch is consistent with itself, so the chain cannot tell it from the
+original. A copy of the head kept somewhere the server's disk does not reach can - and the
+phone is such a place (ADR-019).
+
+After every cycle that completed, the client asks for its ledger (§5.7) starting at
+the last head it witnessed, `(n, digest)`, or at line 1 if it holds none. It accepts the new
+head only when all of the following hold:
+
+1. `entries` is at least `n`, and line `n` hashes to `digest` - the history the phone saw is
+   still there, unchanged;
+2. every later line carries the next number and, in `prev`, the digest of the line before it;
+3. the last line hashes to `head`;
+4. `key` hashes to the server pin the client holds, and `signature` verifies over the
+   statement.
+
+An accepted head is appended to the phone's list of witnessed heads, together with the
+statement and its signature. A head that fails any check is **not** recorded: the client keeps
+the last good one, writes `ledger_rewritten` to the journal with the first check that failed,
+and warns the user. It goes on backing up - the files still need a copy - and every later
+cycle checks against the same good head.
+
+A cycle cut short - by the network or by its time budget - skips the check, and a check whose
+budget runs out between pages records nothing. Neither loses anything: the next check starts
+from the same head and covers every line since.
+
+**What this gives.** Line `n` cannot stay identical while anything before it changes, because
+it carries the digest of its predecessor, which carries the digest of its own, down to the
+first line. Once the phone has witnessed head `n`, lines 1 to `n` cannot be altered, removed
+or rebuilt without the next cycle noticing. The signed statements are evidence a third party
+can check: the server itself stated, at a given time, how long its ledger was and how it
+ended. Any head - from the phone's journal or an earlier report - can also be checked against
+a backup with `tools/verify_ledger.py --head n:digest`.
+
+**What it does not give.** Lines accepted after the last witnessed head are covered only from
+the next cycle on. A server that stops answering `/ledger` proves nothing either way; the
+client records the failure. The witnessed heads are only as safe as the phone that holds them.
 
 ---
 
