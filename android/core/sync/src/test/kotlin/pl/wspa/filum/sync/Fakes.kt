@@ -280,8 +280,7 @@ class FakeTransport : SyncTransport {
     }
 
     private fun sha256(bytes: ByteArray): String =
-        java.security.MessageDigest.getInstance("SHA-256").digest(bytes)
-            .joinToString("") { "%02x".format(it) }
+        java.security.MessageDigest.getInstance("SHA-256").digest(bytes).toHexString()
 
     fun content(path: String): String = received[path]?.toString().orEmpty()
 

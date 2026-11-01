@@ -537,7 +537,7 @@ class SyncEngine(
                 digest.update(buffer, 0, read)
             }
         }
-        return digest.digest().joinToString("") { "%02x".format(it) }
+        return digest.digest().toHexString()
     }
 
     private companion object {
