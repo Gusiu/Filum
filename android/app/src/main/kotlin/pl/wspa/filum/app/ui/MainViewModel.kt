@@ -24,6 +24,7 @@ import pl.wspa.filum.protocol.IntegrityPolicy
 import pl.wspa.filum.data.ExclusionEntity
 import pl.wspa.filum.data.SettingsEntity
 import pl.wspa.filum.data.SyncSessionEntity
+import pl.wspa.filum.data.WitnessedHeadEntity
 import pl.wspa.filum.scan.Environment
 import pl.wspa.filum.scan.ExclusionRules
 import java.io.File
@@ -33,6 +34,13 @@ import java.util.Locale
 
 enum class Screen { HOME, PAIRING, LOG, FOLDERS }
 
+/**
+ * The journal codes that decide what the home screen says about the ledger. A check that could
+ * not be made says nothing either way, so it is left out: a moment without the server must not
+ * clear an alarm about a rewritten ledger.
+ */
+private val LEDGER_EVENTS = listOf("ledger_witnessed", "ledger_rewritten")
+
 data class UiState(
     val screen: Screen = Screen.HOME,
     val server: PairedServerEntity? = null,
@@ -41,6 +49,10 @@ data class UiState(
     val pairing: Boolean = false,
     val pendingFiles: Int = 0,
     val lastSession: SyncSessionEntity? = null,
+    /** The newest head this phone witnessed of the server's ledger (protocol §9.5). */
+    val witnessedHead: WitnessedHeadEntity? = null,
+    /** Set while the newest check of the ledger found it rewritten. */
+    val ledgerAlarm: String? = null,
     val lastError: String? = null,
     val verifying: Boolean = false,
     val verification: String? = null,
@@ -71,19 +83,31 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     /**
-     * Keeps the last session and the queue size current while the screen is open.
+     * Keeps the last session, the queue size and what is known of the server's ledger current
+     * while the screen is open.
      *
-     * A cycle runs in the background and records both in the database. Following those
-     * tables updates the card when the cycle ends, without the screen having to be told.
+     * A cycle runs in the background and records all of it in the database. Following those
+     * tables updates the screen when the cycle ends, without the screen having to be told.
      */
     private fun followProgress() {
         viewModelScope.launch {
             combine(
                 container.database.sessions().observeRecent(limit = 1),
                 container.database.files().observePending(),
-            ) { sessions, pending -> sessions.firstOrNull() to pending }
-                .collect { (session, pending) ->
-                    _state.value = _state.value.copy(lastSession = session, pendingFiles = pending)
+                container.database.witnessedHeads().observeLatest(),
+                container.database.log().observeLatestOf(LEDGER_EVENTS),
+            ) { sessions, pending, head, ledgerEvent ->
+                // Every later cycle checks again, so the alarm lasts exactly as long as the
+                // newest check keeps finding the ledger rewritten.
+                Progress(sessions.firstOrNull(), pending, head, ledgerEvent?.takeIf { it.code == "ledger_rewritten" }?.message)
+            }
+                .collect { progress ->
+                    _state.value = _state.value.copy(
+                        lastSession = progress.session,
+                        pendingFiles = progress.pending,
+                        witnessedHead = progress.head,
+                        ledgerAlarm = progress.ledgerAlarm,
+                    )
                 }
         }
     }
@@ -253,6 +277,13 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
     private data class Snapshot(
         val server: PairedServerEntity?,
         val settings: SettingsEntity,
+    )
+
+    private data class Progress(
+        val session: SyncSessionEntity?,
+        val pending: Int,
+        val head: WitnessedHeadEntity?,
+        val ledgerAlarm: String?,
     )
 
     class Factory(private val container: AppContainer) : ViewModelProvider.Factory {

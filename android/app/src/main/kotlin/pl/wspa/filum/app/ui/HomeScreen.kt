@@ -15,6 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -33,6 +34,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import pl.wspa.filum.app.work.SyncActivity
 import pl.wspa.filum.data.Schedule
+import pl.wspa.filum.data.WitnessedHeadEntity
 import pl.wspa.filum.protocol.IntegrityPolicy
 
 @Composable
@@ -127,6 +129,8 @@ fun HomeScreen(
                 }
             }
         }
+
+        LedgerWitnessCard(state.witnessedHead, state.ledgerAlarm)
 
         HorizontalDivider()
 
@@ -288,4 +292,32 @@ private fun label(schedule: Schedule): String = when (schedule) {
     Schedule.MANUAL -> "Manual"
     Schedule.DAILY -> "Daily"
     Schedule.WEEKLY -> "Weekly"
+}
+
+/**
+ * What this phone can vouch for about the server's ledger (protocol §9.5): how much of it it
+ * has witnessed, or - loudly - that the ledger no longer matches what it saw.
+ */
+@Composable
+private fun LedgerWitnessCard(head: WitnessedHeadEntity?, alarm: String?) {
+    when {
+        alarm != null -> Card(
+            Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+        ) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("The server's ledger has changed", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "It no longer matches what this phone witnessed, so the backup's history may " +
+                        "have been altered on the computer. Details are in the journal.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+
+        head != null -> Text(
+            "Ledger witnessed: ${head.entries} entries, at ${formatTime(head.witnessedAt)}.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
 }

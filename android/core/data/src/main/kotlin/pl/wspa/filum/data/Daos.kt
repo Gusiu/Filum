@@ -197,6 +197,10 @@ interface LogEventDao {
     @Query("SELECT * FROM log_event ORDER BY at DESC, id DESC LIMIT :limit")
     suspend fun recent(limit: Int = LogEventDao.RETENTION): List<LogEventEntity>
 
+    /** The newest event of the given kinds - what the home screen says about the ledger. */
+    @Query("SELECT * FROM log_event WHERE code IN (:codes) ORDER BY at DESC, id DESC LIMIT 1")
+    fun observeLatestOf(codes: List<String>): Flow<LogEventEntity?>
+
     /**
      * Trims the journal to the last [RETENTION] events. The log screen shows that many
      * anyway, and across a hundred thousand files an unbounded journal would grow faster
@@ -217,4 +221,21 @@ interface LogEventDao {
     companion object {
         const val RETENTION = 200
     }
+}
+
+/**
+ * The heads this phone witnessed. There is no delete: a head the phone stops vouching for
+ * would no longer be evidence of anything.
+ */
+@Dao
+interface WitnessedHeadDao {
+
+    @Insert
+    suspend fun add(head: WitnessedHeadEntity)
+
+    @Query("SELECT * FROM witnessed_head WHERE serverPin = :serverPin ORDER BY id DESC LIMIT 1")
+    suspend fun latest(serverPin: String): WitnessedHeadEntity?
+
+    @Query("SELECT * FROM witnessed_head ORDER BY id DESC LIMIT 1")
+    fun observeLatest(): Flow<WitnessedHeadEntity?>
 }

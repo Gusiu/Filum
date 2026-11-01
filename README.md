@@ -41,7 +41,8 @@ monotonic - it can only grow.
   Removing or altering an entry breaks everything that follows. The ledger is plain
   JSONL, checkable without this application: [tools/verify_ledger.py](tools/verify_ledger.py)
   does it with Python's standard library alone, the files and their previous versions
-  included.
+  included. And after every cycle the phone keeps the ledger's head, signed by the
+  server, so a ledger rebuilt on the computer - consistent with itself - is still caught.
 - **Change detection is the user's choice.** Fast mode compares size and modification
   time; thorough mode hashes every file on every scan and catches a substitution that
   left the metadata alone.
@@ -90,6 +91,7 @@ Stages 1-9 of the [build order table](docs/ARCHITECTURE.md#8-build-order).
 | small files aggregated into bundles | works |
 | integrity checks and the orphan report | works |
 | append-only ledger chained by digests | works, independently verifiable |
+| the phone as the ledger's witness | works, checked against the C# server |
 | thorough change detection (digest in the manifest) | works |
 | server as a Windows service | works, not registered |
 | **client↔server conformance test** | passes |

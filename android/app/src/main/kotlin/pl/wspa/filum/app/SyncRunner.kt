@@ -3,6 +3,7 @@ package pl.wspa.filum.app
 import android.util.Log
 import pl.wspa.filum.crypto.DeviceIdentity
 import pl.wspa.filum.crypto.FilumTls
+import pl.wspa.filum.crypto.KeyPin
 import pl.wspa.filum.data.PairedServerEntity
 import pl.wspa.filum.data.ScanStateEntity
 import pl.wspa.filum.data.SettingsEntity
@@ -100,8 +101,9 @@ class SyncRunner(private val container: AppContainer) {
             SyncSessionEntity(sessionId, mode, startedAt = System.currentTimeMillis())
         )
 
+        val api = FilumApiClient(clients.forEndpoint(reached.endpoint))
         val engine = SyncEngine(
-            transport = ApiSyncTransport(FilumApiClient(clients.forEndpoint(reached.endpoint)), reached.endpoint),
+            transport = ApiSyncTransport(api, reached.endpoint),
             queue = container.queue,
             journal = journal,
             // The limits come from the ping response; the client assumes none of its own (§5.1).
@@ -120,6 +122,19 @@ class SyncRunner(private val container: AppContainer) {
         val outcome = engine.run(sessionId, if (usedDelta) mode else ManifestRequest.MODE_FULL, files, deadline)
 
         finishSession(sessionId, outcome, usedDelta)
+
+        // The ledger is held up to the head this phone witnessed last (§9.5) - after a cycle
+        // that completed. One cut short by the network would only add a failed check to the
+        // journal, and one cut short by the budget has no time left for it; neither loses
+        // anything, because the next check covers every line since the last head.
+        if (outcome is SyncOutcome.Completed) {
+            LedgerWitnessing(container.database.witnessedHeads(), journal).witness(
+                read = { from -> api.ledger(reached.endpoint, from) },
+                serverPin = server.serverPin,
+                devicePin = KeyPin.of(identity.certificate),
+                deadline = deadline,
+            )
+        }
 
         return CycleResult.Done(outcome, reached.endpoint)
     }

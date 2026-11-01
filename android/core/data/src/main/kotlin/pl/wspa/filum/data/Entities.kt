@@ -149,3 +149,25 @@ data class LogEventEntity(
     val code: String,
     val message: String,
 )
+
+/**
+ * A ledger head this phone witnessed (protocol §9.5), with the server's signed statement.
+ *
+ * Rows are added, never changed: together they are the phone's evidence of what the server's
+ * ledger held and when, which is why this database's migrations never discard data.
+ */
+@Entity(tableName = "witnessed_head", indices = [Index("serverPin")])
+data class WitnessedHeadEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    /** The server's key pin: a phone paired anew with another server starts another list. */
+    val serverPin: String,
+    val entries: Long,
+    val head: String,
+    /** The server's clock at the statement, in seconds - part of what it signed. */
+    val statedAt: Long,
+    /** The server's public key and its signature over the statement, both in base64url. */
+    val serverKey: String,
+    val signature: String,
+    /** The phone's clock when the head was accepted, in milliseconds. */
+    val witnessedAt: Long,
+)
