@@ -16,7 +16,7 @@ class SessionRecordsTest {
 
     @Test
     fun `a finished session records how many files were queued and how many failed`() {
-        // Both columns read zero after every cycle, including one that sent 235 files (B28).
+        // A column left at its default would read as a cycle that queued and failed nothing.
         val record = SessionRecords.finished(
             started,
             SyncOutcome.Completed(filesSent = 7, bytesSent = 4_096, filesQueued = 10, filesFailed = 3),
