@@ -116,10 +116,14 @@ object LedgerWitness {
         }.getOrDefault(false)
     }
 
-    /** A line's digest over its exact text, as protocol §9.2 defines it. */
+    /**
+     * A line's digest over its exact text, as protocol §9.2 defines it.
+     *
+     * A first witness hashes every line of the ledger, so the hex encoding matters: formatting
+     * each byte with String.format costs some thirty times the hashing itself.
+     */
     fun digestOf(line: String): String =
-        MessageDigest.getInstance("SHA-256").digest(line.toByteArray(Charsets.UTF_8))
-            .joinToString("") { "%02x".format(it) }
+        MessageDigest.getInstance("SHA-256").digest(line.toByteArray(Charsets.UTF_8)).toHexString()
 
     private fun parse(line: String): JsonObject? =
         runCatching { Json.parseToJsonElement(line).jsonObject }.getOrNull()
