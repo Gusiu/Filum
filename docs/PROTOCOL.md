@@ -540,6 +540,11 @@ The consequence: removing, altering or inserting any line breaks everything that
 ledger that cannot be quietly corrected is a qualitatively different thing from a list of
 digests.
 
+Checking needs nothing from this project. `tools/verify_ledger.py` follows this section and
+`PATH-RULES.md` with Python's standard library alone: it walks the chain, then matches every
+file under `files/` against its path's latest entry and every previous version against the
+path's history.
+
 **What this does not give.** The chain detects partial tampering. It does not protect
 against someone with access to the server's disk rebuilding the ledger from scratch. Signing
 it with the server key would change nothing, since that key sits on the same machine. The
