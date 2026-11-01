@@ -480,8 +480,9 @@ The order matters: step 3 must not precede step 2, or I2 would be violated.
 
 When content with a different `(size, mtime)` appears under an existing path, the current
 file MUST be moved to
-`.filum/versions/<the same path>/<name>.<YYYYMMDD>T<HHmmss>Z<.extension>`,
+`.filum/versions/<the same directory>/<name>.<YYYYMMDD>T<HHmmss>Z<.extension>`,
 where the timestamp comes from the **old copy's mtime**, not from the time of the operation.
+When that name is taken, `-<n>` follows the timestamp.
 
 Versions live outside `files/` so that the live tree stays a clean mirror of the phone.
 
