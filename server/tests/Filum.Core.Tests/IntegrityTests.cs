@@ -129,6 +129,59 @@ public class IntegrityLedgerTests
         Assert.False(h.Ledger.Verify(Harness.Slug).Intact);
     }
 
+    // --- a slice for the phone to witness (protocol §5.7) ---
+
+    [Fact]
+    public void ASlice_CarriesTheExactLinesAndTheHead()
+    {
+        using var h = new Harness();
+        for (var i = 1; i <= 3; i++) Append(h, $"file{i}.txt", $"content {i}");
+        var stored = File.ReadAllLines(LedgerPath(h));
+
+        var slice = h.Ledger.Slice(Harness.Slug, from: 1, limit: 100);
+
+        Assert.Equal(3, slice.Entries);
+        Assert.Equal(stored, slice.Lines);
+        Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(stored[2]))), slice.Head);
+    }
+
+    [Fact]
+    public void ASlice_StartsAtTheLineAskedFor_AndStopsAtTheLimit()
+    {
+        using var h = new Harness();
+        for (var i = 1; i <= 5; i++) Append(h, $"file{i}.txt", $"content {i}");
+        var stored = File.ReadAllLines(LedgerPath(h));
+
+        var slice = h.Ledger.Slice(Harness.Slug, from: 2, limit: 2);
+
+        Assert.Equal(5, slice.Entries);
+        Assert.Equal(stored[1..3], slice.Lines);
+    }
+
+    [Fact]
+    public void ASliceBeyondTheEnd_IsEmpty_ButStillTellsTheLength()
+    {
+        // A phone that witnessed more lines than the server now has learns exactly that.
+        using var h = new Harness();
+        Append(h, "a.txt", "aaa");
+
+        var slice = h.Ledger.Slice(Harness.Slug, from: 10, limit: 100);
+
+        Assert.Equal(1, slice.Entries);
+        Assert.Empty(slice.Lines);
+    }
+
+    [Fact]
+    public void AnEmptyLedger_HasTheAnchorForAHead()
+    {
+        using var h = new Harness();
+
+        var slice = h.Ledger.Slice(Harness.Slug, from: 1, limit: 100);
+
+        Assert.Equal(0, slice.Entries);
+        Assert.Equal(IntegrityLedger.Genesis, slice.Head);
+    }
+
     [Fact]
     public void AppendingAtTheEnd_IsValid()
     {

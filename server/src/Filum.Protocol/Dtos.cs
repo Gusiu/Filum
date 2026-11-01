@@ -200,6 +200,30 @@ public sealed record OrphanReport(
     [property: JsonPropertyName("bytes")] long Bytes,
     [property: JsonPropertyName("paths")] IReadOnlyList<string> Paths);
 
+// --- GET /api/v1/ledger (§5.7) ---
+
+/// <summary>
+/// The device's ledger from line <c>From</c> on, with the server's signed statement of the
+/// ledger's length and head. <c>Lines</c> holds each line's exact stored text.
+/// </summary>
+public sealed record LedgerResponse(
+    [property: JsonPropertyName("entries")] long Entries,
+    [property: JsonPropertyName("head")] string Head,
+    [property: JsonPropertyName("from")] long From,
+    [property: JsonPropertyName("lines")] IReadOnlyList<string> Lines,
+    [property: JsonPropertyName("at")] long At,
+    [property: JsonPropertyName("key")] string Key,
+    [property: JsonPropertyName("signature")] string Signature);
+
+/// <summary>The text the server signs for /ledger (protocol §5.7).</summary>
+public static class LedgerStatement
+{
+    public const string Version = "filum-ledger-head/1";
+
+    public static string Text(string serverPin, string devicePin, long entries, string head, long at) =>
+        $"{Version}\n{serverPin}\n{devicePin}\n{entries}\n{head}\n{at}\n";
+}
+
 // --- errors (§6) ---
 
 public sealed record ErrorResponse(

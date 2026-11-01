@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 
 namespace Filum.Core;
 
@@ -34,6 +35,22 @@ public sealed class CertificateStore
 
     /// <summary>The server's public key fingerprint: base64url(SHA-256(SPKI)), 43 characters.</summary>
     public string Pin { get; }
+
+    /// <summary>The public key as SubjectPublicKeyInfo in base64url - what <see cref="Pin"/> is the digest of.</summary>
+    public string PublicKeyInfo => ToBase64Url(Certificate.PublicKey.ExportSubjectPublicKeyInfo());
+
+    /// <summary>
+    /// Signs with the key behind the TLS certificate: ECDSA P-256 over SHA-256, DER-encoded and
+    /// in base64url - a form any standard library verifies (protocol §5.7).
+    /// </summary>
+    public string Sign(string text)
+    {
+        using var key = Certificate.GetECDsaPrivateKey()
+            ?? throw new InvalidOperationException("The server certificate holds no private key.");
+
+        return ToBase64Url(key.SignData(
+            Encoding.UTF8.GetBytes(text), HashAlgorithmName.SHA256, DSASignatureFormat.Rfc3279DerSequence));
+    }
 
     /// <summary>
     /// Loads the certificate, or creates it on the first run.
