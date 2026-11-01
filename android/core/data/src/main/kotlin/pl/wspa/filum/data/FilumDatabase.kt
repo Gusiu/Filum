@@ -37,11 +37,13 @@ abstract class FilumDatabase : RoomDatabase() {
 
         fun open(context: Context): FilumDatabase =
             Room.databaseBuilder(context.applicationContext, FilumDatabase::class.java, NAME)
-                // The database holds only the queue and the history, never user data.
-                // On a schema mismatch, rebuilding it from scratch costs one full scan
-                // rather than the loss of anything - which beats an application that
-                // fails to start after an update.
-                .fallbackToDestructiveMigration(dropAllTables = true)
+                // Besides the queue, the database holds the pairing, the user's settings and
+                // folder exclusions and the foreground-service budget. Rebuilt from scratch, it
+                // would cost a new pairing, not one full scan - so every schema version from 3
+                // on comes with a migration. Versions 1 and 2 never left development; a
+                // database from a newer build cannot be migrated backwards at all.
+                .fallbackToDestructiveMigrationFrom(dropAllTables = true, 1, 2)
+                .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
                 .build()
     }
 }
