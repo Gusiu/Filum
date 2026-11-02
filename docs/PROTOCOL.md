@@ -219,7 +219,7 @@ Response `200`:
   "device":   { "label": "Galaxy S24 Ultra", "fileCount": 128431, "bytesStored": 201000000000 },
   "limits":   {
     "manifestBatch": 2000,
-    "smallFileThreshold": 262144,
+    "smallFileThreshold": 1048576,
     "bundleMaxBytes": 8388608,
     "bundleMaxCount": 256,
     "maxPathBytes": 4096

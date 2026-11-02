@@ -76,7 +76,7 @@ data class DeviceInfo(
 @Serializable
 data class ProtocolLimits(
     @SerialName("manifestBatch") val manifestBatch: Int = 2000,
-    @SerialName("smallFileThreshold") val smallFileThreshold: Int = 262_144,
+    @SerialName("smallFileThreshold") val smallFileThreshold: Int = 1_048_576,
     @SerialName("bundleMaxBytes") val bundleMaxBytes: Int = 8_388_608,
     @SerialName("bundleMaxCount") val bundleMaxCount: Int = 256,
     @SerialName("maxPathBytes") val maxPathBytes: Int = 4096,
