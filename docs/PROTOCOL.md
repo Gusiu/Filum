@@ -581,7 +581,9 @@ digests.
 Checking needs nothing from this project. `tools/verify_ledger.py` follows this section and
 `PATH-RULES.md` with Python's standard library alone: it walks the chain, then matches every
 file under `files/` against its path's latest entry and every previous version against the
-path's history.
+path's history. Given a single phone path with `--provenance`, it lists instead every line
+that accepted the path, where on disk each accepted version lies and whether it still holds
+that content, and - with a witnessed head (§9.5) - which of those lines the head vouches for.
 
 **What this does not give.** The chain detects partial tampering. On its own it does not
 protect against someone with access to the server's disk rebuilding the ledger from scratch,
