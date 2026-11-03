@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- The bench records the Wi-Fi link speed and band with each measurement. -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+
+    <application>
+        <!--
+          Measurement commands sent from the computer over adb. Only the system and the adb
+          shell hold DUMP, so no app installed on the phone can start a measurement.
+        -->
+        <activity
+            android:name="pl.wspa.filum.app.bench.BenchActivity"
+            android:exported="true"
+            android:permission="android.permission.DUMP"
+            android:excludeFromRecents="true"
+            android:label="Filum QA bench" />
+    </application>
+
+</manifest>
