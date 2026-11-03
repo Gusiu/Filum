@@ -27,6 +27,9 @@ public sealed record LedgerVerification(
     long? BrokenAtSequence,
     string? Problem);
 
+/// <summary>A run of ledger lines, with the ledger's length and head at the moment of reading.</summary>
+public sealed record LedgerSlice(long Entries, string Head, IReadOnlyList<string> Lines);
+
 /// <summary>
 /// The integrity ledger: an append-only record of everything the server accepted (ADR-016).
 ///
@@ -191,6 +194,33 @@ public sealed class IntegrityLedger(StoragePaths paths)
         }
 
         return new LedgerVerification(true, count, null, null);
+    }
+
+    /// <summary>
+    /// Up to <paramref name="limit"/> lines from line <paramref name="from"/> on, with the
+    /// ledger's length and head (protocol §5.7) - the material for the phone to witness it.
+    ///
+    /// Read under the same lock as appends, so the length, the head and the lines describe
+    /// one and the same ledger: an entry arriving midway would leave a head that matches
+    /// none of the lines returned.
+    /// </summary>
+    public LedgerSlice Slice(string slug, long from, int limit)
+    {
+        lock (_gate)
+        {
+            var lines = new List<string>();
+            long count = 0;
+            string? last = null;
+
+            foreach (var line in ReadLines(slug))
+            {
+                count++;
+                last = line;
+                if (count >= from && lines.Count < limit) lines.Add(line);
+            }
+
+            return new LedgerSlice(count, last is null ? Genesis : HashOf(last), lines);
+        }
     }
 
     public IEnumerable<LedgerEntry> Read(string slug)

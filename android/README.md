@@ -34,10 +34,10 @@ requirement introduced in Android 17 for now.
 
 | Module | Responsibility | Depends on Android |
 |---|---|---|
-| `:core:protocol` | wire models, `PathRules`, pairing-code parsing, integrity policy | no - plain JVM |
+| `:core:protocol` | wire models, `PathRules`, pairing-code parsing, integrity policy, ledger witnessing | no - plain JVM |
 | `:core:crypto` | key in the Android Keystore, server key pinning | partly |
 | `:core:net` | resource client, route racing, mDNS, binding sockets to Wi-Fi | partly |
-| `:core:data` | Room: queue, journal, foreground-service budget, settings | yes |
+| `:core:data` | Room: queue, journal, foreground-service budget, settings, witnessed ledger heads | yes |
 | `:core:scan` | `MediaStore` with the generation counter, tree walk, exclusions | partly |
 | `:core:sync` | cycle engine: manifest, resuming, bundling, error classification | no - behind interfaces |
 | `:app` | pairing, home, folders, journal, dependency wiring | yes |

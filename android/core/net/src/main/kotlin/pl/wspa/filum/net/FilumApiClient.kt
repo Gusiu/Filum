@@ -17,6 +17,7 @@ import pl.wspa.filum.protocol.BundleResponse
 import pl.wspa.filum.protocol.ErrorResponse
 import pl.wspa.filum.protocol.FileChunkResponse
 import pl.wspa.filum.protocol.FilumHeaders
+import pl.wspa.filum.protocol.LedgerResponse
 import pl.wspa.filum.protocol.ManifestRequest
 import pl.wspa.filum.protocol.ManifestResponse
 import pl.wspa.filum.protocol.PairRequest
@@ -144,6 +145,12 @@ class FilumApiClient(
             .build()
 
         return execute(request) { json.decodeFromString<VerifyResponse>(it) }
+    }
+
+    /** The device's ledger from line [from] on, with the server's signed head (§5.7). */
+    suspend fun ledger(endpoint: ServerEndpoint, from: Long): ApiResult<LedgerResponse> {
+        val request = Request.Builder().url(endpoint.url("/ledger?from=$from")).get().build()
+        return execute(request) { json.decodeFromString<LedgerResponse>(it) }
     }
 
     private fun ServerEndpoint.url(resource: String): String = "$baseUrl${Protocol.PREFIX}$resource"

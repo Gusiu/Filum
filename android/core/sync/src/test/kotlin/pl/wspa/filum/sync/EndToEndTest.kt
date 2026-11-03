@@ -10,13 +10,17 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable
 import org.junit.jupiter.api.io.TempDir
 import pl.wspa.filum.crypto.FilumTls
 import pl.wspa.filum.crypto.FixedKeyManager
+import pl.wspa.filum.crypto.KeyPin
 import pl.wspa.filum.net.ApiResult
 import pl.wspa.filum.net.EndpointKind
 import pl.wspa.filum.net.FilumApiClient
 import pl.wspa.filum.net.FilumHttpClients
 import pl.wspa.filum.net.ServerEndpoint
+import pl.wspa.filum.protocol.LedgerResponse
+import pl.wspa.filum.protocol.LedgerWitness
 import pl.wspa.filum.protocol.ManifestEntry
 import pl.wspa.filum.protocol.ManifestRequest
+import pl.wspa.filum.protocol.WitnessedHead
 import pl.wspa.filum.scan.ExclusionRules
 import pl.wspa.filum.scan.FilesystemScanner
 import java.io.File
@@ -163,6 +167,22 @@ class EndToEndTest {
         assertEquals(4, response.have, "the server should hold everything after the first cycle")
         assertTrue(response.needed.isEmpty(), "nothing should be needed: ${response.needed}")
         assertTrue(response.rejected.isEmpty(), "no path should have been rejected")
+
+        // --- the ledger: the C# server's lines and signature, witnessed by the Kotlin side (§9.5) ---
+
+        val read = client.ledger(endpoint, 1)
+        val ledger = assertInstanceOf(ApiResult.Ok::class.java, read, read.toString()).value as LedgerResponse
+
+        // Every file went with a digest (§9.1), so every one of them is in the ledger.
+        assertEquals(4L, ledger.entries)
+        assertTrue(
+            LedgerWitness.signedByServer(ledger, serverPin, KeyPin.of(clientCertificate.certificate)),
+            "the statement should carry the signature of the key the pin names",
+        )
+        assertEquals(
+            LedgerWitness.Verdict.Extends(WitnessedHead(4, ledger.head)),
+            LedgerWitness.check(null, ledger.lines, ledger.entries, ledger.head),
+        )
 
         println("journal: ${journal.codes()}")
     }

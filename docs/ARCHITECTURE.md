@@ -225,10 +225,18 @@ sequenceDiagram
     end
 
     W->>Q: record budget used and the session result
+
+    W->>Srv: GET /ledger (from the last witnessed head)
+    Srv-->>W: lines + signed length and head
+    W->>Q: record the head, or raise the alarm
 ```
 
 The crucial part: **every step of the loop saves state**. Killing the process at any moment
 costs at most one chunk of one file.
+
+The last step follows a cycle that completed: the phone holds the server's ledger up to the
+head it witnessed last (protocol §9.5, ADR-019). A cycle cut short skips it and loses nothing -
+the next check covers every line since that head.
 
 ---
 

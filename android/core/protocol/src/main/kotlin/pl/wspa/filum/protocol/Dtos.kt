@@ -236,6 +236,23 @@ data class VerifyResponse(
     @SerialName("missing") val missing: List<String> = emptyList(),
 )
 
+// --- GET /ledger (§5.7) ---
+
+/**
+ * The device's ledger from line [from] on, with the server's signed statement of the ledger's
+ * length and head. [lines] holds each line's exact stored text.
+ */
+@Serializable
+data class LedgerResponse(
+    @SerialName("entries") val entries: Long,
+    @SerialName("head") val head: String,
+    @SerialName("from") val from: Long,
+    @SerialName("lines") val lines: List<String>,
+    @SerialName("at") val at: Long,
+    @SerialName("key") val key: String,
+    @SerialName("signature") val signature: String,
+)
+
 // --- errors (§6) ---
 
 @Serializable

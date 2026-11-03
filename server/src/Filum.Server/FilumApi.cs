@@ -35,6 +35,7 @@ public static class FilumApi
         api.MapPost("/bundle", Bundle);
         api.MapPost("/verify", Verify);
         api.MapGet("/orphans", Orphans);
+        api.MapGet("/ledger", Ledger);
     }
 
     // --- POST /api/v1/pair (§3.3) ---
@@ -288,6 +289,26 @@ public static class FilumApi
             ? Error(StatusCodes.Status404NotFound, "no_report",
                     "There is no report for this session. One is produced only after a session closes with a full manifest.")
             : Results.Ok(report);
+    }
+
+    // --- GET /api/v1/ledger (§5.7) ---
+
+    /// <summary>The most lines one answer carries; the phone asks again from the next line.</summary>
+    private const int LedgerPage = 5000;
+
+    private static IResult Ledger(HttpContext context, long? from, IntegrityLedger ledger, CertificateStore certificates)
+    {
+        var device = context.Device();
+        var start = from ?? 1;
+        if (start < 1)
+            return Error(StatusCodes.Status400BadRequest, ErrorCodes.BadRequest, "from must be 1 or more.");
+
+        var slice = ledger.Slice(device.Slug, start, LedgerPage);
+        var at = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var statement = LedgerStatement.Text(certificates.Pin, device.Pin, slice.Entries, slice.Head, at);
+
+        return Results.Ok(new LedgerResponse(
+            slice.Entries, slice.Head, start, slice.Lines, at, certificates.PublicKeyInfo, certificates.Sign(statement)));
     }
 
     // --- headers ---
