@@ -25,7 +25,13 @@ public sealed class FilumOptions
     public string Bind { get; set; } = "0.0.0.0";
 
     public int ManifestBatch { get; set; } = 2000;
-    public int SmallFileThreshold { get; set; } = 262_144;
+
+    /// <summary>
+    /// Files up to this size travel in bundles (ADR-008). On a phone over Wi-Fi, bundles send
+    /// 1 MB files 1.5 times as fast as separate requests, and 4 MB files no faster.
+    /// </summary>
+    public int SmallFileThreshold { get; set; } = 1_048_576;
+
     public int BundleMaxBytes { get; set; } = 8_388_608;
     public int BundleMaxCount { get; set; } = 256;
     public int MaxPathBytes { get; set; } = 4096;

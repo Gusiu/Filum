@@ -123,13 +123,11 @@ data class SyncConfig(
     val maxAttempts: Int = 5,
 
     /**
-     * Below this size a file goes in a bundle rather than its own request (ADR-008).
+     * Up to this size a file goes in a bundle rather than its own request (ADR-008).
      *
      * The value comes from the server's ping response; the client assumes none of its own.
-     * The threshold is to be established by measurement rather than assumed - it is one of the
-     * experiments for the results chapter.
      */
-    val smallFileThreshold: Long = 262_144,
+    val smallFileThreshold: Long = 1_048_576,
 
     val bundleMaxBytes: Long = 8L * 1024 * 1024,
 
