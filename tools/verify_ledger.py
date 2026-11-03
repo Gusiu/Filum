@@ -8,7 +8,9 @@ The device directory is <root>/<device-slug>, the one holding files/ and .filum/
 Exit status: 0 when everything adds up, 1 when something does not, 2 on bad usage.
 
 --provenance follows one phone path, written as the ledger writes it (DCIM/IMG_0001.JPG),
-instead of checking the whole backup. For every ledger line that accepted the path it prints
+instead of checking the whole backup. It first names the device the path came from: label,
+key pin and pairing date from .filum/device.json, or unknown when there is no readable one,
+as after the device was unpaired. For every ledger line that accepted the path it prints
 the time of acceptance, size, modification time and digest; where on disk that version lies,
 under files/ or .filum/versions/, and whether the file there still holds that content; and,
 given --head, whether the line is witnessed: the head's own line, or one still linked to it
@@ -111,6 +113,17 @@ def read_index(meta):
         if "s" in entry and "p" in entry:
             reverse[entry["s"]] = entry["p"]
     return reverse
+
+
+def read_device(meta):
+    """The device's record from .filum/device.json (PROTOCOL §8.1), or None when there is no
+    readable one - unpairing a device removes that file and nothing else."""
+    try:
+        with open(os.path.join(meta, "device.json"), encoding="utf-8") as stream:
+            record = json.load(stream)
+    except (OSError, ValueError):
+        return None
+    return record if isinstance(record, dict) else None
 
 
 def phone_path(stored, index):
@@ -229,12 +242,16 @@ def verify(device, heads=(), chain_only=False):
 
 
 def provenance(device, path, heads=()):
-    """One phone path's history: every ledger line that accepted it, where on disk each accepted
-    version lies and whether it still holds that content, and which of those lines the heads
-    vouch for."""
+    """One phone path's history: the device it came from, every ledger line that accepted it,
+    where on disk each accepted version lies and whether it still holds that content, and
+    which of those lines the heads vouch for."""
     meta = os.path.join(device, ".filum")
     lines = ledger_lines(os.path.join(meta, "integrity.jsonl"))
-    report = {"path": path, **check_ledger(lines, heads)}
+    # An unpaired device leaves its backup behind without device.json: unknown, but nothing
+    # wrong with the backup.
+    record = read_device(meta)
+    report = {"device": {key: record.get(key) for key in ("label", "pin", "pairedAt")} if record else None,
+              "path": path, **check_ledger(lines, heads)}
 
     spans = []
     for head in report["heads"]:
@@ -311,6 +328,13 @@ def provenance(device, path, heads=()):
     return report
 
 
+def describe_device(device):
+    if device is None:
+        return "device: unknown - .filum/device.json is missing or cannot be read"
+    label, pin, paired = ("?" if device[key] is None else device[key] for key in ("label", "pin", "pairedAt"))
+    return f"device: {label}, key pin {pin}, paired {paired}"
+
+
 def print_provenance(report):
     def when(seconds):
         return utc(seconds, "%Y-%m-%dT%H:%M:%SZ") or repr(seconds)
@@ -348,9 +372,9 @@ def main(argv=None):
     scope = parser.add_mutually_exclusive_group()
     scope.add_argument("--chain-only", action="store_true", help="check the ledger alone, read no files")
     scope.add_argument("--provenance", metavar="PATH",
-                       help="report on one phone path instead: every line that accepted it, where each "
-                            "accepted version lies and whether it still holds that content, and whether "
-                            "the heads given vouch for those lines")
+                       help="report on one phone path instead: the device it came from, every line that "
+                            "accepted it, where each accepted version lies and whether it still holds "
+                            "that content, and whether the heads given vouch for those lines")
     parser.add_argument("--json", action="store_true", help="print the report as JSON")
     arguments = parser.parse_args(argv)
 
@@ -364,6 +388,8 @@ def main(argv=None):
     if arguments.json:
         print(json.dumps(report, indent=2, ensure_ascii=False))
     else:
+        if arguments.provenance is not None:
+            print(describe_device(report["device"]))
         print(f"ledger: {report['entries']} entries, chain {report['chain']}")
         for head in report["heads"]:
             span = head.get("lines")

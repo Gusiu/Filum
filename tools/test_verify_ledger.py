@@ -1,4 +1,5 @@
 """Tests for verify_ledger.py: python -m unittest discover -s tools"""
+import base64
 import contextlib
 import hashlib
 import io
@@ -14,6 +15,10 @@ import verify_ledger
 VECTORS = pathlib.Path(__file__).resolve().parent.parent / "docs" / "testvectors" / "paths.tsv"
 MTIME = 1_756_400_000
 
+# PROTOCOL §3.1: a pin is the SHA-256 of a public key in base64url, 43 characters.
+PIN = base64.urlsafe_b64encode(hashlib.sha256(b"the phone's public key").digest()).rstrip(b"=").decode()
+PAIRED_AT = "2025-08-20T09:30:00.5273913+00:00"
+
 
 def digest(data):
     return hashlib.sha256(data).hexdigest()
@@ -27,6 +32,10 @@ class Backup:
         self.meta = os.path.join(self.device, ".filum")
         os.makedirs(self.meta)
         self.lines = []
+        # PROTOCOL §8.1: the device's record, written when it was paired.
+        with open(os.path.join(self.meta, "device.json"), "w", encoding="utf-8") as stream:
+            json.dump({"pin": PIN, "slug": "phone", "label": "Galaxy S24 Ultra",
+                       "pairedAt": PAIRED_AT, "enabled": True}, stream, indent=2)
 
     def accept(self, path, content, stored=None, mtime=MTIME):
         """Stores a file under files/ and appends its ledger line."""
@@ -196,6 +205,32 @@ class ProvenanceTest(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.root, ignore_errors=True)
 
+    def test_the_report_names_the_device_the_file_came_from(self):
+        self.backup.accept("Notes/todo.txt", b"text")
+
+        report = self.backup.provenance("Notes/todo.txt")
+
+        self.assertEqual({"label": "Galaxy S24 Ultra", "pin": PIN, "pairedAt": PAIRED_AT}, report["device"])
+
+    def test_an_unpaired_device_is_unknown_and_its_backup_still_adds_up(self):
+        # PROTOCOL §8.1: unpairing removes device.json and nothing else.
+        self.backup.accept("Notes/todo.txt", b"text")
+        os.remove(os.path.join(self.backup.meta, "device.json"))
+
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            status = verify_ledger.main([self.backup.device, "--provenance", "Notes/todo.txt"])
+
+        self.assertEqual(0, status)
+        self.assertEqual("device: unknown - .filum/device.json is missing or cannot be read",
+                         output.getvalue().splitlines()[0])
+        self.assertIsNone(self.backup.provenance("Notes/todo.txt")["device"])
+
+        # A record that cannot be read names no device either.
+        with open(os.path.join(self.backup.meta, "device.json"), "w", encoding="utf-8") as stream:
+            stream.write("not JSON")
+        self.assertIsNone(self.backup.provenance("Notes/todo.txt")["device"])
+
     def test_every_acceptance_is_listed_with_where_its_version_lies(self):
         self.backup.accept("Notes/todo.txt", b"first", mtime=MTIME - 7200)
         self.backup.accept("DCIM/IMG_0001.JPG", b"photo")
@@ -358,6 +393,7 @@ class ProvenanceTest(unittest.TestCase):
 
         self.assertEqual(0, status)
         self.assertEqual([
+            f"device: Galaxy S24 Ultra, key pin {PIN}, paired {PAIRED_AT}",
             "ledger: 2 entries, chain intact",
             "head 2: matches, lines 1-2 as witnessed",
             "Notes/todo.txt: accepted 2 time(s)",
