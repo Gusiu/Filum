@@ -36,10 +36,10 @@ class SyncEngine(
     private var filesFailed = 0
 
     /**
-     * Files that failed, or had to be skipped, during this cycle. They stay in the queue, and
-     * the queue hands them straight back - without this set the cycle retried them at once,
-     * and a file that changed after the scan was skipped over and over until the budget ran
-     * out (B29). They get their next attempt in the next cycle.
+     * Files that failed, or had to be skipped, during this cycle. They stay in the queue, which
+     * hands them straight back: without this set the cycle would retry them at once, and a
+     * file changed after the scan would be skipped over and over until the budget ran out.
+     * They get their next attempt in the next cycle.
      */
     private val deferred = HashSet<String>()
 
@@ -253,7 +253,7 @@ class SyncEngine(
     /**
      * INTERRUPTED is a lost connection; OUT_OF_BUDGET is the budget running out mid-file.
      * Told apart, because one is worth an early retry and the other has to wait for the next
-     * window - and only the budget stop leaves its entry in the journal (B31).
+     * window - and only the budget stop leaves its entry in the journal.
      */
     private enum class SendResult { SENT, SKIPPED, FAILED, INTERRUPTED, OUT_OF_BUDGET }
 

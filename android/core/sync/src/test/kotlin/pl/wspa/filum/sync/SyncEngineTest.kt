@@ -319,7 +319,7 @@ class SyncEngineTest {
     fun `a transient error gets one attempt per cycle`(@TempDir dir: Path) = runTest {
         // The queue hands a file that failed for now straight back. Trying it again in the
         // same cycle only repeats the failure: with the server's disk full, five quick
-        // attempts would set every file aside before anyone could free the space (B29).
+        // attempts would set every file aside before anyone could free the space.
         setUp()
         val a = file(dir, "a.txt", "x")
         transport.putInterceptor = { _, _, _ -> FakeTransport.outOfSpace() }
@@ -332,7 +332,7 @@ class SyncEngineTest {
 
     @Test
     fun `the outcome counts the files queued and the files that failed`(@TempDir dir: Path) = runTest {
-        // The session row is built from these counts (B28).
+        // The session row is built from these counts.
         setUp()
         val ok = file(dir, "ok.txt", "x")
         val refused = file(dir, "refused.txt", "y")
@@ -471,8 +471,8 @@ class SyncEngineTest {
 
     @Test
     fun `a budget that runs out mid-file is a budget stop`(@TempDir dir: Path) = runTest {
-        // Reported as a dropped connection, it had WorkManager retry a cycle with nothing left
-        // to spend, and the night left no journal entry saying why it stopped (B31).
+        // Reported as a dropped connection, it would have WorkManager retry a cycle with
+        // nothing left to spend, and leave no journal entry saying why the night ended.
         setUp()
         val big = file(dir, "video.mp4", "0123456789")
         var chunks = 0
@@ -488,7 +488,7 @@ class SyncEngineTest {
     @Test
     fun `a file cut off mid-transfer comes back in the next cycle without a rescan`(@TempDir dir: Path) = runTest {
         // The next night's scan is incremental and lists only what changed. A file stopped
-        // halfway has not changed, so only the queue can bring it back (B30).
+        // halfway has not changed, so only the queue can bring it back.
         setUp()
         val big = file(dir, "video.mp4", "0123456789")
         var chunks = 0

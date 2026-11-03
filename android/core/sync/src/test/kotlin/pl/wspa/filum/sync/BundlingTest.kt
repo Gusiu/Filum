@@ -209,8 +209,8 @@ class BundlingTest {
 
     @Test
     fun `a bundle the server keeps refusing is sent once per cycle`(@TempDir dir: Path) = runTest {
-        // The queue hands the refused files straight back, and nothing limited bundle retries:
-        // the cycle resent the same bundle until the budget ran out (B29).
+        // The queue hands the refused files straight back; resending them at once would
+        // repeat the same failure until the budget ran out.
         setUp()
         val files = (1..3).map { file(dir, "p$it.txt", 10) }
         transport.bundleResponder = {
@@ -245,8 +245,8 @@ class BundlingTest {
 
     @Test
     fun `a bundled file that keeps failing is set aside after the attempt limit`(@TempDir dir: Path) = runTest {
-        // A file sent on its own is set aside after the limit; one in a bundle was retried
-        // in every cycle for ever.
+        // The limit holds for a file in a bundle just as for a file sent on its own -
+        // otherwise it would be retried in every cycle for ever.
         setUp()
         val a = file(dir, "a.txt", 10)
         transport.bundleResponder = {

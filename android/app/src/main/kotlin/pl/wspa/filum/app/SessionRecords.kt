@@ -8,7 +8,7 @@ import pl.wspa.filum.sync.SyncOutcome
  *
  * Extracted from SyncRunner so it can be tested without Room. The session table is the
  * record of what each night did, and a column nobody fills in reads as zero rather than
- * as missing (B28).
+ * as missing.
  */
 object SessionRecords {
 

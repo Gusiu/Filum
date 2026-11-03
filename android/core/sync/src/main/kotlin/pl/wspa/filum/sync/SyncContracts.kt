@@ -157,7 +157,7 @@ sealed interface SyncOutcome {
      * for the next cycle.
      *
      * The counts have no defaults on purpose: the session record is built from them, and a
-     * count nobody sets reads as zero (B28).
+     * count nobody sets reads as zero.
      */
     data class Completed(
         val filesSent: Int,

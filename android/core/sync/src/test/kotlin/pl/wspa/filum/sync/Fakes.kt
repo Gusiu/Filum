@@ -23,9 +23,9 @@ import java.io.IOException
  *
  * "Like Room" means like `RoomSyncQueue` and `FileEntryDao` in every detail the engine can
  * observe: which states a batch takes, in what order, and what a progress report does to
- * the state. An earlier version handed out pending files only, while the real queue also
- * hands back files that failed for now - so no test could see the engine retry a failure
- * within the same cycle (B29).
+ * the state. A fake that handed out pending files only, while the real queue also hands
+ * back files that failed for now, would hide what the engine does with a failure within
+ * the same cycle.
  */
 class FakeQueue : SyncQueue {
 

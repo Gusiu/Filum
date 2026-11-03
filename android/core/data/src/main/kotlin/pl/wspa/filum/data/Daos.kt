@@ -69,8 +69,9 @@ interface FileEntryDao {
      * The next batch to send. Oldest entries first, so that a file which once lost its
      * place in a batch does not wait forever.
      *
-     * The three waiting states are the same in every query below: leaving IN_PROGRESS out
-     * hid a file cut off mid-transfer until the next full scan (B30).
+     * The three waiting states must be the same in every query below. A state missing from
+     * one hides its files: without IN_PROGRESS, a file cut off mid-transfer would wait for
+     * the next full scan.
      */
     @Query(
         """
