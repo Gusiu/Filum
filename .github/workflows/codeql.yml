@@ -1,0 +1,112 @@
+name: CodeQL
+
+# Static analysis of every language in the repository: the server's C#, the client's
+# Kotlin, the verifier's Python and these workflows. Besides pushes and pull requests,
+# a weekly run applies the queries of newer CodeQL releases to code that has not changed.
+on:
+  push:
+    branches: [maister]
+  pull_request:
+  schedule:
+    - cron: '27 3 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server:
+    name: C# server
+    # The tray icon targets net9.0-windows, so the solution builds on Windows only.
+    # Analysing a build rather than the bare sources (build-mode none) gives CodeQL the
+    # compiler's view of the code.
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      security-events: write
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 9.0.x
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: csharp
+          build-mode: manual
+      - run: dotnet build Filum.sln --configuration Release
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:csharp
+
+  android:
+    name: Kotlin client
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v4
+        with:
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          # The open-source cache instead of the default proprietary service.
+          cache-provider: basic
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: java-kotlin
+          build-mode: manual
+      # CodeQL reads Kotlin only as it is compiled, so this step repeats the CI build
+      # and the analysis covers exactly what CI compiles. The build cache is off: the
+      # Gradle cache restored above is shared with the other workflows and can hold
+      # their compiled classes, and a compile task taken from it runs no compiler.
+      - run: ./gradlew testDebugUnitTest :core:protocol:test assembleDebug --no-build-cache
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:java-kotlin
+
+  verifier:
+    name: Python verifier
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: python
+          build-mode: none
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:python
+
+  workflows:
+    name: Workflows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: actions
+          build-mode: none
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:actions
