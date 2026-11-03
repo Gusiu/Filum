@@ -25,6 +25,7 @@ import pl.wspa.filum.scan.ExclusionRules
 import pl.wspa.filum.scan.FilesystemScanner
 import java.io.File
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicInteger
 import javax.net.ssl.KeyManager
 
 /**
@@ -96,7 +97,9 @@ class EndToEndTest {
 
         write(root, "DCIM/Camera/IMG_0001.JPG", "photo content")
         write(root, "Documents/zdjęcie-łąka.txt", "non-ascii name")
-        write(root, "Movies/large.bin", "x".repeat(200_000))
+        // Larger than the server's bundle threshold by a few fragments, whatever the threshold
+        // is set to, so that this file travels on its own.
+        write(root, "Movies/large.bin", "x".repeat(limits.smallFileThreshold + 3 * CHUNK_BYTES))
 
         val scanned = FilesystemScanner(
             root, ExclusionRules(includeDefaults = false), nowSeconds = { Long.MAX_VALUE / 2 },
@@ -123,6 +126,8 @@ class EndToEndTest {
 
         val queue = FakeQueue()
         val journal = FakeJournal()
+        val fileRequests = AtomicInteger()
+        val bundleRequests = AtomicInteger()
         val engine = SyncEngine(
             transport = object : SyncTransport {
                 override suspend fun manifest(request: ManifestRequest) = client.manifest(endpoint, request)
@@ -131,13 +136,19 @@ class EndToEndTest {
                     canonicalPath: String, file: File, size: Long, mtime: Long,
                     offset: Long, length: Long, digest: String?,
                 ) = client.putFile(endpoint, canonicalPath, file, size, mtime, offset, length, digest)
+                    .also { fileRequests.incrementAndGet() }
 
                 override suspend fun putBundle(entries: List<pl.wspa.filum.net.BundleEntry>) =
-                    client.putBundle(endpoint, entries)
+                    client.putBundle(endpoint, entries).also { bundleRequests.incrementAndGet() }
             },
             queue = queue,
             journal = journal,
-            config = SyncConfig(manifestBatch = limits.manifestBatch, chunkBytes = 64 * 1024),
+            // The limits come from the ping response, as in the app.
+            config = SyncConfig(
+                manifestBatch = limits.manifestBatch,
+                smallFileThreshold = limits.smallFileThreshold.toLong(),
+                chunkBytes = CHUNK_BYTES.toLong(),
+            ),
         )
 
         val outcome = engine.run("e2e-1", ManifestRequest.MODE_FULL, scanned.asSequence(), Deadline { false })
@@ -145,6 +156,15 @@ class EndToEndTest {
         val completed = assertInstanceOf(SyncOutcome.Completed::class.java, outcome, outcome.toString())
         println("sent ${completed.filesSent} files, ${completed.bytesSent} B")
         assertEquals(4, completed.filesSent)
+
+        // Both ways of sending have to cross between the implementations. PUT /file is the
+        // only one that carries the path, size and mtime in headers and resumes by offset,
+        // so a cycle that bundles everything leaves exactly those parts unchecked.
+        assertEquals(1, bundleRequests.get(), "the three small files should travel in one bundle")
+        assertTrue(
+            fileRequests.get() > 1,
+            "the large file should go on its own, in fragments; PUT /file requests: ${fileRequests.get()}",
+        )
 
         // --- second pass: the server has to recognise it already holds everything ---
 
@@ -192,5 +212,10 @@ class EndToEndTest {
         file.parentFile?.mkdirs()
         file.writeText(content)
         file.setLastModified(1_756_400_000_000)
+    }
+
+    private companion object {
+        /** Far below the production fragment, so one file of a few hundred KB needs several requests. */
+        const val CHUNK_BYTES = 64 * 1024
     }
 }
