@@ -170,6 +170,32 @@ class VerifyLedgerTest(unittest.TestCase):
 
         self.assertIn("no ledger entry", self.backup.verify()["problems"][0])
 
+    def test_a_line_that_is_json_but_not_an_object_cannot_be_read(self):
+        self.backup.accept("a.txt", b"a")
+        self.backup.accept("b.txt", b"b")
+        self.backup.write_ledger(self.backup.lines + ["42"])
+
+        self.assertEqual("line 3 cannot be read", self.backup.verify(chain_only=True)["chain"])
+
+    def test_a_line_that_is_not_an_object_does_not_stop_the_file_checks(self):
+        # The chain breaks at line 1 already, so only the file checks read line 2.
+        self.backup.accept("a.txt", b"a")
+        self.backup.write_ledger([self.backup.lines[0].replace('"n":1', '"n":7'), "null"])
+
+        report = self.backup.verify()
+
+        self.assertIn("entry 7 where 1 was expected", report["chain"])
+        self.assertEqual(1, report["matching"])
+
+    def test_an_index_line_that_is_not_an_object_is_passed_over(self):
+        self.backup.accept("Pictures/Photo.jpg", b"one")
+        self.backup.accept("Pictures/photo.jpg", b"two", stored="Pictures/photo~6a8a8e.jpg")
+        with open(os.path.join(self.backup.meta, "index.jsonl"), "w", encoding="utf-8") as stream:
+            stream.write('["s", "p"]\n')
+            stream.write(json.dumps({"p": "Pictures/photo.jpg", "s": "Pictures/photo~6a8a8e.jpg", "r": "case_collision"}) + "\n")
+
+        self.assertEqual([], self.backup.verify()["problems"])
+
     def test_a_witnessed_head_must_still_be_there(self):
         for index in range(3):
             self.backup.accept(f"f{index}.txt", f"content {index}".encode())

@@ -68,12 +68,13 @@ def utc(seconds, layout):
 
 
 def read_entry(line):
-    """A ledger line as a dict; empty when the line is not a JSON object."""
+    """A line of the ledger or of index.jsonl as a dict, or None when it cannot be read: every
+    entry is a JSON object, so text that is not JSON, or JSON that is not an object, is none."""
     try:
         entry = json.loads(line)
     except ValueError:
-        return {}
-    return entry if isinstance(entry, dict) else {}
+        return None
+    return entry if isinstance(entry, dict) else None
 
 
 def ledger_lines(path):
@@ -89,9 +90,8 @@ def check_chain(lines):
     """Returns (entries, problem): problem is None when every line points at the one before."""
     expected_previous, expected_number = GENESIS, 1
     for line in lines:
-        try:
-            entry = json.loads(line)
-        except ValueError:
+        entry = read_entry(line)
+        if entry is None:
             return expected_number - 1, f"line {expected_number} cannot be read"
         if entry.get("n") != expected_number:
             return expected_number - 1, f"entry {entry.get('n')} where {expected_number} was expected - a line is missing or was inserted"
@@ -107,11 +107,8 @@ def read_index(meta):
     reverse = {}
     path = os.path.join(meta, "index.jsonl")
     for line in ledger_lines(path):
-        try:
-            entry = json.loads(line)
-        except ValueError:
-            continue
-        if "s" in entry and "p" in entry:
+        entry = read_entry(line)
+        if entry is not None and "s" in entry and "p" in entry:
             reverse[entry["s"]] = entry["p"]
     return reverse
 
@@ -192,7 +189,7 @@ def witnessed_span(lines, number, digest):
     if number > len(lines) or line_digest(lines[number - 1]) != digest:
         return None
     first = number
-    while first > 1 and read_entry(lines[first - 1]).get("prev") == line_digest(lines[first - 2]):
+    while first > 1 and (read_entry(lines[first - 1]) or {}).get("prev") == line_digest(lines[first - 2]):
         first -= 1
     return first, number
 
@@ -206,11 +203,9 @@ def verify(device, heads=(), chain_only=False):
 
     history = {}
     for line in lines:
-        try:
-            entry = json.loads(line)
-        except ValueError:
-            continue
-        history.setdefault(entry.get("p"), []).append(entry)
+        entry = read_entry(line)
+        if entry is not None:
+            history.setdefault(entry.get("p"), []).append(entry)
 
     index = read_index(meta)
     files = os.path.join(device, "files")
@@ -274,7 +269,7 @@ def provenance(device, path, heads=()):
     acceptances, latest = [], None
     for number, line in enumerate(lines, 1):
         entry = read_entry(line)
-        if entry.get("p") == path:
+        if entry is not None and entry.get("p") == path:
             latest = entry
             acceptances.append({
                 "line": number, "at": entry.get("at"), "s": entry.get("s"), "m": entry.get("m"),
