@@ -287,6 +287,16 @@ class ProvenanceTest(unittest.TestCase):
              "line 2: the content at files/Notes/todo.txt is not what was accepted"],
             report["problems"])
 
+    def test_a_current_copy_with_another_modification_time_is_reported_as_verify_reports_it(self):
+        # PROTOCOL §8.2: the server sets the accepted modification time on commit. The same
+        # file must get the same verdict whichever way the backup is checked.
+        self.backup.accept("Notes/todo.txt", b"text")
+        os.utime(os.path.join(self.backup.device, "files", "Notes", "todo.txt"), (MTIME + 60, MTIME + 60))
+
+        expected = ["Notes/todo.txt: the modification time differs from the ledger's latest entry (1)"]
+        self.assertEqual(expected, self.backup.verify()["problems"])
+        self.assertEqual(expected, self.backup.provenance("Notes/todo.txt")["problems"])
+
     def test_a_current_copy_holding_an_earlier_lines_content_is_not_taken_for_the_latest(self):
         # The first version copied back over the current one by hand: what line 2 accepted is
         # gone, and the current copy is accounted for by line 1.

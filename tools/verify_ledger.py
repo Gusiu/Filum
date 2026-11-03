@@ -14,7 +14,8 @@ as after the device was unpaired. For every ledger line that accepted the path i
 the time of acceptance, size, modification time and digest; where on disk that version lies,
 under files/ or .filum/versions/, and whether the file there still holds that content; and,
 given --head, whether the line is witnessed: the head's own line, or one still linked to it
-through the digests in between. Other files on disk standing for the path are listed too.
+through the digests in between. Other files on disk standing for the path are listed too,
+and the current copy must carry the modification time accepted, as in the full check.
 
 Only the standard library, and nothing taken from the Filum code: this follows
 docs/PROTOCOL.md (§8, §9.2, §9.5) and docs/PATH-RULES.md (§5-§8). That is the point - a
@@ -142,6 +143,15 @@ def version_of(stored, index):
     return phone_path(f"{directory}/{original}" if directory else original, index), match.group("stamp")
 
 
+def mtime_problem(path, full, entry):
+    """The problem, if any, with a current copy holding its path's latest content: it must also
+    carry that entry's modification time, which the server sets on commit (PROTOCOL §8.2).
+    verify and --provenance ask this alike, so that one file gets one verdict."""
+    if int(os.stat(full).st_mtime) != entry.get("m"):
+        return f"{path}: the modification time differs from the ledger's latest entry ({entry.get('n')})"
+    return None
+
+
 def walk(root):
     """Relative paths, with / as the separator, of every file under root."""
     for directory, _, names in os.walk(root):
@@ -216,9 +226,11 @@ def verify(device, heads=(), chain_only=False):
             continue
         latest = history[path][-1]
         if file_digest(full) != latest.get("d"):
-            report["problems"].append(f"{path}: the content differs from the ledger's latest entry ({latest.get('n')})")
-        elif int(os.stat(full).st_mtime) != latest.get("m"):
-            report["problems"].append(f"{path}: the modification time differs from the ledger's latest entry ({latest.get('n')})")
+            problem = f"{path}: the content differs from the ledger's latest entry ({latest.get('n')})"
+        else:
+            problem = mtime_problem(path, full, latest)
+        if problem:
+            report["problems"].append(problem)
         else:
             counts["matching"] += 1
 
@@ -259,10 +271,11 @@ def provenance(device, path, heads=()):
         if head["lines"]:
             spans.append(head["lines"])
 
-    acceptances = []
+    acceptances, latest = [], None
     for number, line in enumerate(lines, 1):
         entry = read_entry(line)
         if entry.get("p") == path:
+            latest = entry
             acceptances.append({
                 "line": number, "at": entry.get("at"), "s": entry.get("s"), "m": entry.get("m"),
                 "d": entry.get("d"), "locations": [], "content": "missing",
@@ -273,13 +286,13 @@ def provenance(device, path, heads=()):
     # agree on which file belongs to which path. Sorted, because the order a directory lists
     # its files in depends on the filesystem, and the report should not.
     index = read_index(meta)
-    copies = [{"location": f"files/{stored}", "stamp": None, "digest": file_digest(full)}
+    copies = [{"location": f"files/{stored}", "full": full, "stamp": None, "digest": file_digest(full)}
               for stored, full in walk(os.path.join(device, "files"))
               if phone_path(stored, index) == path]
     for stored, full in walk(os.path.join(meta, "versions")):
         version = version_of(stored, index)
         if version and version[0] == path:
-            copies.append({"location": f".filum/versions/{stored}", "stamp": version[1],
+            copies.append({"location": f".filum/versions/{stored}", "full": full, "stamp": version[1],
                            "digest": file_digest(full)})
     copies.sort(key=lambda copy: copy["location"])
 
@@ -322,6 +335,12 @@ def provenance(device, path, heads=()):
                 f"line {acceptance['line']}: the content at {', '.join(acceptance['locations'])} is not what was accepted")
         elif acceptance["content"] == "missing":
             report["problems"].append(f"line {acceptance['line']}: the content accepted is not on disk")
+    if acceptances and acceptances[-1]["content"] == "matches":
+        for copy in copies:
+            if copy["location"].startswith("files/") and copy["location"] in acceptances[-1]["locations"]:
+                problem = mtime_problem(path, copy["full"], latest)
+                if problem:
+                    report["problems"].append(problem)
     for other in report["others"]:
         if not other["content_of"]:
             report["problems"].append(f"{other['location']}: no ledger entry for {path} has this content")
