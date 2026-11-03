@@ -164,6 +164,21 @@ class VerifyLedgerTest(unittest.TestCase):
         self.assertEqual([], report["problems"])
         self.assertEqual(1, report["versions"])
 
+    def test_versions_are_read_back_however_their_names_split(self):
+        # PROTOCOL §8.3: the extension runs from the last dot, so .nomedia has an empty name
+        # and README no extension.
+        self.backup.accept("Music/.nomedia", b"", mtime=MTIME - 7200)
+        self.backup.file_away("Music", ".20250828T145320Z.nomedia", b"")
+        self.backup.accept("Music/.nomedia", b"\n")
+        self.backup.accept("Documents/README", b"first", mtime=MTIME - 7200)
+        self.backup.file_away("Documents", "README.20250828T145320Z", b"first")
+        self.backup.accept("Documents/README", b"second")
+
+        report = self.backup.verify()
+
+        self.assertEqual([], report["problems"])
+        self.assertEqual(2, report["versions"])
+
     def test_a_version_the_ledger_never_recorded_is_reported(self):
         self.backup.accept("Notes/todo.txt", b"current")
         self.backup.file_away("Notes", "todo.20250828T211430Z.txt", b"never accepted")
@@ -386,6 +401,18 @@ class ProvenanceTest(unittest.TestCase):
         self.assertEqual(
             [[".filum/versions/Pictures/photo~6a8a8e.20250828T145320Z.jpg"], ["files/Pictures/photo~6a8a8e.jpg"]],
             [acceptance["locations"] for acceptance in report["acceptances"]])
+
+    def test_a_dotfile_is_followed_into_its_versions(self):
+        # PROTOCOL §8.3: .nomedia has an empty name, so its version is .<timestamp>Z.nomedia.
+        self.backup.accept("Music/.nomedia", b"", mtime=MTIME - 7200)
+        self.backup.file_away("Music", ".20250828T145320Z.nomedia", b"")
+        self.backup.accept("Music/.nomedia", b"\n")
+
+        report = self.backup.provenance("Music/.nomedia")
+
+        self.assertEqual([], report["problems"])
+        self.assertEqual([[".filum/versions/Music/.20250828T145320Z.nomedia"], ["files/Music/.nomedia"]],
+                         [acceptance["locations"] for acceptance in report["acceptances"]])
 
     def test_lines_up_to_a_witnessed_head_are_witnessed_and_later_ones_are_not(self):
         self.backup.accept("Notes/todo.txt", b"first", mtime=MTIME - 7200)

@@ -527,6 +527,11 @@ file MUST be moved to
 where the timestamp comes from the **old copy's mtime**, not from the time of the operation.
 When that name is taken, `-<n>` follows the timestamp.
 
+The stored name splits at its last dot: `<.extension>` runs from that dot to the end, and
+`<name>` is everything before it. So `.nomedia` has an empty name and its version is
+`.20250828T120000Z.nomedia`, while a name with no dot has no extension - `README` becomes
+`README.20250828T120000Z`.
+
 Versions live outside `files/` so that the live tree stays a clean mirror of the phone.
 
 ### 8.4 Free-space threshold

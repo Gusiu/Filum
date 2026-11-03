@@ -37,8 +37,9 @@ EPOCH = datetime.datetime(1970, 1, 1)
 # PATH-RULES §5: every %XX stands for one escaped ASCII character, in uppercase hex.
 ESCAPE = re.compile(r"%([0-9A-F]{2})")
 
-# PROTOCOL §8.3: a previous version is filed as <stem>.<YYYYMMDD>T<HHmmss>Z[-n]<extension>.
-VERSION_NAME = re.compile(r"^(?P<stem>.+)\.(?P<stamp>\d{8}T\d{6})Z(?:-\d+)?(?P<extension>\.[^.]*)?$")
+# PROTOCOL §8.3: a previous version is filed as <stem>.<YYYYMMDD>T<HHmmss>Z[-n]<extension>,
+# the extension running from the name's last dot - so the stem of .nomedia is empty.
+VERSION_NAME = re.compile(r"^(?P<stem>.*)\.(?P<stamp>\d{8}T\d{6})Z(?:-\d+)?(?P<extension>\.[^.]*)?$")
 
 
 def line_digest(line):
