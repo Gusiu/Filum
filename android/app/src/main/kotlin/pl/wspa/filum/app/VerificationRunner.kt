@@ -140,7 +140,7 @@ class VerificationRunner(private val container: AppContainer) {
                 digest.update(buffer, 0, read)
             }
         }
-        digest.digest().joinToString("") { "%02x".format(it) }
+        digest.digest().toHexString()
     }.getOrNull()
 
     private suspend fun journal(level: JournalLevel, code: String, message: String) =
