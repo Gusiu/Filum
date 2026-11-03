@@ -130,6 +130,40 @@ public class IntegrityLedgerTests
     }
 
     [Fact]
+    public void CuttingOffTheEnd_IsExposedByTheNextEntry()
+    {
+        // Dropping the newest lines leaves a ledger consistent on its own - every remaining
+        // line still points at the one before it. The server's next entry must point at what
+        // the server last wrote, not at wherever the file now ends: chained onto the cut, it
+        // would hide it.
+        using var h = new Harness();
+        for (var i = 1; i <= 5; i++) Append(h, $"file{i}.txt", $"content {i}");
+
+        var lines = File.ReadAllLines(LedgerPath(h));
+        File.WriteAllLines(LedgerPath(h), lines[..3]);
+        Append(h, "file6.txt", "content 6");
+
+        var result = h.Ledger.Verify(Harness.Slug);
+
+        Assert.False(result.Intact);
+        Assert.Equal(6, result.BrokenAtSequence);
+    }
+
+    [Fact]
+    public void AfterARestart_TheChainContinuesFromTheFile()
+    {
+        // A new instance - the server started again - knows nothing it did not read.
+        using var h = new Harness();
+        for (var i = 1; i <= 3; i++) Append(h, $"file{i}.txt", $"content {i}");
+
+        var restarted = new IntegrityLedger(h.Paths);
+        var next = restarted.Append(Harness.Slug, "file4.txt", 9, Mtime, Digest("content 4"));
+
+        Assert.Equal(4, next.Sequence);
+        Assert.True(restarted.Verify(Harness.Slug).Intact);
+    }
+
+    [Fact]
     public void AppendingAtTheEnd_IsValid()
     {
         // The ledger is append-only by definition - new entries must not invalidate it.

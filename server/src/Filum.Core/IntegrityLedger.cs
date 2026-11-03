@@ -74,6 +74,18 @@ public sealed class IntegrityLedger(StoragePaths paths)
     private readonly Dictionary<string, Dictionary<string, string>> _index = new(StringComparer.Ordinal);
 
     /// <summary>
+    /// Each device's last line - number and digest - as this instance last wrote it.
+    ///
+    /// Finding the tail in the file means reading the whole ledger: an entry would cost more
+    /// the longer the ledger grew, and a first backup's ledger work would grow with the square
+    /// of its size. So the file is read once, on the first append after the server starts.
+    /// It also keeps a cut visible: when someone drops lines off the end behind the server's
+    /// back, the next entry points at the line the server wrote, not at wherever the file now
+    /// ends.
+    /// </summary>
+    private readonly Dictionary<string, (long Sequence, string Hash)> _tails = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// Appends an entry for an accepted file.
     ///
     /// The write is under a lock, because the chain requires reading the last line before
@@ -87,18 +99,20 @@ public sealed class IntegrityLedger(StoragePaths paths)
             var file = LedgerFile(slug);
             Directory.CreateDirectory(LongPath.Extended(Path.GetDirectoryName(file)!));
 
-            var (sequence, previous) = TailOf(file);
+            if (!_tails.TryGetValue(slug, out var tail)) tail = TailOf(file);
 
             var entry = new LedgerEntry(
-                Sequence: sequence + 1,
+                Sequence: tail.Sequence + 1,
                 AcceptedAt: DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                 Path: canonicalPath,
                 Size: size,
                 Mtime: mtime,
                 Digest: digest,
-                Previous: previous);
+                Previous: tail.Hash);
 
-            File.AppendAllText(LongPath.Extended(file), Serialize(entry) + "\n", Utf8);
+            var line = Serialize(entry);
+            File.AppendAllText(LongPath.Extended(file), line + "\n", Utf8);
+            _tails[slug] = (entry.Sequence, HashOf(line));
 
             // Keep the index in step with what was just written. Only when it already
             // exists: building it here would force a read of the whole ledger at a
