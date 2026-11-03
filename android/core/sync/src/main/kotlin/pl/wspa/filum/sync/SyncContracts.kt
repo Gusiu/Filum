@@ -2,6 +2,7 @@ package pl.wspa.filum.sync
 
 import pl.wspa.filum.net.ApiResult
 import pl.wspa.filum.net.BundleEntry
+import pl.wspa.filum.net.FilumHttpClients
 import pl.wspa.filum.protocol.BundleResponse
 import pl.wspa.filum.protocol.FileChunkResponse
 import pl.wspa.filum.protocol.IntegrityPolicy
@@ -133,7 +134,27 @@ data class SyncConfig(
     val bundleMaxBytes: Long = 8L * 1024 * 1024,
 
     val bundleMaxCount: Int = 256,
-)
+
+    /**
+     * How many transfers run at once; a bundle and a file sent on its own count as one each.
+     *
+     * Like the bundling threshold, this is to be settled by measurement (architecture §7,
+     * experiment 2). With one, transfers go strictly one after another, in the order of the
+     * batch.
+     */
+    val parallelTransfers: Int = 1,
+) {
+    init {
+        require(parallelTransfers in 1..MAX_PARALLEL_TRANSFERS) {
+            "parallelTransfers must be between 1 and $MAX_PARALLEL_TRANSFERS, was $parallelTransfers"
+        }
+    }
+
+    companion object {
+        /** The HTTP client lets this many calls to one host run at once; more would only queue. */
+        const val MAX_PARALLEL_TRANSFERS = FilumHttpClients.MAX_REQUESTS_PER_HOST
+    }
+}
 
 /**
  * Why the cycle ended early.
