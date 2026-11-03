@@ -23,7 +23,7 @@ GENESIS = "genesis"
 ESCAPE = re.compile(r"%([0-9A-F]{2})")
 
 # PROTOCOL §8.3: a previous version is filed as <stem>.<YYYYMMDD>T<HHmmss>Z[-n]<extension>.
-VERSION_NAME = re.compile(r"^(?P<stem>.+)\.\d{8}T\d{6}Z(?:-\d+)?(?P<extension>\.[^.]*)?$")
+VERSION_NAME = re.compile(r"^(?P<stem>.+)\.(?P<stamp>\d{8}T\d{6})Z(?:-\d+)?(?P<extension>\.[^.]*)?$")
 
 
 def line_digest(line):
@@ -89,6 +89,17 @@ def phone_path(stored, index):
     return index.get(stored) or "/".join(decode_segment(segment) for segment in stored.split("/"))
 
 
+def version_of(stored, index):
+    """(phone path, timestamp in the name) for a path stored under versions/, or None when the
+    name is not a version name (PROTOCOL §8.3)."""
+    directory, _, name = stored.rpartition("/")
+    match = VERSION_NAME.match(name)
+    if not match:
+        return None
+    original = f"{match.group('stem')}{match.group('extension') or ''}"
+    return phone_path(f"{directory}/{original}" if directory else original, index), match.group("stamp")
+
+
 def walk(root):
     """Relative paths, with / as the separator, of every file under root."""
     for directory, _, names in os.walk(root):
@@ -97,9 +108,8 @@ def walk(root):
             yield os.path.relpath(full, root).replace(os.sep, "/"), full
 
 
-def verify(device, heads=(), chain_only=False):
-    meta = os.path.join(device, ".filum")
-    lines = ledger_lines(os.path.join(meta, "integrity.jsonl"))
+def check_ledger(lines, heads=()):
+    """The part of a report that reads the ledger alone: its chain and the heads given."""
     entries, problem = check_chain(lines)
     report = {"entries": entries, "chain": problem or "intact", "heads": [], "problems": []}
     if problem:
@@ -117,7 +127,13 @@ def verify(device, heads=(), chain_only=False):
         report["heads"].append({"n": number, "digest": digest, "result": outcome})
         if outcome != "matches":
             report["problems"].append(f"head {number}: {outcome}")
+    return report
 
+
+def verify(device, heads=(), chain_only=False):
+    meta = os.path.join(device, ".filum")
+    lines = ledger_lines(os.path.join(meta, "integrity.jsonl"))
+    report = check_ledger(lines, heads)
     if chain_only:
         return report
 
@@ -155,13 +171,11 @@ def verify(device, heads=(), chain_only=False):
 
     for stored, full in walk(os.path.join(meta, "versions")):
         counts["versions"] += 1
-        directory, _, name = stored.rpartition("/")
-        match = VERSION_NAME.match(name)
-        if not match:
+        version = version_of(stored, index)
+        if not version:
             report["problems"].append(f"versions/{stored}: not a version name")
             continue
-        original = f"{match.group('stem')}{match.group('extension') or ''}"
-        path = phone_path(f"{directory}/{original}" if directory else original, index)
+        path = version[0]
         digests = {entry.get("d") for entry in history.get(path, [])}
         if file_digest(full) not in digests:
             report["problems"].append(f"versions/{stored}: no ledger entry for {path} has this content")
