@@ -46,7 +46,9 @@ The invariants the rest of this specification rests on:
 - Default port: **8765/tcp**, configurable.
 - Prefix for all resources: `/api/v1`.
 - Text encoding: UTF-8, no BOM.
-- Timestamps in JSON bodies: ISO 8601 in UTC.
+- Timestamps in JSON bodies: ISO 8601 in UTC, except `at`, which is written like `mtime`
+  below, in integer seconds since the Unix epoch: the moment of acceptance in a ledger line
+  (§9.2) and the moment of the server's signed statement of the ledger's head (§5.7).
 - `mtime` values: **integer seconds since the Unix epoch, UTC**. The client MUST
   normalise mtime to seconds in one place, at the boundary where it reads the filesystem
   (ADR-011 - `MediaStore` reports seconds, `File.lastModified()` milliseconds; mixing the

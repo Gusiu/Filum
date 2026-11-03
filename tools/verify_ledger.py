@@ -31,7 +31,7 @@ import sys
 
 GENESIS = "genesis"
 
-# PROTOCOL §2: times are whole seconds since the Unix epoch, UTC.
+# PROTOCOL §2: a ledger line's m (an mtime) and at are whole seconds since the Unix epoch, UTC.
 EPOCH = datetime.datetime(1970, 1, 1)
 
 # PATH-RULES §5: every %XX stands for one escaped ASCII character, in uppercase hex.
