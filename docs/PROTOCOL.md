@@ -480,8 +480,9 @@ The order matters: step 3 must not precede step 2, or I2 would be violated.
 
 When content with a different `(size, mtime)` appears under an existing path, the current
 file MUST be moved to
-`.filum/versions/<the same path>/<name>.<YYYYMMDD>T<HHmmss>Z<.extension>`,
+`.filum/versions/<the same directory>/<name>.<YYYYMMDD>T<HHmmss>Z<.extension>`,
 where the timestamp comes from the **old copy's mtime**, not from the time of the operation.
+When that name is taken, `-<n>` follows the timestamp.
 
 Versions live outside `files/` so that the live tree stays a clean mirror of the phone.
 
@@ -539,6 +540,11 @@ hashing the object would invalidate the entire history without anyone having tou
 The consequence: removing, altering or inserting any line breaks everything that follows. A
 ledger that cannot be quietly corrected is a qualitatively different thing from a list of
 digests.
+
+Checking needs nothing from this project. `tools/verify_ledger.py` follows this section and
+`PATH-RULES.md` with Python's standard library alone: it walks the chain, then matches every
+file under `files/` against its path's latest entry and every previous version against the
+path's history.
 
 **What this does not give.** The chain detects partial tampering. It does not protect
 against someone with access to the server's disk rebuilding the ledger from scratch. Signing

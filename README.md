@@ -39,7 +39,9 @@ monotonic - it can only grow.
 - **Integrity is checkable.** The digest of every accepted file goes into an
   append-only ledger where each line carries the digest of the one before it.
   Removing or altering an entry breaks everything that follows. The ledger is plain
-  JSONL - it can be verified without this application, in a few lines of code.
+  JSONL, checkable without this application: [tools/verify_ledger.py](tools/verify_ledger.py)
+  does it with Python's standard library alone, the files and their previous versions
+  included.
 - **Change detection is the user's choice.** Fast mode compares size and modification
   time; thorough mode hashes every file on every scan and catches a substitution that
   left the metadata alone.
@@ -59,6 +61,7 @@ monotonic - it can only grow.
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | module breakdown, flows, build order |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | architecture decision record, including the rejected alternatives |
 | [docs/testvectors/paths.tsv](docs/testvectors/paths.tsv) | shared test vectors for path sanitisation |
+| [tools/verify_ledger.py](tools/verify_ledger.py) | an independent check of a backup: the ledger's chain, every file and every previous version |
 
 Server and client are written independently, in different languages, and reconciled
 solely through the specification and the shared test vectors. That is deliberate:

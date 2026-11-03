@@ -27,6 +27,15 @@ jobs:
           dotnet-version: 9.0.x
       - run: dotnet test Filum.sln --configuration Release
 
+  verifier:
+    name: Ledger verifier
+    # A third implementation of the ledger and path rules, in Python's standard library
+    # only - so it runs on the runner's own interpreter, with nothing to install.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: python3 -m unittest discover -s tools -v
+
   android:
     name: Android tests and APK
     runs-on: ubuntu-latest
