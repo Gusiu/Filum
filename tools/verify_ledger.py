@@ -7,6 +7,12 @@
 The device directory is <root>/<device-slug>, the one holding files/ and .filum/.
 Exit status: 0 when everything adds up, 1 when something does not, 2 on bad usage.
 
+By default it checks the whole backup: the chain; every file under files/ against its path's
+latest entry; every previous version under .filum/versions/ against its path's history; and
+that every content the ledger accepted is still on disk, as the current copy of its path or
+as one of its versions, since the server neither deletes nor overwrites. A current copy
+that is missing or changed is reported once, as that, not again as missing content.
+
 --provenance follows one phone path, written as the ledger writes it (DCIM/IMG_0001.JPG),
 instead of checking the whole backup. It first names the device the path came from: label,
 key pin and pairing date from .filum/device.json, or unknown when there is no readable one,
@@ -228,18 +234,23 @@ def verify(device, heads=(), chain_only=False):
     index = read_index(meta)
     files = os.path.join(device, "files")
     seen = set()
+    held = {}  # phone path -> the content of every copy of it on disk, current or previous
+    named = set()  # paths whose current copy is already reported missing or changed
     counts = {"files": 0, "matching": 0, "versions": 0}
 
     for stored, full in walk(files):
         counts["files"] += 1
         path = phone_path(stored, index)
         seen.add(path)
+        content = file_digest(full)
+        held.setdefault(path, set()).add(content)
         if path not in history:
             report["problems"].append(f"{path}: on disk but not in the ledger")
             continue
         latest = history[path][-1]
-        if file_digest(full) != latest.get("d"):
+        if content != latest.get("d"):
             problem = f"{path}: the content differs from the ledger's latest entry ({latest.get('n')})"
+            named.add(path)
         else:
             problem = mtime_problem(path, full, latest)
         if problem:
@@ -250,6 +261,7 @@ def verify(device, heads=(), chain_only=False):
     for path in history:
         if path not in seen:
             report["problems"].append(f"{path}: in the ledger but not on disk - the server never deletes")
+            named.add(path)
 
     for stored, full in walk(os.path.join(meta, "versions")):
         counts["versions"] += 1
@@ -258,9 +270,23 @@ def verify(device, heads=(), chain_only=False):
             report["problems"].append(f"versions/{stored}: not a version name")
             continue
         path = version[0]
+        content = file_digest(full)
+        held.setdefault(path, set()).add(content)
         digests = {entry.get("d") for entry in history.get(path, [])}
-        if file_digest(full) not in digests:
+        if content not in digests:
             report["problems"].append(f"versions/{stored}: no ledger entry for {path} has this content")
+
+    # PROTOCOL I1-I2: the server deletes and overwrites nothing, so every content the ledger
+    # accepted is still on disk, as the current copy of its path or as one of its versions -
+    # the same question --provenance asks line by line. A path's latest content gone with a
+    # current copy reported missing or changed is that same fault, named once already.
+    for path, entries in history.items():
+        for content in dict.fromkeys(entry.get("d") for entry in entries):
+            if content in held.get(path, ()) or (path in named and content == entries[-1].get("d")):
+                continue
+            numbers = [str(entry.get("n")) for entry in entries if entry.get("d") == content]
+            which = f"entry {numbers[0]}" if len(numbers) == 1 else f"entries {', '.join(numbers)}"
+            report["problems"].append(f"{path}: no copy on disk holds what {which} accepted - the server never deletes")
 
     report.update(counts)
     return report

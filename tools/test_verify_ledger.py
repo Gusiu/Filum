@@ -179,6 +179,52 @@ class VerifyLedgerTest(unittest.TestCase):
         self.assertEqual([], report["problems"])
         self.assertEqual(2, report["versions"])
 
+    def test_a_previous_version_that_vanished_is_reported(self):
+        # PROTOCOL I1-I2: the server deletes nothing, so what the ledger accepted stays on disk.
+        self.backup.accept("Notes/todo.txt", b"first", mtime=MTIME - 7200)
+        self.backup.file_away("Notes", "todo.20250828T145320Z.txt", b"first")
+        self.backup.accept("Notes/todo.txt", b"second")
+        self.assertEqual([], self.backup.verify()["problems"])
+        gone = "Notes/todo.txt: no copy on disk holds what entry 1 accepted - the server never deletes"
+
+        os.remove(os.path.join(self.backup.meta, "versions", "Notes", "todo.20250828T145320Z.txt"))
+        self.assertEqual([gone], self.backup.verify()["problems"])
+
+        shutil.rmtree(os.path.join(self.backup.meta, "versions"))
+        self.assertEqual([gone], self.backup.verify()["problems"])
+        self.assertEqual(["line 1: the content accepted is not on disk"],
+                         self.backup.provenance("Notes/todo.txt")["problems"])
+
+        # Gone with the current copy, the earlier content is still a fault of its own.
+        os.remove(os.path.join(self.backup.device, "files", "Notes", "todo.txt"))
+        self.assertEqual(["Notes/todo.txt: in the ledger but not on disk - the server never deletes", gone],
+                         self.backup.verify()["problems"])
+
+    def test_a_vanished_content_is_named_by_every_entry_that_accepted_it(self):
+        # Saved again with the same bytes, the file was filed away twice before it changed;
+        # neither version is left.
+        self.backup.accept("Notes/todo.txt", b"first", mtime=MTIME - 7200)
+        self.backup.accept("Notes/todo.txt", b"first", mtime=MTIME - 3600)
+        self.backup.accept("Notes/todo.txt", b"second")
+
+        self.assertEqual(
+            ["Notes/todo.txt: no copy on disk holds what entries 1, 2 accepted - the server never deletes"],
+            self.backup.verify()["problems"])
+
+    def test_a_current_copy_that_changed_or_vanished_is_reported_once(self):
+        # Its latest content went with it, and that is the same fault, named already.
+        self.backup.accept("Notes/todo.txt", b"text")
+        current = os.path.join(self.backup.device, "files", "Notes", "todo.txt")
+        with open(current, "wb") as stream:
+            stream.write(b"changed")
+        os.utime(current, (MTIME, MTIME))
+        self.assertEqual(["Notes/todo.txt: the content differs from the ledger's latest entry (1)"],
+                         self.backup.verify()["problems"])
+
+        os.remove(current)
+        self.assertEqual(["Notes/todo.txt: in the ledger but not on disk - the server never deletes"],
+                         self.backup.verify()["problems"])
+
     def test_a_version_the_ledger_never_recorded_is_reported(self):
         self.backup.accept("Notes/todo.txt", b"current")
         self.backup.file_away("Notes", "todo.20250828T211430Z.txt", b"never accepted")
