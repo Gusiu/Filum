@@ -6,8 +6,10 @@ import io
 import json
 import os
 import pathlib
+import random
 import shutil
 import tempfile
+import time
 import unittest
 
 import verify_ledger
@@ -605,6 +607,110 @@ class ProvenanceTest(unittest.TestCase):
             verify_ledger.main([self.backup.device, "--provenance", "a.txt", "--chain-only"])
 
         self.assertEqual(2, raised.exception.code)
+
+
+class RandomDamageTest(unittest.TestCase):
+    """Histories of one path, filed away as the server files them and then damaged at random:
+    both checks must find a fault exactly where the damage made one."""
+
+    SEED = 20261104
+    HISTORIES = 400
+    # Few contents and times, so that they repeat within a history as they do on a phone.
+    CONTENTS = [b"first", b"second", b"third"]
+    MTIMES = [MTIME - 7200, MTIME - 3600, MTIME]
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp(prefix="filum-damage-")
+
+    def tearDown(self):
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    @staticmethod
+    def accept(backup, content, mtime):
+        """Commits new content the way PROTOCOL §8.2 does: the current copy is filed away first,
+        named after its own modification time, with -<n> when that name is taken (§8.3)."""
+        current = os.path.join(backup.device, "files", "Notes", "todo.txt")
+        if os.path.exists(current):
+            stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(os.stat(current).st_mtime))
+            directory = os.path.join(backup.meta, "versions", "Notes")
+            os.makedirs(directory, exist_ok=True)
+            name, counter = f"todo.{stamp}.txt", 2
+            while os.path.exists(os.path.join(directory, name)):
+                name, counter = f"todo.{stamp}-{counter}.txt", counter + 1
+            os.replace(current, os.path.join(directory, name))
+        backup.accept("Notes/todo.txt", content, mtime=mtime)
+        return content, mtime
+
+    def damage(self, backup, rng):
+        current = os.path.join(backup.device, "files", "Notes", "todo.txt")
+        versions = os.path.join(backup.meta, "versions", "Notes")
+        filed = sorted(os.listdir(versions)) if os.path.isdir(versions) else []
+        other = rng.choice(self.CONTENTS + [b"forged"])
+        what = rng.choice(["nothing", "delete a version", "delete every version", "rewrite a version",
+                           "plant a version", "delete the current copy", "rewrite the current copy",
+                           "touch the current copy"])
+        if what == "delete a version" and filed:
+            os.remove(os.path.join(versions, rng.choice(filed)))
+        elif what == "delete every version":
+            shutil.rmtree(os.path.join(backup.meta, "versions"), ignore_errors=True)
+        elif what == "rewrite a version" and filed:
+            with open(os.path.join(versions, rng.choice(filed)), "wb") as stream:
+                stream.write(other)
+        elif what == "plant a version":
+            backup.file_away("Notes", "todo.20240101T000000Z.txt", other)
+        elif what == "delete the current copy" and os.path.exists(current):
+            os.remove(current)
+        elif what == "rewrite the current copy" and os.path.exists(current):
+            mtime = os.stat(current).st_mtime
+            with open(current, "wb") as stream:
+                stream.write(other)
+            os.utime(current, (mtime, mtime))
+        elif what == "touch the current copy" and os.path.exists(current):
+            os.utime(current, (MTIME + 99, MTIME + 99))
+        return what
+
+    @staticmethod
+    def fault_put_in(backup, accepted):
+        """The fault the damage made, read off the disk alone, or None: a current copy missing,
+        or holding other content or another modification time than the latest line accepted;
+        an accepted content that no copy holds; a copy holding content the path never accepted.
+        A version gone while another copy holds its content is no fault: §9.2 checks contents,
+        not copies."""
+        current = os.path.join(backup.device, "files", "Notes", "todo.txt")
+        versions = os.path.join(backup.meta, "versions", "Notes")
+        copies = [os.path.join(versions, name) for name in os.listdir(versions)] if os.path.isdir(versions) else []
+        if not os.path.exists(current):
+            return "current copy missing"
+        held = set()
+        for copy in copies + [current]:
+            with open(copy, "rb") as stream:
+                held.add(digest(stream.read()))
+        with open(current, "rb") as stream:
+            latest, mtime = accepted[-1]
+            if digest(stream.read()) != digest(latest) or int(os.stat(current).st_mtime) != mtime:
+                return "current copy changed"
+        contents = {digest(content) for content, _ in accepted}
+        if contents - held:
+            return "accepted content held by no copy"
+        if held - contents:
+            return "copy with content never accepted"
+        return None
+
+    def test_both_checks_find_a_fault_exactly_where_the_damage_made_one(self):
+        rng = random.Random(self.SEED)
+        wrong = []
+        for history in range(self.HISTORIES):
+            backup = Backup(tempfile.mkdtemp(dir=self.root))
+            accepted = [self.accept(backup, rng.choice(self.CONTENTS), rng.choice(self.MTIMES))
+                        for _ in range(rng.randint(1, 4))]
+            damages = [self.damage(backup, rng) for _ in range(rng.randint(0, 2))]
+            fault = self.fault_put_in(backup, accepted)
+            verdicts = (bool(backup.verify()["problems"]), bool(backup.provenance("Notes/todo.txt")["problems"]))
+            if verdicts != (fault is not None,) * 2:
+                wrong.append({"history": history, "damage": damages, "fault": fault,
+                              "verify": verdicts[0], "provenance": verdicts[1]})
+
+        self.assertEqual([], wrong[:3], f"{len(wrong)} of {self.HISTORIES} histories judged wrongly")
 
 
 class PathVectorsTest(unittest.TestCase):
