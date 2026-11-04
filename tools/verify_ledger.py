@@ -20,8 +20,9 @@ as after the device was unpaired. For every ledger line that accepted the path i
 the time of acceptance, size, modification time and digest; where on disk that version lies,
 under files/ or .filum/versions/, and whether the file there still holds that content; and,
 given --head, whether the line is witnessed: the head's own line, or one still linked to it
-through the digests in between. Other files on disk standing for the path are listed too,
-and the current copy must carry the modification time accepted, as in the full check.
+through the digests in between. Other files on disk standing for the path are listed too.
+As in the full check, the latest line is looked for in the current copy alone, which must
+hold what that line accepted, with the modification time accepted.
 
 Only the standard library, and nothing taken from the Filum code: this follows
 docs/PROTOCOL.md (§8, §9.2, §9.5) and docs/PATH-RULES.md (§5-§8). That is the point - a
@@ -337,26 +338,34 @@ def provenance(device, path, heads=()):
 
     accepted = {acceptance["d"] for acceptance in acceptances}
     for acceptance in acceptances:
-        # Where the server keeps it (PROTOCOL §8.2-§8.3): the latest acceptance is the current
-        # copy, and an earlier one was filed away when the next arrived, under a name carrying
-        # its modification time - which tells apart versions that hold the same content.
         if acceptance is acceptances[-1]:
-            expected = [copy for copy in copies if copy["location"].startswith("files/")]
+            # The latest line has one place, the current copy (PROTOCOL §8.2), as in verify.
+            # Anything else there is other content, whichever line it came from; and with no
+            # current copy, that copy is what is missing, even when a version holds its bytes.
+            current = [copy for copy in copies if copy["location"].startswith("files/")]
+            found = [copy for copy in current if copy["digest"] == acceptance["d"]]
+            if found:
+                acceptance["content"] = "matches"
+            elif current:
+                acceptance["content"], found = "differs", current
         else:
+            # An earlier line was filed away when the next arrived, under a name carrying its
+            # modification time (PROTOCOL §8.3) - which tells apart versions that hold the
+            # same content. Failing that, the same content anywhere else: a file deleted by
+            # hand and sent again leaves no version, and the current copy holds what this
+            # line accepted.
             stamp = utc(acceptance["m"], "%Y%m%dT%H%M%S")
             expected = [copy for copy in copies if stamp and copy["stamp"] == stamp]
-        # Failing that, the same content anywhere else: a file deleted by hand and sent again
-        # leaves no version, and the current copy holds what the earlier line accepted.
-        found = ([copy for copy in expected if copy["digest"] == acceptance["d"]]
-                 or [copy for copy in copies if copy["digest"] == acceptance["d"]])
-        if found:
-            acceptance["content"] = "matches"
-        else:
-            # Nowhere. A file in its place holding content this path never had is what became
-            # of it; one holding another line's content belongs to that line.
-            found = [copy for copy in expected if copy["digest"] not in accepted]
+            found = ([copy for copy in expected if copy["digest"] == acceptance["d"]]
+                     or [copy for copy in copies if copy["digest"] == acceptance["d"]])
             if found:
-                acceptance["content"] = "differs"
+                acceptance["content"] = "matches"
+            else:
+                # Nowhere. A version in its place holding content this path never had is what
+                # became of it; one holding another line's content belongs to that line.
+                found = [copy for copy in expected if copy["digest"] not in accepted]
+                if found:
+                    acceptance["content"] = "differs"
         acceptance["locations"] = [copy["location"] for copy in found]
 
     placed = {location for acceptance in acceptances for location in acceptance["locations"]}
@@ -372,11 +381,13 @@ def provenance(device, path, heads=()):
         if acceptance["content"] == "differs":
             report["problems"].append(
                 f"line {acceptance['line']}: the content at {', '.join(acceptance['locations'])} is not what was accepted")
+        elif acceptance["content"] == "missing" and acceptance is acceptances[-1]:
+            report["problems"].append(f"line {acceptance['line']}: the current copy is missing from files/")
         elif acceptance["content"] == "missing":
             report["problems"].append(f"line {acceptance['line']}: the content accepted is not on disk")
     if acceptances and acceptances[-1]["content"] == "matches":
         for copy in copies:
-            if copy["location"].startswith("files/") and copy["location"] in acceptances[-1]["locations"]:
+            if copy["location"] in acceptances[-1]["locations"]:
                 problem = mtime_problem(path, copy["full"], latest)
                 if problem:
                     report["problems"].append(problem)
@@ -405,7 +416,7 @@ def print_provenance(report):
         for location in acceptance["locations"]:
             print(f"  {location}: content {acceptance['content']}")
         if not acceptance["locations"]:
-            print("  not on disk")
+            print("  no current copy in files/" if acceptance is report["acceptances"][-1] else "  not on disk")
         if acceptance["witnessed"] is not None:
             print("  witnessed" if acceptance["witnessed"] else "  not witnessed")
     if report["others"]:

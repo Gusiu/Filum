@@ -413,9 +413,43 @@ class ProvenanceTest(unittest.TestCase):
         self.assertEqual(expected, self.backup.verify()["problems"])
         self.assertEqual(expected, self.backup.provenance("Notes/todo.txt")["problems"])
 
+    def saved_again_with_the_same_bytes(self):
+        """Notes/todo.txt accepted three times, the last two with the same bytes, so that what
+        line 3 accepted lies in line 2's version as well as in the current copy."""
+        self.backup.accept("Notes/todo.txt", b"first", mtime=MTIME - 7200)
+        self.backup.file_away("Notes", "todo.20250828T145320Z.txt", b"first")
+        self.backup.accept("Notes/todo.txt", b"second", mtime=MTIME - 3600)
+        self.backup.file_away("Notes", "todo.20250828T155320Z.txt", b"second")
+        self.backup.accept("Notes/todo.txt", b"second")
+        return os.path.join(self.backup.device, "files", "Notes", "todo.txt")
+
+    def test_a_current_copy_overwritten_with_an_earlier_lines_content_differs(self):
+        # PROTOCOL §8.2: the latest line's one place is the current copy, as in verify.
+        current = self.saved_again_with_the_same_bytes()
+        with open(current, "wb") as stream:
+            stream.write(b"first")
+        os.utime(current, (MTIME, MTIME))
+
+        self.assertEqual(["Notes/todo.txt: the content differs from the ledger's latest entry (3)"],
+                         self.backup.verify()["problems"])
+        self.assertEqual(["line 3: the content at files/Notes/todo.txt is not what was accepted"],
+                         self.backup.provenance("Notes/todo.txt")["problems"])
+
+    def test_a_current_copy_that_is_gone_is_missing_though_a_version_holds_its_bytes(self):
+        os.remove(self.saved_again_with_the_same_bytes())
+
+        self.assertEqual(["Notes/todo.txt: in the ledger but not on disk - the server never deletes"],
+                         self.backup.verify()["problems"])
+        self.assertEqual(["line 3: the current copy is missing from files/"],
+                         self.backup.provenance("Notes/todo.txt")["problems"])
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            verify_ledger.main([self.backup.device, "--provenance", "Notes/todo.txt"])
+        self.assertIn("  no current copy in files/", output.getvalue().splitlines())
+
     def test_a_current_copy_holding_an_earlier_lines_content_is_not_taken_for_the_latest(self):
-        # The first version copied back over the current one by hand: what line 2 accepted is
-        # gone, and the current copy is accounted for by line 1.
+        # The first version copied back over the current one by hand: the current copy holds
+        # other content than line 2 accepted, though it is what line 1 accepted.
         self.backup.accept("Notes/todo.txt", b"first", mtime=MTIME - 7200)
         self.backup.file_away("Notes", "todo.20250828T145320Z.txt", b"first")
         self.backup.accept("Notes/todo.txt", b"second")
@@ -424,9 +458,10 @@ class ProvenanceTest(unittest.TestCase):
 
         report = self.backup.provenance("Notes/todo.txt")
 
-        self.assertEqual(("missing", []), (report["acceptances"][1]["content"], report["acceptances"][1]["locations"]))
-        self.assertEqual([{"location": "files/Notes/todo.txt", "content_of": [1]}], report["others"])
-        self.assertEqual(["line 2: the content accepted is not on disk"], report["problems"])
+        self.assertEqual(("differs", ["files/Notes/todo.txt"]),
+                         (report["acceptances"][1]["content"], report["acceptances"][1]["locations"]))
+        self.assertEqual([], report["others"])
+        self.assertEqual(["line 2: the content at files/Notes/todo.txt is not what was accepted"], report["problems"])
 
     def test_a_version_that_is_gone_is_reported(self):
         self.backup.accept("Notes/todo.txt", b"first", mtime=MTIME - 7200)
