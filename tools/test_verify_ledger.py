@@ -211,6 +211,35 @@ class VerifyLedgerTest(unittest.TestCase):
 
         self.assertEqual([], self.backup.verify()["problems"])
 
+    def test_a_field_of_the_wrong_type_makes_a_line_unreadable(self):
+        # PROTOCOL §9.2 gives every field of a line its type, and a list is no path.
+        self.backup.accept("a.txt", b"a")
+        self.backup.write_ledger([self.backup.lines[0].replace('"p":"a.txt"', '"p":["a.txt"]')])
+
+        report = self.backup.verify()
+
+        self.assertEqual("line 1 cannot be read", report["chain"])
+        self.assertIn("a.txt: on disk but not in the ledger", report["problems"])
+
+    def test_true_is_not_a_number_in_a_ledger_line(self):
+        # Python takes true for 1: "n":true would pass for the first line's number, and
+        # "s":true for a size that nothing else looks at.
+        self.backup.accept("a.txt", b"a")
+        for number, forged in (('"n":1', '"n":true'), ('"s":1', '"s":true')):
+            self.backup.write_ledger([self.backup.lines[0].replace(number, forged)])
+            self.assertEqual("line 1 cannot be read", self.backup.verify(chain_only=True)["chain"], forged)
+
+    def test_an_index_line_whose_names_are_not_text_is_passed_over(self):
+        self.backup.accept("Pictures/Photo.jpg", b"one")
+        self.backup.accept("Pictures/photo.jpg", b"two", stored="Pictures/photo~6a8a8e.jpg")
+        with open(os.path.join(self.backup.meta, "index.jsonl"), "w", encoding="utf-8") as stream:
+            stream.write(json.dumps({"p": "Pictures/photo.jpg", "s": ["Pictures/photo~6a8a8e.jpg"]}) + "\n")
+            stream.write(json.dumps({"p": "Pictures/photo.jpg", "s": "Pictures/photo~6a8a8e.jpg", "r": "case_collision"}) + "\n")
+            # Read last, this line would map the stored name to a number.
+            stream.write(json.dumps({"p": 5, "s": "Pictures/photo~6a8a8e.jpg"}) + "\n")
+
+        self.assertEqual([], self.backup.verify()["problems"])
+
     def test_a_witnessed_head_must_still_be_there(self):
         for index in range(3):
             self.backup.accept(f"f{index}.txt", f"content {index}".encode())
@@ -413,6 +442,15 @@ class ProvenanceTest(unittest.TestCase):
         self.assertEqual([], report["problems"])
         self.assertEqual([[".filum/versions/Music/.20250828T145320Z.nomedia"], ["files/Music/.nomedia"]],
                          [acceptance["locations"] for acceptance in report["acceptances"]])
+
+    def test_a_digest_of_the_wrong_type_does_not_stop_the_report(self):
+        self.backup.accept("Notes/todo.txt", b"text")
+        self.backup.write_ledger([self.backup.lines[0].replace(f'"d":"{digest(b"text")}"', '"d":["x"]')])
+
+        report = self.backup.provenance("Notes/todo.txt")
+
+        self.assertEqual("line 1 cannot be read", report["chain"])
+        self.assertEqual([], report["acceptances"])
 
     def test_lines_up_to_a_witnessed_head_are_witnessed_and_later_ones_are_not(self):
         self.backup.accept("Notes/todo.txt", b"first", mtime=MTIME - 7200)

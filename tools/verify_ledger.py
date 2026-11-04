@@ -31,6 +31,9 @@ import sys
 
 GENESIS = "genesis"
 
+# PROTOCOL §9.2: the fields of every ledger line, with their JSON types.
+LEDGER_FIELDS = {"n": int, "at": int, "p": str, "s": int, "m": int, "d": str, "prev": str}
+
 # PROTOCOL §2: a ledger line's m (an mtime) and at are whole seconds since the Unix epoch, UTC.
 EPOCH = datetime.datetime(1970, 1, 1)
 
@@ -68,14 +71,27 @@ def utc(seconds, layout):
         return None
 
 
-def read_entry(line):
-    """A line of the ledger or of index.jsonl as a dict, or None when it cannot be read: every
-    entry is a JSON object, so text that is not JSON, or JSON that is not an object, is none."""
+def read_object(line):
+    """A line of a JSONL file as a dict, or None when it is not JSON, or JSON but not an object."""
     try:
-        entry = json.loads(line)
+        value = json.loads(line)
     except ValueError:
         return None
-    return entry if isinstance(entry, dict) else None
+    return value if isinstance(value, dict) else None
+
+
+def read_entry(line):
+    """A ledger line as a dict, or None when it cannot be read: when it is not a JSON object, or
+    one of its fields is missing or not of the type PROTOCOL §9.2 gives it."""
+    entry = read_object(line)
+    if entry is None:
+        return None
+    for field, kind in LEDGER_FIELDS.items():
+        value = entry.get(field)
+        # bool is an int to Python, but true and false are not numbers in JSON.
+        if not isinstance(value, kind) or isinstance(value, bool):
+            return None
+    return entry
 
 
 def ledger_lines(path):
@@ -108,8 +124,9 @@ def read_index(meta):
     reverse = {}
     path = os.path.join(meta, "index.jsonl")
     for line in ledger_lines(path):
-        entry = read_entry(line)
-        if entry is not None and "s" in entry and "p" in entry:
+        entry = read_object(line)
+        # Both names are paths, so a line where either is not text maps nothing.
+        if entry is not None and isinstance(entry.get("s"), str) and isinstance(entry.get("p"), str):
             reverse[entry["s"]] = entry["p"]
     return reverse
 
