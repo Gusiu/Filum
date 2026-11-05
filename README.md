@@ -96,7 +96,7 @@ optional adoption mode ([protocol §10](docs/PROTOCOL.md#10-adoption-mode-option
 | thorough change detection (digest in the manifest) | works |
 | server as a Windows service | works, installed by `Install-Filum.ps1`, checked in CI |
 | **client↔server conformance test** | passes |
-| **191 server tests, 217 client tests** | green |
+| **223 server tests, 261 client tests** | green |
 | tested on a phone (Galaxy S24 Ultra, Android 16) | full backup and incremental cycles, also behind a VPN |
 | QR scanning with the phone camera | works, checked on a phone |
 
