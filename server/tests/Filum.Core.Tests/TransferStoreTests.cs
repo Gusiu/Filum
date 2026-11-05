@@ -1,3 +1,4 @@
+using System.Globalization;
 using Filum.Protocol;
 
 namespace Filum.Core.Tests;
@@ -159,6 +160,26 @@ public class TransferStoreTests
 
         var expected = DateTimeOffset.FromUnixTimeSeconds(oldMtime).UtcDateTime.ToString("yyyyMMdd'T'HHmmss'Z'");
         Assert.Equal($"note.{expected}.txt", h.VersionFiles().Single());
+    }
+
+    [Theory]
+    [InlineData("Music/.nomedia", ".{0}.nomedia")]
+    [InlineData("Documents/README", "README.{0}")]
+    [InlineData("Backups/archive.tar.gz", "archive.tar.{0}.gz")]
+    [InlineData("Documents/.config.json", ".config.{0}.json")]
+    public async Task VersionName_SplitsTheStoredNameAtItsLastDot(string path, string expectedName)
+    {
+        // Protocol §8.3 defines the split, and the verifier reads version names by it: the
+        // extension runs from the last dot, so a dotfile has an empty name and a name with
+        // no dot has no extension. Backups already hold versions named this way, so a change
+        // here would leave the verifier unable to match them.
+        using var h = new Harness();
+
+        h.Seed(path, Harness.Bytes("old"), Mtime);
+        await h.WriteWholeAsync(path, Harness.Bytes("new"), Mtime + 60);
+
+        var stamp = DateTimeOffset.FromUnixTimeSeconds(Mtime).UtcDateTime.ToString("yyyyMMdd'T'HHmmss'Z'");
+        Assert.Equal(string.Format(CultureInfo.InvariantCulture, expectedName, stamp), h.VersionFiles().Single());
     }
 
     [Fact]

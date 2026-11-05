@@ -7,6 +7,12 @@
 The device directory is <root>/<device-slug>, the one holding files/ and .filum/.
 Exit status: 0 when everything adds up, 1 when something does not, 2 on bad usage.
 
+By default it checks the whole backup: the chain; every file under files/ against its path's
+latest entry; every previous version under .filum/versions/ against its path's history; and
+that every content the ledger accepted is still on disk, as the current copy of its path or
+as one of its versions, since the server neither deletes nor overwrites. A current copy
+that is missing or changed is reported once, as that, not again as missing content.
+
 --provenance follows one phone path, written as the ledger writes it (DCIM/IMG_0001.JPG),
 instead of checking the whole backup. It first names the device the path came from: label,
 key pin and pairing date from .filum/device.json, or unknown when there is no readable one,
@@ -14,8 +20,9 @@ as after the device was unpaired. For every ledger line that accepted the path i
 the time of acceptance, size, modification time and digest; where on disk that version lies,
 under files/ or .filum/versions/, and whether the file there still holds that content; and,
 given --head, whether the line is witnessed: the head's own line, or one still linked to it
-through the digests in between. Other files on disk standing for the path are listed too,
-and the current copy must carry the modification time accepted, as in the full check.
+through the digests in between. Other files on disk standing for the path are listed too.
+As in the full check, the latest line is looked for in the current copy alone, which must
+hold what that line accepted, with the modification time accepted.
 
 Only the standard library, and nothing taken from the Filum code: this follows
 docs/PROTOCOL.md (§8, §9.2, §9.5) and docs/PATH-RULES.md (§5-§8). That is the point - a
@@ -31,14 +38,18 @@ import sys
 
 GENESIS = "genesis"
 
-# PROTOCOL §2: times are whole seconds since the Unix epoch, UTC.
+# PROTOCOL §9.2: the fields of every ledger line, with their JSON types.
+LEDGER_FIELDS = {"n": int, "at": int, "p": str, "s": int, "m": int, "d": str, "prev": str}
+
+# PROTOCOL §2: a ledger line's m (an mtime) and at are whole seconds since the Unix epoch, UTC.
 EPOCH = datetime.datetime(1970, 1, 1)
 
 # PATH-RULES §5: every %XX stands for one escaped ASCII character, in uppercase hex.
 ESCAPE = re.compile(r"%([0-9A-F]{2})")
 
-# PROTOCOL §8.3: a previous version is filed as <stem>.<YYYYMMDD>T<HHmmss>Z[-n]<extension>.
-VERSION_NAME = re.compile(r"^(?P<stem>.+)\.(?P<stamp>\d{8}T\d{6})Z(?:-\d+)?(?P<extension>\.[^.]*)?$")
+# PROTOCOL §8.3: a previous version is filed as <stem>.<YYYYMMDD>T<HHmmss>Z[-n]<extension>,
+# the extension running from the name's last dot - so the stem of .nomedia is empty.
+VERSION_NAME = re.compile(r"^(?P<stem>.*)\.(?P<stamp>\d{8}T\d{6})Z(?:-\d+)?(?P<extension>\.[^.]*)?$")
 
 
 def line_digest(line):
@@ -67,13 +78,27 @@ def utc(seconds, layout):
         return None
 
 
-def read_entry(line):
-    """A ledger line as a dict; empty when the line is not a JSON object."""
+def read_object(line):
+    """A line of a JSONL file as a dict, or None when it is not JSON, or JSON but not an object."""
     try:
-        entry = json.loads(line)
+        value = json.loads(line)
     except ValueError:
-        return {}
-    return entry if isinstance(entry, dict) else {}
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def read_entry(line):
+    """A ledger line as a dict, or None when it cannot be read: when it is not a JSON object, or
+    one of its fields is missing or not of the type PROTOCOL §9.2 gives it."""
+    entry = read_object(line)
+    if entry is None:
+        return None
+    for field, kind in LEDGER_FIELDS.items():
+        value = entry.get(field)
+        # bool is an int to Python, but true and false are not numbers in JSON.
+        if not isinstance(value, kind) or isinstance(value, bool):
+            return None
+    return entry
 
 
 def ledger_lines(path):
@@ -89,9 +114,8 @@ def check_chain(lines):
     """Returns (entries, problem): problem is None when every line points at the one before."""
     expected_previous, expected_number = GENESIS, 1
     for line in lines:
-        try:
-            entry = json.loads(line)
-        except ValueError:
+        entry = read_entry(line)
+        if entry is None:
             return expected_number - 1, f"line {expected_number} cannot be read"
         if entry.get("n") != expected_number:
             return expected_number - 1, f"entry {entry.get('n')} where {expected_number} was expected - a line is missing or was inserted"
@@ -107,11 +131,9 @@ def read_index(meta):
     reverse = {}
     path = os.path.join(meta, "index.jsonl")
     for line in ledger_lines(path):
-        try:
-            entry = json.loads(line)
-        except ValueError:
-            continue
-        if "s" in entry and "p" in entry:
+        entry = read_object(line)
+        # Both names are paths, so a line where either is not text maps nothing.
+        if entry is not None and isinstance(entry.get("s"), str) and isinstance(entry.get("p"), str):
             reverse[entry["s"]] = entry["p"]
     return reverse
 
@@ -192,7 +214,7 @@ def witnessed_span(lines, number, digest):
     if number > len(lines) or line_digest(lines[number - 1]) != digest:
         return None
     first = number
-    while first > 1 and read_entry(lines[first - 1]).get("prev") == line_digest(lines[first - 2]):
+    while first > 1 and (read_entry(lines[first - 1]) or {}).get("prev") == line_digest(lines[first - 2]):
         first -= 1
     return first, number
 
@@ -206,27 +228,30 @@ def verify(device, heads=(), chain_only=False):
 
     history = {}
     for line in lines:
-        try:
-            entry = json.loads(line)
-        except ValueError:
-            continue
-        history.setdefault(entry.get("p"), []).append(entry)
+        entry = read_entry(line)
+        if entry is not None:
+            history.setdefault(entry.get("p"), []).append(entry)
 
     index = read_index(meta)
     files = os.path.join(device, "files")
     seen = set()
+    held = {}  # phone path -> the content of every copy of it on disk, current or previous
+    named = set()  # paths whose current copy is already reported missing or changed
     counts = {"files": 0, "matching": 0, "versions": 0}
 
     for stored, full in walk(files):
         counts["files"] += 1
         path = phone_path(stored, index)
         seen.add(path)
+        content = file_digest(full)
+        held.setdefault(path, set()).add(content)
         if path not in history:
             report["problems"].append(f"{path}: on disk but not in the ledger")
             continue
         latest = history[path][-1]
-        if file_digest(full) != latest.get("d"):
+        if content != latest.get("d"):
             problem = f"{path}: the content differs from the ledger's latest entry ({latest.get('n')})"
+            named.add(path)
         else:
             problem = mtime_problem(path, full, latest)
         if problem:
@@ -237,6 +262,7 @@ def verify(device, heads=(), chain_only=False):
     for path in history:
         if path not in seen:
             report["problems"].append(f"{path}: in the ledger but not on disk - the server never deletes")
+            named.add(path)
 
     for stored, full in walk(os.path.join(meta, "versions")):
         counts["versions"] += 1
@@ -245,9 +271,23 @@ def verify(device, heads=(), chain_only=False):
             report["problems"].append(f"versions/{stored}: not a version name")
             continue
         path = version[0]
+        content = file_digest(full)
+        held.setdefault(path, set()).add(content)
         digests = {entry.get("d") for entry in history.get(path, [])}
-        if file_digest(full) not in digests:
+        if content not in digests:
             report["problems"].append(f"versions/{stored}: no ledger entry for {path} has this content")
+
+    # PROTOCOL I1-I2: the server deletes and overwrites nothing, so every content the ledger
+    # accepted is still on disk, as the current copy of its path or as one of its versions -
+    # the same question --provenance asks line by line. A path's latest content gone with a
+    # current copy reported missing or changed is that same fault, named once already.
+    for path, entries in history.items():
+        for content in dict.fromkeys(entry.get("d") for entry in entries):
+            if content in held.get(path, ()) or (path in named and content == entries[-1].get("d")):
+                continue
+            numbers = [str(entry.get("n")) for entry in entries if entry.get("d") == content]
+            which = f"entry {numbers[0]}" if len(numbers) == 1 else f"entries {', '.join(numbers)}"
+            report["problems"].append(f"{path}: no copy on disk holds what {which} accepted - the server never deletes")
 
     report.update(counts)
     return report
@@ -274,7 +314,7 @@ def provenance(device, path, heads=()):
     acceptances, latest = [], None
     for number, line in enumerate(lines, 1):
         entry = read_entry(line)
-        if entry.get("p") == path:
+        if entry is not None and entry.get("p") == path:
             latest = entry
             acceptances.append({
                 "line": number, "at": entry.get("at"), "s": entry.get("s"), "m": entry.get("m"),
@@ -298,26 +338,34 @@ def provenance(device, path, heads=()):
 
     accepted = {acceptance["d"] for acceptance in acceptances}
     for acceptance in acceptances:
-        # Where the server keeps it (PROTOCOL §8.2-§8.3): the latest acceptance is the current
-        # copy, and an earlier one was filed away when the next arrived, under a name carrying
-        # its modification time - which tells apart versions that hold the same content.
         if acceptance is acceptances[-1]:
-            expected = [copy for copy in copies if copy["location"].startswith("files/")]
+            # The latest line has one place, the current copy (PROTOCOL §8.2), as in verify.
+            # Anything else there is other content, whichever line it came from; and with no
+            # current copy, that copy is what is missing, even when a version holds its bytes.
+            current = [copy for copy in copies if copy["location"].startswith("files/")]
+            found = [copy for copy in current if copy["digest"] == acceptance["d"]]
+            if found:
+                acceptance["content"] = "matches"
+            elif current:
+                acceptance["content"], found = "differs", current
         else:
+            # An earlier line was filed away when the next arrived, under a name carrying its
+            # modification time (PROTOCOL §8.3) - which tells apart versions that hold the
+            # same content. Failing that, the same content anywhere else: a file deleted by
+            # hand and sent again leaves no version, and the current copy holds what this
+            # line accepted.
             stamp = utc(acceptance["m"], "%Y%m%dT%H%M%S")
             expected = [copy for copy in copies if stamp and copy["stamp"] == stamp]
-        # Failing that, the same content anywhere else: a file deleted by hand and sent again
-        # leaves no version, and the current copy holds what the earlier line accepted.
-        found = ([copy for copy in expected if copy["digest"] == acceptance["d"]]
-                 or [copy for copy in copies if copy["digest"] == acceptance["d"]])
-        if found:
-            acceptance["content"] = "matches"
-        else:
-            # Nowhere. A file in its place holding content this path never had is what became
-            # of it; one holding another line's content belongs to that line.
-            found = [copy for copy in expected if copy["digest"] not in accepted]
+            found = ([copy for copy in expected if copy["digest"] == acceptance["d"]]
+                     or [copy for copy in copies if copy["digest"] == acceptance["d"]])
             if found:
-                acceptance["content"] = "differs"
+                acceptance["content"] = "matches"
+            else:
+                # Nowhere. A version in its place holding content this path never had is what
+                # became of it; one holding another line's content belongs to that line.
+                found = [copy for copy in expected if copy["digest"] not in accepted]
+                if found:
+                    acceptance["content"] = "differs"
         acceptance["locations"] = [copy["location"] for copy in found]
 
     placed = {location for acceptance in acceptances for location in acceptance["locations"]}
@@ -333,11 +381,13 @@ def provenance(device, path, heads=()):
         if acceptance["content"] == "differs":
             report["problems"].append(
                 f"line {acceptance['line']}: the content at {', '.join(acceptance['locations'])} is not what was accepted")
+        elif acceptance["content"] == "missing" and acceptance is acceptances[-1]:
+            report["problems"].append(f"line {acceptance['line']}: the current copy is missing from files/")
         elif acceptance["content"] == "missing":
             report["problems"].append(f"line {acceptance['line']}: the content accepted is not on disk")
     if acceptances and acceptances[-1]["content"] == "matches":
         for copy in copies:
-            if copy["location"].startswith("files/") and copy["location"] in acceptances[-1]["locations"]:
+            if copy["location"] in acceptances[-1]["locations"]:
                 problem = mtime_problem(path, copy["full"], latest)
                 if problem:
                     report["problems"].append(problem)
@@ -366,7 +416,7 @@ def print_provenance(report):
         for location in acceptance["locations"]:
             print(f"  {location}: content {acceptance['content']}")
         if not acceptance["locations"]:
-            print("  not on disk")
+            print("  no current copy in files/" if acceptance is report["acceptances"][-1] else "  not on disk")
         if acceptance["witnessed"] is not None:
             print("  witnessed" if acceptance["witnessed"] else "  not witnessed")
     if report["others"]:

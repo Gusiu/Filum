@@ -6,8 +6,10 @@ import io
 import json
 import os
 import pathlib
+import random
 import shutil
 import tempfile
+import time
 import unittest
 
 import verify_ledger
@@ -164,11 +166,127 @@ class VerifyLedgerTest(unittest.TestCase):
         self.assertEqual([], report["problems"])
         self.assertEqual(1, report["versions"])
 
+    def test_versions_are_read_back_however_their_names_split(self):
+        # PROTOCOL §8.3: the extension runs from the last dot, so .nomedia has an empty name
+        # and README no extension.
+        self.backup.accept("Music/.nomedia", b"", mtime=MTIME - 7200)
+        self.backup.file_away("Music", ".20250828T145320Z.nomedia", b"")
+        self.backup.accept("Music/.nomedia", b"\n")
+        self.backup.accept("Documents/README", b"first", mtime=MTIME - 7200)
+        self.backup.file_away("Documents", "README.20250828T145320Z", b"first")
+        self.backup.accept("Documents/README", b"second")
+
+        report = self.backup.verify()
+
+        self.assertEqual([], report["problems"])
+        self.assertEqual(2, report["versions"])
+
+    def test_a_previous_version_that_vanished_is_reported(self):
+        # PROTOCOL I1-I2: the server deletes nothing, so what the ledger accepted stays on disk.
+        self.backup.accept("Notes/todo.txt", b"first", mtime=MTIME - 7200)
+        self.backup.file_away("Notes", "todo.20250828T145320Z.txt", b"first")
+        self.backup.accept("Notes/todo.txt", b"second")
+        self.assertEqual([], self.backup.verify()["problems"])
+        gone = "Notes/todo.txt: no copy on disk holds what entry 1 accepted - the server never deletes"
+
+        os.remove(os.path.join(self.backup.meta, "versions", "Notes", "todo.20250828T145320Z.txt"))
+        self.assertEqual([gone], self.backup.verify()["problems"])
+
+        shutil.rmtree(os.path.join(self.backup.meta, "versions"))
+        self.assertEqual([gone], self.backup.verify()["problems"])
+        self.assertEqual(["line 1: the content accepted is not on disk"],
+                         self.backup.provenance("Notes/todo.txt")["problems"])
+
+        # Gone with the current copy, the earlier content is still a fault of its own.
+        os.remove(os.path.join(self.backup.device, "files", "Notes", "todo.txt"))
+        self.assertEqual(["Notes/todo.txt: in the ledger but not on disk - the server never deletes", gone],
+                         self.backup.verify()["problems"])
+
+    def test_a_vanished_content_is_named_by_every_entry_that_accepted_it(self):
+        # Saved again with the same bytes, the file was filed away twice before it changed;
+        # neither version is left.
+        self.backup.accept("Notes/todo.txt", b"first", mtime=MTIME - 7200)
+        self.backup.accept("Notes/todo.txt", b"first", mtime=MTIME - 3600)
+        self.backup.accept("Notes/todo.txt", b"second")
+
+        self.assertEqual(
+            ["Notes/todo.txt: no copy on disk holds what entries 1, 2 accepted - the server never deletes"],
+            self.backup.verify()["problems"])
+
+    def test_a_current_copy_that_changed_or_vanished_is_reported_once(self):
+        # Its latest content went with it, and that is the same fault, named already.
+        self.backup.accept("Notes/todo.txt", b"text")
+        current = os.path.join(self.backup.device, "files", "Notes", "todo.txt")
+        with open(current, "wb") as stream:
+            stream.write(b"changed")
+        os.utime(current, (MTIME, MTIME))
+        self.assertEqual(["Notes/todo.txt: the content differs from the ledger's latest entry (1)"],
+                         self.backup.verify()["problems"])
+
+        os.remove(current)
+        self.assertEqual(["Notes/todo.txt: in the ledger but not on disk - the server never deletes"],
+                         self.backup.verify()["problems"])
+
     def test_a_version_the_ledger_never_recorded_is_reported(self):
         self.backup.accept("Notes/todo.txt", b"current")
         self.backup.file_away("Notes", "todo.20250828T211430Z.txt", b"never accepted")
 
         self.assertIn("no ledger entry", self.backup.verify()["problems"][0])
+
+    def test_a_line_that_is_json_but_not_an_object_cannot_be_read(self):
+        self.backup.accept("a.txt", b"a")
+        self.backup.accept("b.txt", b"b")
+        self.backup.write_ledger(self.backup.lines + ["42"])
+
+        self.assertEqual("line 3 cannot be read", self.backup.verify(chain_only=True)["chain"])
+
+    def test_a_line_that_is_not_an_object_does_not_stop_the_file_checks(self):
+        # The chain breaks at line 1 already, so only the file checks read line 2.
+        self.backup.accept("a.txt", b"a")
+        self.backup.write_ledger([self.backup.lines[0].replace('"n":1', '"n":7'), "null"])
+
+        report = self.backup.verify()
+
+        self.assertIn("entry 7 where 1 was expected", report["chain"])
+        self.assertEqual(1, report["matching"])
+
+    def test_an_index_line_that_is_not_an_object_is_passed_over(self):
+        self.backup.accept("Pictures/Photo.jpg", b"one")
+        self.backup.accept("Pictures/photo.jpg", b"two", stored="Pictures/photo~6a8a8e.jpg")
+        with open(os.path.join(self.backup.meta, "index.jsonl"), "w", encoding="utf-8") as stream:
+            stream.write('["s", "p"]\n')
+            stream.write(json.dumps({"p": "Pictures/photo.jpg", "s": "Pictures/photo~6a8a8e.jpg", "r": "case_collision"}) + "\n")
+
+        self.assertEqual([], self.backup.verify()["problems"])
+
+    def test_a_field_of_the_wrong_type_makes_a_line_unreadable(self):
+        # PROTOCOL §9.2 gives every field of a line its type, and a list is no path.
+        self.backup.accept("a.txt", b"a")
+        self.backup.write_ledger([self.backup.lines[0].replace('"p":"a.txt"', '"p":["a.txt"]')])
+
+        report = self.backup.verify()
+
+        self.assertEqual("line 1 cannot be read", report["chain"])
+        self.assertIn("a.txt: on disk but not in the ledger", report["problems"])
+
+    def test_true_is_not_a_number_in_a_ledger_line(self):
+        # Python takes true for 1: "n":true would pass for the first line's number, and
+        # "s":true for a size that nothing else looks at.
+        self.backup.accept("a.txt", b"a")
+        for number, forged in (('"n":1', '"n":true'), ('"s":1', '"s":true')):
+            self.backup.write_ledger([self.backup.lines[0].replace(number, forged)])
+            self.assertEqual("line 1 cannot be read", self.backup.verify(chain_only=True)["chain"], forged)
+
+    def test_an_index_line_whose_names_are_not_text_is_passed_over(self):
+        self.backup.accept("Pictures/Photo.jpg", b"one")
+        self.backup.accept("Pictures/photo.jpg", b"two", stored="Pictures/photo~6a8a8e.jpg")
+        with open(os.path.join(self.backup.meta, "index.jsonl"), "w", encoding="utf-8") as stream:
+            stream.write(json.dumps({"p": "Pictures/photo.jpg", "s": ["Pictures/photo~6a8a8e.jpg"]}) + "\n")
+            stream.write(json.dumps({"p": "Pictures/photo.jpg", "s": "Pictures/photo~6a8a8e.jpg", "r": "case_collision"}) + "\n")
+            # Read last, this line would map the stored name to a number.
+            stream.write(json.dumps({"p": 5, "s": "Pictures/photo~6a8a8e.jpg"}) + "\n")
+
+        self.assertEqual([], self.backup.verify()["problems"])
 
     def test_a_witnessed_head_must_still_be_there(self):
         for index in range(3):
@@ -297,9 +415,43 @@ class ProvenanceTest(unittest.TestCase):
         self.assertEqual(expected, self.backup.verify()["problems"])
         self.assertEqual(expected, self.backup.provenance("Notes/todo.txt")["problems"])
 
+    def saved_again_with_the_same_bytes(self):
+        """Notes/todo.txt accepted three times, the last two with the same bytes, so that what
+        line 3 accepted lies in line 2's version as well as in the current copy."""
+        self.backup.accept("Notes/todo.txt", b"first", mtime=MTIME - 7200)
+        self.backup.file_away("Notes", "todo.20250828T145320Z.txt", b"first")
+        self.backup.accept("Notes/todo.txt", b"second", mtime=MTIME - 3600)
+        self.backup.file_away("Notes", "todo.20250828T155320Z.txt", b"second")
+        self.backup.accept("Notes/todo.txt", b"second")
+        return os.path.join(self.backup.device, "files", "Notes", "todo.txt")
+
+    def test_a_current_copy_overwritten_with_an_earlier_lines_content_differs(self):
+        # PROTOCOL §8.2: the latest line's one place is the current copy, as in verify.
+        current = self.saved_again_with_the_same_bytes()
+        with open(current, "wb") as stream:
+            stream.write(b"first")
+        os.utime(current, (MTIME, MTIME))
+
+        self.assertEqual(["Notes/todo.txt: the content differs from the ledger's latest entry (3)"],
+                         self.backup.verify()["problems"])
+        self.assertEqual(["line 3: the content at files/Notes/todo.txt is not what was accepted"],
+                         self.backup.provenance("Notes/todo.txt")["problems"])
+
+    def test_a_current_copy_that_is_gone_is_missing_though_a_version_holds_its_bytes(self):
+        os.remove(self.saved_again_with_the_same_bytes())
+
+        self.assertEqual(["Notes/todo.txt: in the ledger but not on disk - the server never deletes"],
+                         self.backup.verify()["problems"])
+        self.assertEqual(["line 3: the current copy is missing from files/"],
+                         self.backup.provenance("Notes/todo.txt")["problems"])
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            verify_ledger.main([self.backup.device, "--provenance", "Notes/todo.txt"])
+        self.assertIn("  no current copy in files/", output.getvalue().splitlines())
+
     def test_a_current_copy_holding_an_earlier_lines_content_is_not_taken_for_the_latest(self):
-        # The first version copied back over the current one by hand: what line 2 accepted is
-        # gone, and the current copy is accounted for by line 1.
+        # The first version copied back over the current one by hand: the current copy holds
+        # other content than line 2 accepted, though it is what line 1 accepted.
         self.backup.accept("Notes/todo.txt", b"first", mtime=MTIME - 7200)
         self.backup.file_away("Notes", "todo.20250828T145320Z.txt", b"first")
         self.backup.accept("Notes/todo.txt", b"second")
@@ -308,9 +460,10 @@ class ProvenanceTest(unittest.TestCase):
 
         report = self.backup.provenance("Notes/todo.txt")
 
-        self.assertEqual(("missing", []), (report["acceptances"][1]["content"], report["acceptances"][1]["locations"]))
-        self.assertEqual([{"location": "files/Notes/todo.txt", "content_of": [1]}], report["others"])
-        self.assertEqual(["line 2: the content accepted is not on disk"], report["problems"])
+        self.assertEqual(("differs", ["files/Notes/todo.txt"]),
+                         (report["acceptances"][1]["content"], report["acceptances"][1]["locations"]))
+        self.assertEqual([], report["others"])
+        self.assertEqual(["line 2: the content at files/Notes/todo.txt is not what was accepted"], report["problems"])
 
     def test_a_version_that_is_gone_is_reported(self):
         self.backup.accept("Notes/todo.txt", b"first", mtime=MTIME - 7200)
@@ -360,6 +513,27 @@ class ProvenanceTest(unittest.TestCase):
         self.assertEqual(
             [[".filum/versions/Pictures/photo~6a8a8e.20250828T145320Z.jpg"], ["files/Pictures/photo~6a8a8e.jpg"]],
             [acceptance["locations"] for acceptance in report["acceptances"]])
+
+    def test_a_dotfile_is_followed_into_its_versions(self):
+        # PROTOCOL §8.3: .nomedia has an empty name, so its version is .<timestamp>Z.nomedia.
+        self.backup.accept("Music/.nomedia", b"", mtime=MTIME - 7200)
+        self.backup.file_away("Music", ".20250828T145320Z.nomedia", b"")
+        self.backup.accept("Music/.nomedia", b"\n")
+
+        report = self.backup.provenance("Music/.nomedia")
+
+        self.assertEqual([], report["problems"])
+        self.assertEqual([[".filum/versions/Music/.20250828T145320Z.nomedia"], ["files/Music/.nomedia"]],
+                         [acceptance["locations"] for acceptance in report["acceptances"]])
+
+    def test_a_digest_of_the_wrong_type_does_not_stop_the_report(self):
+        self.backup.accept("Notes/todo.txt", b"text")
+        self.backup.write_ledger([self.backup.lines[0].replace(f'"d":"{digest(b"text")}"', '"d":["x"]')])
+
+        report = self.backup.provenance("Notes/todo.txt")
+
+        self.assertEqual("line 1 cannot be read", report["chain"])
+        self.assertEqual([], report["acceptances"])
 
     def test_lines_up_to_a_witnessed_head_are_witnessed_and_later_ones_are_not(self):
         self.backup.accept("Notes/todo.txt", b"first", mtime=MTIME - 7200)
@@ -433,6 +607,110 @@ class ProvenanceTest(unittest.TestCase):
             verify_ledger.main([self.backup.device, "--provenance", "a.txt", "--chain-only"])
 
         self.assertEqual(2, raised.exception.code)
+
+
+class RandomDamageTest(unittest.TestCase):
+    """Histories of one path, filed away as the server files them and then damaged at random:
+    both checks must find a fault exactly where the damage made one."""
+
+    SEED = 20261104
+    HISTORIES = 400
+    # Few contents and times, so that they repeat within a history as they do on a phone.
+    CONTENTS = [b"first", b"second", b"third"]
+    MTIMES = [MTIME - 7200, MTIME - 3600, MTIME]
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp(prefix="filum-damage-")
+
+    def tearDown(self):
+        shutil.rmtree(self.root, ignore_errors=True)
+
+    @staticmethod
+    def accept(backup, content, mtime):
+        """Commits new content the way PROTOCOL §8.2 does: the current copy is filed away first,
+        named after its own modification time, with -<n> when that name is taken (§8.3)."""
+        current = os.path.join(backup.device, "files", "Notes", "todo.txt")
+        if os.path.exists(current):
+            stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime(os.stat(current).st_mtime))
+            directory = os.path.join(backup.meta, "versions", "Notes")
+            os.makedirs(directory, exist_ok=True)
+            name, counter = f"todo.{stamp}.txt", 2
+            while os.path.exists(os.path.join(directory, name)):
+                name, counter = f"todo.{stamp}-{counter}.txt", counter + 1
+            os.replace(current, os.path.join(directory, name))
+        backup.accept("Notes/todo.txt", content, mtime=mtime)
+        return content, mtime
+
+    def damage(self, backup, rng):
+        current = os.path.join(backup.device, "files", "Notes", "todo.txt")
+        versions = os.path.join(backup.meta, "versions", "Notes")
+        filed = sorted(os.listdir(versions)) if os.path.isdir(versions) else []
+        other = rng.choice(self.CONTENTS + [b"forged"])
+        what = rng.choice(["nothing", "delete a version", "delete every version", "rewrite a version",
+                           "plant a version", "delete the current copy", "rewrite the current copy",
+                           "touch the current copy"])
+        if what == "delete a version" and filed:
+            os.remove(os.path.join(versions, rng.choice(filed)))
+        elif what == "delete every version":
+            shutil.rmtree(os.path.join(backup.meta, "versions"), ignore_errors=True)
+        elif what == "rewrite a version" and filed:
+            with open(os.path.join(versions, rng.choice(filed)), "wb") as stream:
+                stream.write(other)
+        elif what == "plant a version":
+            backup.file_away("Notes", "todo.20240101T000000Z.txt", other)
+        elif what == "delete the current copy" and os.path.exists(current):
+            os.remove(current)
+        elif what == "rewrite the current copy" and os.path.exists(current):
+            mtime = os.stat(current).st_mtime
+            with open(current, "wb") as stream:
+                stream.write(other)
+            os.utime(current, (mtime, mtime))
+        elif what == "touch the current copy" and os.path.exists(current):
+            os.utime(current, (MTIME + 99, MTIME + 99))
+        return what
+
+    @staticmethod
+    def fault_put_in(backup, accepted):
+        """The fault the damage made, read off the disk alone, or None: a current copy missing,
+        or holding other content or another modification time than the latest line accepted;
+        an accepted content that no copy holds; a copy holding content the path never accepted.
+        A version gone while another copy holds its content is no fault: §9.2 checks contents,
+        not copies."""
+        current = os.path.join(backup.device, "files", "Notes", "todo.txt")
+        versions = os.path.join(backup.meta, "versions", "Notes")
+        copies = [os.path.join(versions, name) for name in os.listdir(versions)] if os.path.isdir(versions) else []
+        if not os.path.exists(current):
+            return "current copy missing"
+        held = set()
+        for copy in copies + [current]:
+            with open(copy, "rb") as stream:
+                held.add(digest(stream.read()))
+        with open(current, "rb") as stream:
+            latest, mtime = accepted[-1]
+            if digest(stream.read()) != digest(latest) or int(os.stat(current).st_mtime) != mtime:
+                return "current copy changed"
+        contents = {digest(content) for content, _ in accepted}
+        if contents - held:
+            return "accepted content held by no copy"
+        if held - contents:
+            return "copy with content never accepted"
+        return None
+
+    def test_both_checks_find_a_fault_exactly_where_the_damage_made_one(self):
+        rng = random.Random(self.SEED)
+        wrong = []
+        for history in range(self.HISTORIES):
+            backup = Backup(tempfile.mkdtemp(dir=self.root))
+            accepted = [self.accept(backup, rng.choice(self.CONTENTS), rng.choice(self.MTIMES))
+                        for _ in range(rng.randint(1, 4))]
+            damages = [self.damage(backup, rng) for _ in range(rng.randint(0, 2))]
+            fault = self.fault_put_in(backup, accepted)
+            verdicts = (bool(backup.verify()["problems"]), bool(backup.provenance("Notes/todo.txt")["problems"]))
+            if verdicts != (fault is not None,) * 2:
+                wrong.append({"history": history, "damage": damages, "fault": fault,
+                              "verify": verdicts[0], "provenance": verdicts[1]})
+
+        self.assertEqual([], wrong[:3], f"{len(wrong)} of {self.HISTORIES} histories judged wrongly")
 
 
 class PathVectorsTest(unittest.TestCase):

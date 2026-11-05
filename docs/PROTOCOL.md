@@ -46,7 +46,9 @@ The invariants the rest of this specification rests on:
 - Default port: **8765/tcp**, configurable.
 - Prefix for all resources: `/api/v1`.
 - Text encoding: UTF-8, no BOM.
-- Timestamps in JSON bodies: ISO 8601 in UTC.
+- Timestamps in JSON bodies: ISO 8601 in UTC, except `at`, which is written like `mtime`
+  below, in integer seconds since the Unix epoch: the moment of acceptance in a ledger line
+  (§9.2) and the moment of the server's signed statement of the ledger's head (§5.7).
 - `mtime` values: **integer seconds since the Unix epoch, UTC**. The client MUST
   normalise mtime to seconds in one place, at the boundary where it reads the filesystem
   (ADR-011 - `MediaStore` reports seconds, `File.lastModified()` milliseconds; mixing the
@@ -527,6 +529,11 @@ file MUST be moved to
 where the timestamp comes from the **old copy's mtime**, not from the time of the operation.
 When that name is taken, `-<n>` follows the timestamp.
 
+The stored name splits at its last dot: `<.extension>` runs from that dot to the end, and
+`<name>` is everything before it. So `.nomedia` has an empty name and its version is
+`.20250828T120000Z.nomedia`, while a name with no dot has no extension - `README` becomes
+`README.20250828T120000Z`.
+
 Versions live outside `files/` so that the live tree stays a clean mirror of the phone.
 
 ### 8.4 Free-space threshold
@@ -587,7 +594,9 @@ digests.
 Checking needs nothing from this project. `tools/verify_ledger.py` follows this section and
 `PATH-RULES.md` with Python's standard library alone: it walks the chain, then matches every
 file under `files/` against its path's latest entry and every previous version against the
-path's history. Given a single phone path with `--provenance`, it reports on that path
+path's history, and checks that every content the ledger accepted is still on disk, as the
+current copy of its path or as one of its versions, since the server neither deletes nor
+overwrites (I1, I2). Given a single phone path with `--provenance`, it reports on that path
 alone: the device it came from (§8.1), every line that accepted it, where on disk each
 accepted version lies and whether it still holds that content, and - with a witnessed head
 (§9.5) - which of those lines the head vouches for.
