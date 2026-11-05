@@ -487,7 +487,7 @@ pass the same set.
     files/                      # the live tree, mirroring the phone, browsable in Explorer
       DCIM/Camera/IMG_0001.JPG
     .filum/
-      device.json               # pin, label, pairing date
+      device.json               # pin, slug, label, pairedAt, enabled
       incoming/                 # transfers in progress
         <id>.part
         <id>.meta               # {"p":..,"s":..,"m":..}
@@ -500,6 +500,12 @@ pass the same set.
 
 The `files/` directory MUST contain only complete files. Partial files MUST NOT be visible
 there - the user is to see a consistent tree at any moment (I3).
+
+`device.json` is the device's record, a JSON object with the fields `pin` (the pin of its
+client certificate, which is its identity - §3.2), `slug` (the name of its directory),
+`label` (§3.2), `pairedAt` (when it was first paired, ISO 8601) and `enabled` (`false`
+while it is disabled, when the server answers it with `403` - §6). Unpairing a device
+removes its `device.json` and nothing else: its files, versions and ledger stay (I1).
 
 ### 8.2 Committing a transfer
 
@@ -581,7 +587,10 @@ digests.
 Checking needs nothing from this project. `tools/verify_ledger.py` follows this section and
 `PATH-RULES.md` with Python's standard library alone: it walks the chain, then matches every
 file under `files/` against its path's latest entry and every previous version against the
-path's history.
+path's history. Given a single phone path with `--provenance`, it reports on that path
+alone: the device it came from (§8.1), every line that accepted it, where on disk each
+accepted version lies and whether it still holds that content, and - with a witnessed head
+(§9.5) - which of those lines the head vouches for.
 
 **What this does not give.** The chain detects partial tampering. On its own it does not
 protect against someone with access to the server's disk rebuilding the ledger from scratch,
