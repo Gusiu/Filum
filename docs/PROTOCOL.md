@@ -1,7 +1,9 @@
 # Filum - protocol specification
 
 Protocol version: **1**
-Status: draft, ahead of the first implementation.
+Status: in force. The server and the client are both written from it, and the conformance
+test checks them against each other ([ARCHITECTURE.md](ARCHITECTURE.md) §6). The optional
+adoption mode (§10) is not built.
 
 This document is normative for both implementations: the server (.NET) and the client
 (Android). The goal is that either side can be written from scratch using only this
@@ -692,6 +694,11 @@ as canonical**, after which the mode switches itself off.
 The mode MUST be single-use, explicitly enabled in the server panel, and time-limited. The
 primary path remains a full transfer over the network (ADR-012).
 
+The server does not build this mode yet. Besides being optional, it waits on a decision this
+section leaves open: whether an adopted file, which never crossed the network, gets a line in
+the ledger (§9.2) - and if so, whose digest the line records, since the phone sends one only
+in thorough mode (§9.3).
+
 ---
 
 ## 11. Open questions
@@ -702,9 +709,8 @@ primary path remains a full transfer over the network (ADR-012).
   but a merged view in the panel is worth considering.
 - A retention policy for versions in `.filum/versions/` - currently none; the directory
   grows without bound.
-- A trusted external witness for the ledger from §9.2. The chain detects partial tampering,
-  but someone with disk access can rebuild the ledger from scratch. Raising the guarantee
-  would require periodically publishing the digest of the last line outside the server - to
-  a second participant, to a timestamping service, or onto write-once media. Each of those
-  introduces a dependency the project does not currently have, so the decision needs
-  separate consideration.
+- A witness for the ledger besides the phone. Since §9.5 a ledger rebuilt from scratch is
+  caught at the next cycle, but the witnessed heads are only as safe as the phone that holds
+  them. Keeping the heads somewhere else as well - on write-once media, or with a
+  timestamping service, which ADR-019 rejected as an outside party - would remove that single
+  point, at the cost of a dependency the project does not currently have.
