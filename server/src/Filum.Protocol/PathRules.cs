@@ -197,6 +197,29 @@ public static class PathRules
     /// </summary>
     public static string CaseCollisionSuffix(string canonicalPath) => "~" + ShortHash(canonicalPath);
 
+    /// <summary>
+    /// A stored name with the case-collision suffix (docs/PATH-RULES.md §6) set before its
+    /// extension, which runs from the last dot as PROTOCOL.md §8.3 splits a name. A name the
+    /// suffix would push past the component limit is shortened first, as rule 6 shortens one.
+    /// </summary>
+    public static string WithCollisionSuffix(string storedName, string canonicalPath)
+    {
+        ArgumentNullException.ThrowIfNull(storedName);
+
+        var suffix = CaseCollisionSuffix(canonicalPath);
+        var dot = storedName.LastIndexOf('.');
+        var stem = dot < 0 ? storedName : storedName[..dot];
+        var extension = dot < 0 ? "" : storedName[dot..];
+        if (stem.Length + suffix.Length + extension.Length <= MaxSegmentLength)
+            return stem + suffix + extension;
+
+        // When even an empty stem leaves no room, the extension goes too.
+        var room = MaxSegmentLength - suffix.Length - extension.Length;
+        return room > 0
+            ? TruncateAtEscapeBoundary(stem, room) + suffix + extension
+            : TruncateAtEscapeBoundary(storedName, MaxSegmentLength - suffix.Length) + suffix;
+    }
+
     private static void AppendEscaped(StringBuilder builder, char c) =>
         builder.Append('%').Append(((int)c).ToString("X2", CultureInfo.InvariantCulture));
 

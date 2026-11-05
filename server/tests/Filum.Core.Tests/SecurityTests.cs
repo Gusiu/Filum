@@ -213,6 +213,68 @@ public class PairingRateLimiterTests
     }
 }
 
+public class VerifyRateLimiterTests
+{
+    [Fact]
+    public void ADevice_RunsOneVerificationAtATime()
+    {
+        var limiter = new VerifyRateLimiter(new FakeTimeProvider());
+
+        Assert.True(limiter.TryStart("phone", out _));
+        Assert.False(limiter.TryStart("phone", out var retryAfter));
+        Assert.Equal(VerifyRateLimiter.WhileRunning, retryAfter);
+
+        limiter.Finish("phone");
+        Assert.True(limiter.TryStart("phone", out _));
+    }
+
+    [Fact]
+    public void PastTheHourlyLimit_TheDeviceIsToldWhenToComeBack()
+    {
+        var time = new FakeTimeProvider();
+        var limiter = new VerifyRateLimiter(time);
+        for (var i = 0; i < VerifyRateLimiter.MaxRequests; i++)
+        {
+            Assert.True(limiter.TryStart("phone", out _));
+            limiter.Finish("phone");
+            time.Advance(TimeSpan.FromMinutes(1));
+        }
+
+        Assert.False(limiter.TryStart("phone", out var retryAfter));
+        // The oldest of the ten started ten minutes ago and leaves the window in fifty.
+        Assert.Equal(TimeSpan.FromMinutes(50), retryAfter);
+
+        time.Advance(retryAfter);
+        Assert.True(limiter.TryStart("phone", out _));
+    }
+
+    [Fact]
+    public void AnotherDevice_HasItsOwnLimit()
+    {
+        var limiter = new VerifyRateLimiter(new FakeTimeProvider());
+        Assert.True(limiter.TryStart("phone", out _));
+
+        Assert.True(limiter.TryStart("tablet", out _));
+    }
+
+    [Fact]
+    public async Task OverHttp_AVerificationPastTheLimit_IsRefusedWithRetryAfter()
+    {
+        // PROTOCOL §5.5 requires the limit, §6 the 429 and the Retry-After the client honours.
+        using var app = new FilumApp();
+        await app.PairAsync();
+        var client = app.CreateClient();
+        var request = new VerifyRequest([new VerifyEntry("DCIM/none.jpg", new string('0', 64))]);
+
+        for (var i = 0; i < VerifyRateLimiter.MaxRequests; i++)
+            Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/v1/verify", request)).StatusCode);
+        var refused = await client.PostAsJsonAsync("/api/v1/verify", request);
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, refused.StatusCode);
+        Assert.True(refused.Headers.RetryAfter?.Delta > TimeSpan.Zero);
+    }
+}
+
 /// <summary>
 /// Authentication over HTTP: the full pairing exchange and the refusal of everyone else.
 /// </summary>

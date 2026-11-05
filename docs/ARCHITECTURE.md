@@ -55,7 +55,9 @@ the class a mirror image of the `:core:protocol` module on the Android side.
 - `OrphanReporter` - after a `mode: full` session closes, computes the difference between
   "what I have on disk" and "what arrived in the manifest".
 - `SpacePolicy` - the free-space threshold, the source of `507` responses.
-- `PathRules` (in `Protocol`) - sanitisation, collision detection, `index.jsonl`.
+- `PathRules` (in `Protocol`) - sanitisation and the collision suffix, with no file access.
+- `StoragePaths` - the one place a phone path meets the disk: the containment check, case
+  collisions read off the names the directories hold, and `index.jsonl` (PATH-RULES §6-§7).
 
 ### 2.3 The tray icon and the system service
 

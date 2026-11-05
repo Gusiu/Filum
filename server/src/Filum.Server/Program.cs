@@ -41,6 +41,7 @@ builder.Services.AddSingleton<OrphanReporter>();
 builder.Services.AddSingleton<DeviceStats>();
 builder.Services.AddSingleton<PairingService>();
 builder.Services.AddSingleton<PairingRateLimiter>();
+builder.Services.AddSingleton<VerifyRateLimiter>();
 builder.Services.AddSingleton<IClientCertificateProvider, ConnectionClientCertificateProvider>();
 builder.Services.AddSingleton<AdminService>();
 

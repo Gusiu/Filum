@@ -52,10 +52,17 @@ public sealed class TransferStore(
     /// </summary>
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
 
+    /// <summary>
+    /// Per-device commit locks. Two phone paths that differ only in case are two transfers,
+    /// each with a lock of its own, but one name to Windows: which of them takes it is settled
+    /// at commit, one commit at a time (docs/PATH-RULES.md §6).
+    /// </summary>
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> _commits = new(StringComparer.Ordinal);
+
     public async Task<ChunkOutcome> WriteAsync(string slug, ChunkRequest request, Stream body, CancellationToken ct)
     {
         if (!paths.TryResolveFile(slug, request.CanonicalPath, options.MaxPathBytes,
-                                  out var target, out var storedRelative, out var rejection))
+                                  out _, out _, out var rejection))
         {
             return new ChunkOutcome(ChunkStatus.PathRejected, Rejection: rejection);
         }
@@ -80,8 +87,7 @@ public sealed class TransferStore(
         await gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            return await WriteLockedAsync(slug, request, body, target, storedRelative, ct)
-                .ConfigureAwait(false);
+            return await WriteLockedAsync(slug, request, body, ct).ConfigureAwait(false);
         }
         finally
         {
@@ -93,8 +99,6 @@ public sealed class TransferStore(
         string slug,
         ChunkRequest request,
         Stream body,
-        string target,
-        string storedRelative,
         CancellationToken ct)
     {
         var partPath = paths.PartPath(slug, request.CanonicalPath);
@@ -145,8 +149,7 @@ public sealed class TransferStore(
         if (length < request.Size)
             return new ChunkOutcome(ChunkStatus.Ok, received, length, Complete: false);
 
-        return await CommitAsync(slug, request, partPath, metaPath, target, storedRelative, received, ct)
-            .ConfigureAwait(false);
+        return await CommitAsync(slug, request, partPath, metaPath, received, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -158,8 +161,6 @@ public sealed class TransferStore(
         ChunkRequest request,
         string partPath,
         string metaPath,
-        string target,
-        string storedRelative,
         long received,
         CancellationToken ct)
     {
@@ -174,26 +175,45 @@ public sealed class TransferStore(
             }
         }
 
-        string? versioned = null;
-        if (File.Exists(LongPath.Extended(target)))
-            versioned = versions.Archive(slug, storedRelative, target);
-
-        Directory.CreateDirectory(LongPath.Extended(Path.GetDirectoryName(target)!));
-        File.Move(LongPath.Extended(partPath), LongPath.Extended(target));
-
-        File.SetLastWriteTimeUtc(LongPath.Extended(target),
-                                 DateTimeOffset.FromUnixTimeSeconds(request.Mtime).UtcDateTime);
-
-        Delete(metaPath);
-
-        // The ledger is appended only after the move succeeds. An entry for a file that
-        // never landed on disk would be worse than no entry at all.
-        if (request.Digest is { } accepted)
+        var device = _commits.GetOrAdd(slug, _ => new SemaphoreSlim(1, 1));
+        await device.WaitAsync(ct).ConfigureAwait(false);
+        try
         {
-            ledger.Append(slug, request.CanonicalPath, request.Size, request.Mtime, accepted);
-        }
+            // Resolved again, against what the disk holds now: a file of another spelling
+            // may have landed since this transfer began.
+            if (!paths.TryResolveFile(slug, request.CanonicalPath, options.MaxPathBytes,
+                                      out var target, out var storedRelative, out var rejection))
+            {
+                return new ChunkOutcome(ChunkStatus.PathRejected, Rejection: rejection);
+            }
 
-        return new ChunkOutcome(ChunkStatus.Ok, received, request.Size, Complete: true, VersionedPath: versioned);
+            paths.RecordStored(slug, request.CanonicalPath, storedRelative);
+
+            string? versioned = null;
+            if (File.Exists(LongPath.Extended(target)))
+                versioned = versions.Archive(slug, storedRelative, target);
+
+            Directory.CreateDirectory(LongPath.Extended(Path.GetDirectoryName(target)!));
+            File.Move(LongPath.Extended(partPath), LongPath.Extended(target));
+
+            File.SetLastWriteTimeUtc(LongPath.Extended(target),
+                                     DateTimeOffset.FromUnixTimeSeconds(request.Mtime).UtcDateTime);
+
+            Delete(metaPath);
+
+            // The ledger is appended only after the move succeeds. An entry for a file that
+            // never landed on disk would be worse than no entry at all.
+            if (request.Digest is { } accepted)
+            {
+                ledger.Append(slug, request.CanonicalPath, request.Size, request.Mtime, accepted);
+            }
+
+            return new ChunkOutcome(ChunkStatus.Ok, received, request.Size, Complete: true, VersionedPath: versioned);
+        }
+        finally
+        {
+            device.Release();
+        }
     }
 
     /// <summary>

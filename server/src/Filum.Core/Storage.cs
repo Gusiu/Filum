@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using Filum.Protocol;
@@ -102,6 +103,9 @@ public sealed class StoragePaths(string root)
 {
     private readonly string _root = Path.GetFullPath(root);
 
+    /// <summary>Each device's index.jsonl, read on first use (docs/PATH-RULES.md §7).</summary>
+    private readonly ConcurrentDictionary<string, PathIndex> _indexes = new(StringComparer.Ordinal);
+
     public string Root => _root;
 
     public string DeviceRoot(string slug) => Path.Combine(_root, slug);
@@ -146,24 +150,88 @@ public sealed class StoragePaths(string root)
         }
 
         rejection = PathRejection.None;
-        storedRelativePath = sanitized.Stored!;
+
+        // A path placed once keeps its place, even after the file of another spelling that
+        // decided it is gone.
+        var stored = IndexFor(slug).StoredFor(canonicalPath) ?? Place(slug, canonicalPath, sanitized.Stored!);
 
         var filesRoot = FilesRoot(slug);
-        var relative = storedRelativePath.Replace('/', Path.DirectorySeparatorChar);
+        var relative = stored.Replace('/', Path.DirectorySeparatorChar);
         var candidate = Path.GetFullPath(Path.Combine(filesRoot, relative));
 
         // A second layer of defence. Sanitisation should already have ruled out escaping
         // the directory, but the cost of a mistake is writing an arbitrary file anywhere
-        // on the disk, so we check the result.
+        // on the disk, so we check the result - index.jsonl included, since it is a file
+        // anyone with the disk can edit.
         if (!IsInside(filesRoot, candidate))
         {
             rejection = PathRejection.Traversal;
             return false;
         }
 
+        storedRelativePath = stored;
         absolutePath = candidate;
         return true;
     }
+
+    /// <summary>
+    /// Records in index.jsonl a stored path that percent-decoding cannot turn back into its
+    /// phone path: a name shortened by rule 6 of docs/PATH-RULES.md §5, or a place settled by a
+    /// case collision (§6, §7). Called as a file is committed, before it lands, so that the
+    /// index never lags behind what files/ holds.
+    /// </summary>
+    public void RecordStored(string slug, string canonicalPath, string storedRelativePath)
+    {
+        if (string.Equals(PathRules.Decode(storedRelativePath), canonicalPath, StringComparison.Ordinal)) return;
+
+        var sanitized = PathRules.Sanitize(canonicalPath, int.MaxValue).Stored;
+        var reason = string.Equals(storedRelativePath, sanitized, StringComparison.Ordinal) ? "truncated" : "case_collision";
+        IndexFor(slug).Add(canonicalPath, storedRelativePath, reason);
+    }
+
+    /// <summary>
+    /// The phone path a path stored under files/ stands for: from index.jsonl when it is
+    /// there, otherwise by percent-decoding (docs/PATH-RULES.md §8).
+    /// </summary>
+    public string PhonePathOf(string slug, string storedRelativePath) =>
+        IndexFor(slug).PhonePathFor(storedRelativePath) ?? PathRules.Decode(storedRelativePath);
+
+    /// <summary>
+    /// Where a path that index.jsonl does not name is stored (docs/PATH-RULES.md §6). Every
+    /// part of it that already exists is read back in the spelling the disk holds: a file of
+    /// another spelling belongs to another phone path, and this one takes the name with the
+    /// collision suffix. So does a path whose name a directory holds, or that the index gives
+    /// to another phone path. A path whose directories alone are spelled differently goes
+    /// into them as they are, and the index keeps its own spelling.
+    /// </summary>
+    private string Place(string slug, string canonicalPath, string sanitized)
+    {
+        var segments = sanitized.Split('/');
+        var held = new string[segments.Length];
+        var current = FilesRoot(slug);
+        var present = true;
+
+        for (var i = 0; i < segments.Length; i++)
+        {
+            var name = present ? DiskNames.Find(current, segments[i]) : null;
+            present = name is not null;
+            held[i] = name ?? segments[i];
+            current = Path.Combine(current, held[i]);
+        }
+
+        var onDisk = string.Join('/', held);
+        var owner = IndexFor(slug).PhonePathFor(onDisk);
+        var taken = present && (!string.Equals(onDisk, sanitized, StringComparison.Ordinal)
+                                || Directory.Exists(LongPath.Extended(current)))
+                    || owner is not null && !string.Equals(owner, canonicalPath, StringComparison.Ordinal);
+
+        return taken
+            ? string.Join('/', held[..^1].Append(PathRules.WithCollisionSuffix(segments[^1], canonicalPath)))
+            : onDisk;
+    }
+
+    private PathIndex IndexFor(string slug) =>
+        _indexes.GetOrAdd(slug, s => new PathIndex(Path.Combine(MetaRoot(s), "index.jsonl")));
 
     private static bool IsInside(string root, string candidate)
     {
