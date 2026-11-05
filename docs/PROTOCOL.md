@@ -1,7 +1,9 @@
 # Filum - protocol specification
 
 Protocol version: **1**
-Status: draft, ahead of the first implementation.
+Status: in force. The server and the client are both written from it, and the conformance
+test checks them against each other ([ARCHITECTURE.md](ARCHITECTURE.md) §6). The optional
+adoption mode (§10) is not built.
 
 This document is normative for both implementations: the server (.NET) and the client
 (Android). The goal is that either side can be written from scratch using only this
