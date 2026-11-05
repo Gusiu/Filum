@@ -27,6 +27,71 @@ jobs:
           dotnet-version: 9.0.x
       - run: dotnet test Filum.sln --configuration Release
 
+  install:
+    name: Install script
+    # The script registers a service, firewall rules and a sign-in entry, which only a real
+    # Windows machine has, so it runs on one, from a publish made the way the release makes it.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 9.0.x
+      - name: Publish as the release does
+        shell: pwsh
+        run: |
+          foreach ($project in 'Filum.Server', 'Filum.Tray') {
+              dotnet publish "server/src/$project/$project.csproj" --configuration Release `
+                  --runtime win-x64 --self-contained -p:PublishSingleFile=true --output "$env:RUNNER_TEMP/release"
+          }
+          Copy-Item server/install/Install-Filum.ps1 "$env:RUNNER_TEMP/release"
+      # Windows PowerShell 5.1, as on a computer nobody has installed anything on.
+      - name: Install
+        shell: powershell
+        run: '& "$env:RUNNER_TEMP\release\Install-Filum.ps1" -Root "$env:RUNNER_TEMP\backup" -Port 8766'
+      - name: Everything is in place and the service answers
+        shell: pwsh
+        run: |
+          if ((Get-Service Filum).Status -ne 'Running') { throw 'The service is not running.' }
+          foreach ($rule in 'Filum-TCP-In', 'Filum-mDNS-In') {
+              if ((Get-NetFirewallRule -Name $rule).Profile -ne 'Any') { throw "$rule is not open on every profile." }
+          }
+          if (-not (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' -Name Filum -ErrorAction SilentlyContinue)) {
+              throw 'The tray icon does not start at sign-in.'
+          }
+
+          $config = Join-Path $env:ProgramData 'Filum'
+          $users = (New-Object Security.Principal.SecurityIdentifier 'S-1-5-32-545').Translate([Security.Principal.NTAccount]).Value
+          function Readers($file) { (Get-Acl $file).Access | Where-Object { $_.IdentityReference.Value -eq $users } }
+          if (Readers (Join-Path $config 'server.pfx')) { throw 'Users can read the private key.' }
+          if (-not (Readers (Join-Path $config 'server.cer'))) { throw 'Users cannot read server.cer.' }
+
+          $offer = $null
+          foreach ($attempt in 1..30) {
+              try {
+                  $offer = Invoke-RestMethod https://127.0.0.1:8766/api/v1/pair/new -SkipCertificateCheck
+                  break
+              } catch {
+                  Start-Sleep -Seconds 1
+              }
+          }
+          if (-not $offer) { throw 'The service does not answer on port 8766.' }
+      - name: Uninstall
+        shell: powershell
+        run: '& "$env:ProgramFiles\Filum\Install-Filum.ps1" -Uninstall'
+      - name: Only the backup and the key remain
+        shell: pwsh
+        run: |
+          if (Get-Service Filum -ErrorAction SilentlyContinue) { throw 'The service is still registered.' }
+          if (Get-NetFirewallRule -Name 'Filum-TCP-In' -ErrorAction SilentlyContinue) { throw 'The firewall rule is still there.' }
+          if (Test-Path "$env:ProgramFiles\Filum") { throw 'The program files are still there.' }
+          if (-not (Test-Path "$env:RUNNER_TEMP\backup")) { throw 'The backup root is gone.' }
+          if (-not (Test-Path (Join-Path $env:ProgramData 'Filum\server.pfx'))) { throw 'The key is gone.' }
+      - name: Service log
+        if: failure()
+        shell: pwsh
+        run: Get-WinEvent -LogName Application -MaxEvents 30 | Format-List TimeCreated, ProviderName, Message
+
   verifier:
     name: Ledger verifier
     # A third implementation of the ledger and path rules, in Python's standard library

@@ -93,7 +93,7 @@ Stages 1-9 of the [build order table](docs/ARCHITECTURE.md#8-build-order).
 | append-only ledger chained by digests | works, independently verifiable |
 | the phone as the ledger's witness | works, checked against the C# server |
 | thorough change detection (digest in the manifest) | works |
-| server as a Windows service | works, not registered |
+| server as a Windows service | works, installed by `Install-Filum.ps1`, checked in CI |
 | **client↔server conformance test** | passes |
 | **191 server tests, 217 client tests** | green |
 | tested on a phone (Galaxy S24 Ultra, Android 16) | full backup and incremental cycles, also behind a VPN |

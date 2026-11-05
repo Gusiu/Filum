@@ -81,8 +81,8 @@ directly.
   overlay-network route.
 - **The Windows firewall on all profiles.** The overlay network's adapter will most likely
   be classified as a public network. A rule created only for the private profile will work
-  at home and silently stop working remotely. The installer creates the rule for Domain,
-  Private and Public.
+  at home and silently stop working remotely. The install script,
+  `server/install/Install-Filum.ps1`, creates the rule for Domain, Private and Public.
 - **The `\\?\` prefix** on every file operation.
 - **`Path.Combine`** discards its first argument when the second is rooted - see the note in
   [PATH-RULES.md](PATH-RULES.md) §4.
