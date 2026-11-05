@@ -45,10 +45,11 @@ abstract class FilumDatabase : RoomDatabase() {
                 // folder exclusions, the foreground-service budget and the witnessed ledger
                 // heads. Rebuilt from scratch, it would cost a new pairing and the evidence,
                 // not one full scan - so every schema version from 3 on comes with a
-                // migration. Versions 1 and 2 never left development; a database from a newer
-                // build cannot be migrated backwards at all.
+                // migration. Versions 1 and 2 never left development. A database from a newer
+                // build is never dropped either: an older build fails to open it instead, and
+                // Android refuses to install an older build over a newer one anyway, since
+                // the version code grows with every release.
                 .fallbackToDestructiveMigrationFrom(dropAllTables = true, 1, 2)
-                .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
                 .build()
     }
 }
