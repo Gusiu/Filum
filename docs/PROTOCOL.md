@@ -692,6 +692,11 @@ as canonical**, after which the mode switches itself off.
 The mode MUST be single-use, explicitly enabled in the server panel, and time-limited. The
 primary path remains a full transfer over the network (ADR-012).
 
+The server does not build this mode yet. Besides being optional, it waits on a decision this
+section leaves open: whether an adopted file, which never crossed the network, gets a line in
+the ledger (§9.2) - and if so, whose digest the line records, since the phone sends one only
+in thorough mode (§9.3).
+
 ---
 
 ## 11. Open questions

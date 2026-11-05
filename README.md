@@ -77,7 +77,8 @@ implementing from the document alone is the evidence that the document is comple
 
 ## Status
 
-Stages 1-9 of the [build order table](docs/ARCHITECTURE.md#8-build-order).
+Stages 1-9 of the [build order table](docs/ARCHITECTURE.md#8-build-order), except the
+optional adoption mode ([protocol §10](docs/PROTOCOL.md#10-adoption-mode-optional-adr-012)).
 
 | Item | State |
 |---|---|

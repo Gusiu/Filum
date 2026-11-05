@@ -307,6 +307,8 @@ Worth planning from the start, because some of it requires preparing data:
 | 9 | `verify`, orphans, adoption mode, integrity ledger | the remaining features |
 | 10 | measurements and write-up | the experimental chapter of the thesis |
 
+Adoption mode is the one part of stage 9 not built; protocol §10 says what it waits on.
+
 Stages 1-3 give a working skeleton on which everything else can be tested. Security is
 deliberately deferred to stage 4 - on `localhost`, before the first exposure to a network.
 That order must not be reversed by putting a server without mTLS on an address reachable
