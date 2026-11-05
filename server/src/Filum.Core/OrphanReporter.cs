@@ -58,8 +58,9 @@ public sealed class OrphanReporter(StoragePaths paths)
                 var stored = Path.GetRelativePath(extendedRoot, absolute).Replace(Path.DirectorySeparatorChar, '/');
 
                 // We compare in canonical form, because that is all the manifest deals in;
-                // what lies on disk has been through sanitisation and looks different.
-                var canonical = PathRules.Decode(stored);
+                // what lies on disk has been through sanitisation and looks different, and a
+                // name shortened or set apart by a collision reads back only through the index.
+                var canonical = paths.PhonePathOf(slug, stored);
                 if (reported.Contains(canonical)) continue;
 
                 orphans.Add(canonical);

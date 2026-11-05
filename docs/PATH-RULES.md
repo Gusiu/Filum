@@ -122,24 +122,36 @@ NTFS is case-insensitive, so `Pictures/Photo.jpg` and `Pictures/photo.jpg` from 
 point at one file on disk. Left unhandled, the second would silently overwrite the first -
 another violation of I2.
 
-Detection needs no index at all, because **Windows preserves case on write** even though it
-ignores case when looking a name up:
+Detection reads the disk, because **Windows preserves case on write** even though it ignores
+case when looking a name up:
 
-1. Compute the destination path `S` per §5.
-2. Check whether a file exists at `S`. If not - write directly, done.
-3. If it exists, read the **actual name from the directory** and compare it against `S`
-   byte for byte.
-   - Equal → this is the same file, the normal update path (versioning, protocol §8.3).
-   - Different → a case collision.
+1. If `index.jsonl` (§7) already gives the source path a stored path, use that one - a path
+   keeps its place even after the file of another spelling that decided it is gone.
+2. Otherwise compute the destination path `S` per §5.
+3. Read the **actual name from the directory** for every component of `S` that exists, and
+   compare the result against `S` byte for byte.
+   - Nothing at `S` → write directly, done.
+   - A file at `S`, spelled exactly as `S` → this is the same file, the normal update path
+     (versioning, protocol §8.3).
+   - A file at `S` spelled differently, a directory at `S`, or a stored path that
+     `index.jsonl` gives to another source path → a case collision.
+   - No file at `S`, but a directory on the way spelled differently → write into the
+     directory as the disk spells it, and record the path in `index.jsonl`.
 4. On collision, append to the name (before the extension) `~` and the first 6 hexadecimal
    characters in **lowercase** of the `SHA-256` of the **full original path**:
-   `Pictures/photo.jpg` → `Pictures/photo~6a8a8e.jpg`.
+   `Pictures/photo.jpg` → `Pictures/photo~6a8a8e.jpg`. The extension runs from the name's
+   last dot, as protocol §8.3 splits a name, so `.nomedia` becomes `~6a8a8e.nomedia`. When
+   the suffix would take the name past 255 UTF-16 units, the part before the extension is
+   shortened as in §5 rule 6, without splitting a `%XX` sequence.
 
 The value `~6a8a8e` in the example above is binding and is checked by a test on both sides
 - an implementation producing anything else has diverged from this document.
 
-The resolution is deterministic and stable: the same source path always yields the same
-destination name, including after restoring the backup from a copy.
+Which of two spellings keeps the plain name depends on which arrived first, and the server
+settles it when a transfer commits, one commit of a device at a time: two spellings sent at
+once must not both take the plain name. After that the resolution is stable: the same source
+path always yields the same destination name, including after restoring the backup from a
+copy.
 
 ---
 
@@ -152,9 +164,15 @@ cannot be reversed by percent-decoding alone - that is, the cases from §5 rule 
 {"p":"Pictures/photo.jpg","s":"Pictures/photo~6a8a8e.jpg","r":"case_collision"}
 ```
 
-The file is **auxiliary, not authoritative**: it can be reconstructed from any complete
-manifest, because both rules are deterministic. Losing it does not lose data, only the
-readable record of the original name. The disk remains the source of truth (ADR-003).
+`p` is the source path, `s` the stored path as the disk spells it, and `r` the reason:
+`case_collision` for §6, directories spelled differently included, and `truncated` for §5
+rule 6. An entry is written when the file is committed, before it lands, so the file never
+lags behind `files/`. A line that cannot be read, or whose `p` and `s` are not both text,
+maps nothing.
+
+The file is **auxiliary, not authoritative**: it can be reconstructed from the disk and any
+complete manifest, because both rules are deterministic. Losing it does not lose data, only
+the readable record of the original name. The disk remains the source of truth (ADR-003).
 
 ---
 

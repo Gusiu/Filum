@@ -98,6 +98,34 @@ public class PathRulesTests
             PathRules.CaseCollisionSuffix("Pictures/Photo.jpg"));
     }
 
+    [Theory]
+    // docs/PATH-RULES.md §6 states the first one outright.
+    [InlineData("photo.jpg", "Pictures/photo.jpg", "photo~6a8a8e.jpg")]
+    // The extension runs from the last dot (PROTOCOL.md §8.3): a dotfile's name is empty,
+    // and a name with no dot has no extension.
+    [InlineData("archive.tar.gz", "Pictures/photo.jpg", "archive.tar~6a8a8e.gz")]
+    [InlineData(".nomedia", "Pictures/photo.jpg", "~6a8a8e.nomedia")]
+    [InlineData("README", "Pictures/photo.jpg", "README~6a8a8e")]
+    public void TheCollisionSuffix_GoesBeforeTheExtension(string stored, string canonical, string expected)
+    {
+        Assert.Equal(expected, PathRules.WithCollisionSuffix(stored, canonical));
+    }
+
+    [Fact]
+    public void ALongNameWithTheCollisionSuffix_StaysWithinTheLimit()
+    {
+        // 250 units once encoded: within the limit, but not with the suffix added.
+        var canonical = "Pictures/" + new string(':', 82) + ".jpg";
+        var stored = PathRules.EncodeSegment(new string(':', 82) + ".jpg");
+
+        var suffixed = PathRules.WithCollisionSuffix(stored, canonical);
+
+        Assert.True(suffixed.Length <= 255, $"length {suffixed.Length} exceeds the NTFS limit");
+        Assert.EndsWith(PathRules.CaseCollisionSuffix(canonical) + ".jpg", suffixed, StringComparison.Ordinal);
+        // Shortened without splitting a %XX sequence.
+        Assert.Equal(0, suffixed[..suffixed.LastIndexOf('~')].Length % 3);
+    }
+
     // --- component length limit (§5 rule 6) ---
 
     [Fact]
