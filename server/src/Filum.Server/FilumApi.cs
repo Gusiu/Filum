@@ -267,6 +267,7 @@ public static class FilumApi
         HttpContext context,
         VerifyRequest request,
         VerifyService verifier,
+        VerifyRateLimiter limiter,
         CancellationToken ct)
     {
         if (request.Files is null)
@@ -276,7 +277,24 @@ public static class FilumApi
             return Error(StatusCodes.Status413PayloadTooLarge, ErrorCodes.PayloadTooLarge,
                          $"At most {MaxVerifyBatch} files can be checked at once.");
 
-        return Results.Ok(await verifier.VerifyAsync(context.Device().Slug, request.Files, ct));
+        var device = context.Device();
+        if (!limiter.TryStart(device.Pin, out var retryAfter))
+        {
+            var seconds = (int)Math.Ceiling(retryAfter.TotalSeconds);
+            context.Response.Headers.RetryAfter = seconds.ToString(CultureInfo.InvariantCulture);
+            return Error(StatusCodes.Status429TooManyRequests, "rate_limited",
+                         $"A device may run one verification at a time and {VerifyRateLimiter.MaxRequests} an hour. " +
+                         $"Try again in {Math.Max(1, (seconds + 59) / 60)} minute(s).");
+        }
+
+        try
+        {
+            return Results.Ok(await verifier.VerifyAsync(device.Slug, request.Files, ct));
+        }
+        finally
+        {
+            limiter.Finish(device.Pin);
+        }
     }
 
     // --- GET /api/v1/orphans (§5.6) ---

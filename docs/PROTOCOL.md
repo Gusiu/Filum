@@ -384,7 +384,9 @@ Response `200`:
 ```
 
 The server hashes its own copies, so the resource is expensive. The server MUST rate-limit
-it and SHOULD reject requests larger than 256 entries.
+it and SHOULD reject requests larger than 256 entries. This implementation runs one
+verification at a time per device and at most 10 an hour, and refuses the rest with `429` and
+`Retry-After` (§6).
 
 ### 5.6 `GET /api/v1/orphans?session=<uuid>`
 
