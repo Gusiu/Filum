@@ -709,9 +709,8 @@ in thorough mode (§9.3).
   but a merged view in the panel is worth considering.
 - A retention policy for versions in `.filum/versions/` - currently none; the directory
   grows without bound.
-- A trusted external witness for the ledger from §9.2. The chain detects partial tampering,
-  but someone with disk access can rebuild the ledger from scratch. Raising the guarantee
-  would require periodically publishing the digest of the last line outside the server - to
-  a second participant, to a timestamping service, or onto write-once media. Each of those
-  introduces a dependency the project does not currently have, so the decision needs
-  separate consideration.
+- A witness for the ledger besides the phone. Since §9.5 a ledger rebuilt from scratch is
+  caught at the next cycle, but the witnessed heads are only as safe as the phone that holds
+  them. Keeping the heads somewhere else as well - on write-once media, or with a
+  timestamping service, which ADR-019 rejected as an outside party - would remove that single
+  point, at the cost of a dependency the project does not currently have.
