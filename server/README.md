@@ -148,8 +148,9 @@ It is a **separate process**, because a Windows service runs in session 0 and ca
 show a UI. It talks to the server over the same local API as the panel - there is no
 special channel between them.
 
-It verifies the server certificate by the key fingerprint read from `server.pfx`, not
-by a trust chain. That way it does not trust whatever happens to claim port 8765.
+It verifies the server certificate by the key fingerprint, not by a trust chain, reading
+it from `server.cer` - the certificate the server publishes next to its key - or, failing
+that, from `server.pfx`. That way it does not trust whatever happens to claim port 8765.
 
 The configuration directory and port can be overridden with `FILUM_CONFIG` and
 `FILUM_PORT`.
