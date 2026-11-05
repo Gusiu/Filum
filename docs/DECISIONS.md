@@ -4,7 +4,7 @@ Each entry records the context, the decision, the rationale and the **rejected
 alternatives**. That last heading is the important one: a thesis defends itself by showing
 what was deliberately not chosen, and why.
 
-As of 2026-09-01. Entries marked *accepted* hold until explicitly changed.
+As of 2026-11-03. Entries marked *accepted* hold until explicitly changed.
 
 ---
 
