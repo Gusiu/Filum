@@ -22,7 +22,7 @@ jobs:
       - id: read
         name: The tag, the app and the server agree
         run: |
-          app=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' android/app/build.gradle.kts)
+          app=$(sed -n 's/^val appVersion = "\(.*\)"$/\1/p' android/app/build.gradle.kts)
           server=$(sed -n 's/.*<Version>\(.*\)<\/Version>.*/\1/p' server/Directory.Build.props)
           echo "app $app, server $server"
           if [ "$app" != "$server" ]; then
@@ -76,13 +76,39 @@ jobs:
         with:
           # The open-source cache instead of the default proprietary service.
           cache-provider: basic
+      # A release installs over the one before only if it carries the same key, so a tag is
+      # published with the release key or not at all (android/README.md says how to create
+      # it). Started by hand without the key, the workflow builds the APK unsigned, which
+      # checks the packaging and installs nowhere.
+      - name: The release key
+        env:
+          KEYSTORE: ${{ secrets.FILUM_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE" ]; then
+            if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+              echo "::error::The FILUM_KEYSTORE_BASE64 secret is missing."
+              exit 1
+            fi
+            echo "::warning::No release key: the APK is built unsigned."
+            exit 0
+          fi
+          echo "$KEYSTORE" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          echo "FILUM_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
       - working-directory: android
-        run: ./gradlew assembleDebug
-      - run: cp android/app/build/outputs/apk/debug/app-debug.apk "filum-${{ needs.version.outputs.version }}-debug.apk"
+        env:
+          FILUM_KEYSTORE_PASSWORD: ${{ secrets.FILUM_KEYSTORE_PASSWORD }}
+          FILUM_KEY_ALIAS: ${{ secrets.FILUM_KEY_ALIAS }}
+          FILUM_KEY_PASSWORD: ${{ secrets.FILUM_KEY_PASSWORD }}
+        run: ./gradlew assembleRelease
+      - run: |
+          for apk in android/app/build/outputs/apk/release/*.apk; do
+            case "$apk" in *-unsigned.apk) suffix=-unsigned ;; *) suffix= ;; esac
+            cp "$apk" "filum-${{ needs.version.outputs.version }}$suffix.apk"
+          done
       - uses: actions/upload-artifact@v7
         with:
           name: android
-          path: filum-*-debug.apk
+          path: filum-*.apk
 
   publish:
     name: Publish
@@ -104,4 +130,4 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --title "Filum $GITHUB_REF_NAME" \
             --generate-notes \
-            --notes "The APK is signed with a debug key: install it with adb or by sideloading. The server zip holds self-contained executables for Windows: no .NET runtime is needed."
+            --notes "The APK is signed with the release key, so later releases install over it; install it by sideloading. The server zip holds self-contained executables for Windows: no .NET runtime is needed."
