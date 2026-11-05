@@ -57,6 +57,21 @@ public class CertificateStoreTests
 
         Assert.True(store.Certificate.HasPrivateKey);
     }
+
+    [Fact]
+    public void TheCertificate_IsPublishedWithoutItsKey()
+    {
+        // The tray icon pins the server by this file; when the server runs as a service the
+        // icon runs under another account, which must not read the key.
+        using var directory = new TempRoot();
+
+        var store = CertificateStore.LoadOrCreate(directory.Path);
+        using var published = X509CertificateLoader.LoadCertificate(
+            File.ReadAllBytes(Path.Combine(directory.Path, CertificateStore.PublishedFileName)));
+
+        Assert.False(published.HasPrivateKey);
+        Assert.Equal(store.Pin, CertificateStore.ComputePin(published));
+    }
 }
 
 /// <summary>The registry of paired devices.</summary>

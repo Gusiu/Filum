@@ -64,17 +64,42 @@ public sealed class CertificateStore
         var path = System.IO.Path.Combine(configDirectory, "server.pfx");
         var extended = LongPath.Extended(path);
 
+        CertificateStore store;
         if (File.Exists(extended))
         {
             var loaded = X509CertificateLoader.LoadPkcs12(
                 File.ReadAllBytes(extended), password: null, X509KeyStorageFlags.Exportable);
-            return new CertificateStore(loaded, path);
+            store = new CertificateStore(loaded, path);
+        }
+        else
+        {
+            var created = Create();
+            File.WriteAllBytes(extended, created.Export(X509ContentType.Pkcs12));
+            store = new CertificateStore(created, path);
         }
 
-        var created = Create();
-        File.WriteAllBytes(extended, created.Export(X509ContentType.Pkcs12));
-        return new CertificateStore(created, path);
+        Publish(configDirectory, store.Certificate);
+        return store;
     }
+
+    /// <summary>
+    /// Writes server.cer, the certificate without its private key, next to server.pfx. The tray
+    /// icon pins the server by it: run as a service, the server runs under another account than
+    /// the signed-in user, who may read this file but must not read the key
+    /// (server/install/Install-Filum.ps1 sets the access rights).
+    /// </summary>
+    private static void Publish(string configDirectory, X509Certificate2 certificate)
+    {
+        var path = LongPath.Extended(System.IO.Path.Combine(configDirectory, PublishedFileName));
+        var der = certificate.Export(X509ContentType.Cert);
+
+        // Rewritten in place only when it differs, so the file keeps the rights it was given.
+        if (!File.Exists(path) || !File.ReadAllBytes(path).AsSpan().SequenceEqual(der))
+            File.WriteAllBytes(path, der);
+    }
+
+    /// <summary>The public certificate's file name in the configuration directory.</summary>
+    public const string PublishedFileName = "server.cer";
 
     /// <summary>A certificate held only in memory - for tests.</summary>
     public static CertificateStore InMemory() => new(Create(), path: "");

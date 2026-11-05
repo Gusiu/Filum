@@ -110,25 +110,30 @@ to unpair is a lost phone, which is exactly when the backup matters most.
 The same executable works either way - it detects how it was started. The service is
 what lets the backup keep accepting files while no user is logged in.
 
-Publish as a single file:
+The release zip holds the server and the tray icon as self-contained executables, with
+`Install-Filum.ps1` next to them. Run it in PowerShell started as administrator:
+
+```powershell
+.\Install-Filum.ps1 -Root D:\Backup
+```
+
+It copies the program to `%ProgramFiles%\Filum`, registers the service `Filum` (started
+with the computer, restarted if it fails, running as `LocalSystem`), opens the port and
+mDNS in the firewall on every profile, and starts the tray icon at every sign-in. The
+server's key goes to `%ProgramData%\Filum`, readable to SYSTEM and administrators alone;
+the tray icon pins the server by `server.cer`, the certificate the server publishes there
+without the key. A key left by a server started by hand is taken over, so the phones
+paired with it stay paired - give `-Root` the directory that server used. `-Uninstall`
+removes everything but the backup and the key.
+
+The service runs in session 0 and **cannot show a UI** - which is why the tray icon is
+a separate process started at sign-in (ADR-010).
+
+To build the same executables from the source:
 
 ```bash
 cd server && dotnet publish src/Filum.Server -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
 ```
-
-Register the service (command prompt with administrator rights):
-
-```bash
-sc.exe create Filum binPath= "C:\path\to\Filum.Server.exe" start= auto
-```
-
-The service runs in session 0 and **cannot show a UI** - which is why the tray icon is
-a separate process started at logon (ADR-010).
-
-The configuration directory defaults to something account-dependent, so it is worth
-passing `Filum:Root` and `Filum:ConfigDirectory` explicitly at registration time -
-otherwise a service running as `LocalSystem` will use different directories than the
-server started by hand.
 
 ## Tray icon
 

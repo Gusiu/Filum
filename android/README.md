@@ -22,6 +22,31 @@ that holds a real backup.
 cd android && ./gradlew :app:assembleQa
 ```
 
+### Release key
+
+Android installs an update only over an app signed with the same key, and replacing the
+app the other way erases its database: the pairing and the witnessed ledger heads
+(ADR-019). A release is therefore signed with one key, created once and kept outside the
+repository. The release workflow reads it from four repository secrets:
+`FILUM_KEYSTORE_BASE64`, `FILUM_KEYSTORE_PASSWORD`, `FILUM_KEY_ALIAS` and
+`FILUM_KEY_PASSWORD`. It refuses to publish a tag without them.
+
+```bash
+keytool -genkeypair -keystore filum-release.jks -alias filum -keyalg RSA -keysize 4096 -validity 10000
+```
+
+```bash
+base64 -w0 filum-release.jks
+```
+
+The second command prints the value of `FILUM_KEYSTORE_BASE64`. Keep the keystore and its
+passwords somewhere safe: a lost key means every installation has to be replaced by hand.
+`v0.1.0` was signed with a debug key from the build machine, so moving an installation of
+it to a release-signed build takes one reinstall.
+
+The version code follows the version (`major * 10000 + minor * 100 + patch`), so Android
+also refuses to install an older release over a newer one and its database.
+
 Requires Android Studio (Gradle, the Kotlin compiler, the SDK). Tool versions:
 AGP 9.3.2, Gradle 9.5, Kotlin 2.3.10, `compileSdk 37`, `targetSdk 36`.
 

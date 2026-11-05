@@ -70,22 +70,32 @@ public sealed class ServerLink : IDisposable
     }
 
     /// <summary>
-    /// Reads the server's public key from its certificate.
+    /// Reads the server's public key from its certificate. That way we do not have to trust
+    /// whatever is on port 8765 - not even locally, where another process could have claimed
+    /// the port first.
     ///
-    /// The icon runs under the same user account as the server, so the file is readable to
-    /// it. That way we do not have to trust whatever is on port 8765 - not even locally,
-    /// where another process could have claimed the port first.
+    /// The server publishes the certificate alone as server.cer, which the icon can read when
+    /// the server runs as a service under another account. Started by hand, under the icon's
+    /// own account, the server may have only server.pfx, the key itself, which the icon can
+    /// read then.
     /// </summary>
     private static string? ReadServerPin(string configDirectory)
     {
-        var path = Path.Combine(configDirectory, "server.pfx");
-        if (!File.Exists(path)) return null;
-
         try
         {
-            using var certificate = X509CertificateLoader.LoadPkcs12(
-                File.ReadAllBytes(path), password: null, X509KeyStorageFlags.EphemeralKeySet);
-            return CertificateStore.ComputePin(certificate);
+            var published = Path.Combine(configDirectory, CertificateStore.PublishedFileName);
+            if (File.Exists(published))
+            {
+                using var certificate = X509CertificateLoader.LoadCertificate(File.ReadAllBytes(published));
+                return CertificateStore.ComputePin(certificate);
+            }
+
+            var key = Path.Combine(configDirectory, "server.pfx");
+            if (!File.Exists(key)) return null;
+
+            using var withKey = X509CertificateLoader.LoadPkcs12(
+                File.ReadAllBytes(key), password: null, X509KeyStorageFlags.EphemeralKeySet);
+            return CertificateStore.ComputePin(withKey);
         }
         catch (Exception)
         {

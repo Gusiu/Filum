@@ -3,6 +3,19 @@ plugins {
     alias(libs.plugins.compose.compiler)
 }
 
+/** The release workflow checks this against the server's version and the tag. */
+val appVersion = "0.1.0"
+
+/**
+ * major * 10000 + minor * 100 + patch, so every release has a greater code than the one
+ * before - Android installs an update only over a lower code, which also keeps an older
+ * build from being installed over a newer one and its database.
+ */
+val appVersionCode = appVersion.split('.').map(String::toInt).let { (major, minor, patch) ->
+    require(minor < 100 && patch < 100) { "versionCode leaves two digits each for minor and patch" }
+    major * 10_000 + minor * 100 + patch
+}
+
 android {
     namespace = "pl.wspa.filum.app"
 
@@ -21,13 +34,31 @@ android {
         // applications of this kind.
         targetSdk = 36
 
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = appVersionCode
+        versionName = appVersion
+    }
+
+    // Android installs an update only when it carries the same key as the installed app, and
+    // replacing the app the other way erases its database: the pairing and the witnessed
+    // ledger heads (ADR-019). So a release is signed with one key kept outside the repository,
+    // which the release workflow decodes from a secret. Without the key the release build stays
+    // unsigned rather than signed with a debug key that differs from one machine to the next.
+    val releaseKey = providers.environmentVariable("FILUM_KEYSTORE").orNull
+    signingConfigs {
+        if (releaseKey != null) {
+            create("release") {
+                storeFile = file(releaseKey)
+                storePassword = providers.environmentVariable("FILUM_KEYSTORE_PASSWORD").get()
+                keyAlias = providers.environmentVariable("FILUM_KEY_ALIAS").get()
+                keyPassword = providers.environmentVariable("FILUM_KEY_PASSWORD").get()
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (releaseKey != null) signingConfig = signingConfigs.getByName("release")
         }
         // A debuggable build that installs next to the regular app. Its own application id
         // gives it its own device key, pairing and database, so device tests and the
