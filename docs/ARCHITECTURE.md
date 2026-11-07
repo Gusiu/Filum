@@ -84,11 +84,16 @@ directly.
   at home and silently stop working remotely. The install script,
   `server/install/Install-Filum.ps1`, creates the rule for Domain, Private and Public.
 - **Junctions in the backup.** The path check compares strings, and a write follows a
-  junction. One that any account could make in the backup would carry the service's writes,
-  made as LocalSystem, anywhere on the disk - and below the root of a data drive every
-  signed-in user may change everything. The install script therefore gives the backup root to
-  the service: SYSTEM and administrators may change it, the user who installs may read it, and
+  junction. One that any account could make in the backup would carry the service's writes
+  wherever its account may write - and below the root of a data drive every signed-in user
+  may change everything. The install script therefore gives the backup root to the service:
+  the service, SYSTEM and administrators may change it, the user who installs may read it, and
   a root holding a link is refused.
+- **LocalSystem for a server on the network.** A flaw in a server that listens on the network
+  would hand over the whole computer. The install script runs the service under its own
+  virtual account, `NT SERVICE\Filum`, which may change the backup and the key's directory and
+  nothing else, and keeps no privilege but traversing directories - not even
+  `SeImpersonatePrivilege`, the usual way from a service account to SYSTEM.
 - **The `\\?\` prefix** on every file operation.
 - **`Path.Combine`** discards its first argument when the second is rooted - see the note in
   [PATH-RULES.md](PATH-RULES.md) §4.

@@ -7,25 +7,28 @@ Run it from the unpacked release, the directory that holds Filum.Server.exe and
 Filum.Tray.exe, in a PowerShell window started as administrator.
 
 Installing copies the program to %ProgramFiles%\Filum, where only administrators can change
-it, since the service runs as LocalSystem; registers the service "Filum", started with the
-computer and restarted if it fails; opens its port and mDNS in the Windows firewall on every
-profile, because an overlay network's adapter is usually filed as public
-(docs/ARCHITECTURE.md section 2.4); and starts the tray icon whenever someone signs in.
+what the service runs; registers the service "Filum", started with the computer and restarted
+if it fails, under its own virtual account, NT SERVICE\Filum, which keeps no privilege but
+traversing directories; opens its port and mDNS in the Windows firewall on every profile,
+because an overlay network's adapter is usually filed as public (docs/ARCHITECTURE.md section
+2.4); and starts the tray icon whenever someone signs in.
 
-The server's private key, server.pfx, stays readable to SYSTEM and administrators alone. A key
+The server's private key, server.pfx, stays readable to the service, SYSTEM and administrators
+alone. A key
 that a server started by hand left in its user's profile moves there, so the phones paired with
 that server stay paired. The tray icon runs as the signed-in user and pins the server by
 server.cer, the certificate the server publishes next to the key.
 
-The backup becomes the service's to write: SYSTEM and administrators may change it, the user
-who installs may read it, to browse and copy it in Explorer, and nobody else gets in. Deleting
+The backup becomes the service's to write: the service, SYSTEM and administrators may change
+it, the user who installs may read it, to browse and copy it in Explorer, and nobody else gets
+in. Deleting
 from it by hand then takes an administrator. Since everything under the root changes hands, the
 root must be a backup's: a directory of its own, not a whole drive, holding device directories
 alone and no link. The installer refuses any other.
 
-Installing again replaces the program, the service, the rules and the logon entry. Removing
-them leaves the backup, with its rights, and the key where they are: the server deletes
-nothing, and the same key keeps the paired phones paired after a reinstall.
+Installing again replaces the program, the service, the rules, the logon entry and the event
+log source. Removing them leaves the backup, with its rights, and the key where they are: the
+server deletes nothing, and the same key keeps the paired phones paired after a reinstall.
 
 .PARAMETER Root
 The backup root, where every paired phone has a directory. To keep a backup made so far, give
@@ -38,7 +41,8 @@ Where the server keeps its key. By default %ProgramData%\Filum.
 The port the server listens on. By default 8765 (docs/PROTOCOL.md section 2).
 
 .PARAMETER Uninstall
-Removes the program, the service, the firewall rules and the logon entry instead.
+Removes the program, the service, the firewall rules, the logon entry and the event log source
+instead.
 
 .EXAMPLE
 .\Install-Filum.ps1 -Root D:\Backup
@@ -69,6 +73,9 @@ $serviceName = 'Filum'
 $installDirectory = Join-Path $env:ProgramFiles 'Filum'
 $rules = 'Filum-TCP-In', 'Filum-mDNS-In'
 $runKey = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run'
+
+# The host logs under the application's name.
+$eventSource = 'Filum.Server'
 
 # Well-known SIDs rather than names, which Windows translates: "Administratorzy" in Polish.
 $system = '*S-1-5-18'
@@ -103,6 +110,7 @@ function Remove-Registration {
     Remove-ItemProperty -Path $runKey -Name $serviceName -ErrorAction SilentlyContinue
     [Environment]::SetEnvironmentVariable('FILUM_CONFIG', $null, 'Machine')
     [Environment]::SetEnvironmentVariable('FILUM_PORT', $null, 'Machine')
+    if ([Diagnostics.EventLog]::SourceExists($eventSource)) { [Diagnostics.EventLog]::DeleteEventSource($eventSource) }
 }
 
 # A full path, resolved from PowerShell's own location. One ending in a backslash would escape
@@ -118,8 +126,13 @@ function Invoke-Icacls {
     if ($LASTEXITCODE -ne 0) { throw "icacls $($args -join ' ') failed." }
 }
 
+function Invoke-Sc {
+    & sc.exe @args | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "sc.exe $($args -join ' ') failed." }
+}
+
 # Every directory of a backup, the root first. A link anywhere stops it: changing rights would
-# follow one out of the backup, and so would the service, writing through it as LocalSystem.
+# follow one out of the backup, and so would the service, writing through it.
 function Get-BackupDirectory([string] $directory) {
     $directory
     foreach ($item in Get-ChildItem -LiteralPath $directory -Force) {
@@ -177,6 +190,22 @@ if ($source -ne $installDirectory.TrimEnd('\')) {
 $server = Join-Path $installDirectory 'Filum.Server.exe'
 $tray = Join-Path $installDirectory 'Filum.Tray.exe'
 
+# The service runs under its own virtual account, NT SERVICE\Filum, rather than LocalSystem: a
+# flaw in a server that listens on the network then reaches only what that account may touch,
+# the backup and the key. Of its privileges it keeps the one to traverse directories alone;
+# without SeImpersonatePrivilege, which every service account has by default, it cannot take on
+# the identity of a client that connects to it. The account exists only with the service, so
+# the service comes first and the rights after.
+$arguments = "--Filum:Root=`"$Root`" --Filum:ConfigDirectory=`"$ConfigDirectory`" --Filum:Port=$Port"
+New-Service -Name $serviceName -DisplayName 'Filum backup server' `
+    -Description 'Receives the backups of paired phones.' `
+    -BinaryPathName "`"$server`" $arguments" -StartupType Automatic | Out-Null
+Invoke-Sc config $serviceName obj= "NT SERVICE\$serviceName"
+Invoke-Sc privs $serviceName SeChangeNotifyPrivilege
+Invoke-Sc failure $serviceName reset= 86400 actions= restart/60000/restart/60000/restart/60000
+$serviceAccount = '*' + (New-Object Security.Principal.NTAccount "NT SERVICE\$serviceName").Translate(
+    [Security.Principal.SecurityIdentifier]).Value
+
 New-Item -ItemType Directory -Force -Path $Root | Out-Null
 
 # The backup is the service's to write. Whoever else could write to it could make a link there,
@@ -191,7 +220,7 @@ New-Item -ItemType Directory -Force -Path $Root | Out-Null
 # else go first.
 $reader = '*' + [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
 Invoke-Icacls $Root /reset /L
-Invoke-Icacls $Root /inheritance:r /grant:r "${system}:(OI)(CI)F" "${administrators}:(OI)(CI)F" "${reader}:(OI)(CI)RX" /L
+Invoke-Icacls $Root /inheritance:r /grant:r "${system}:(OI)(CI)F" "${administrators}:(OI)(CI)F" "${serviceAccount}:(OI)(CI)M" "${reader}:(OI)(CI)RX" /L
 Invoke-Icacls $Root /setowner $administrators /L
 foreach ($directory in $directories | Select-Object -Skip 1) {
     Invoke-Icacls $directory /reset /L
@@ -200,9 +229,11 @@ foreach ($directory in $directories | Select-Object -Skip 1) {
 
 New-Item -ItemType Directory -Force -Path $ConfigDirectory | Out-Null
 
-# The key is for SYSTEM and administrators. Signed-in users may list the directory, and read
-# server.cer once the server has written it - never the key itself.
-Invoke-Icacls $ConfigDirectory /inheritance:r /grant:r "${system}:(OI)(CI)F" "${administrators}:(OI)(CI)F" "${users}:(RX)"
+# The key is for the service, SYSTEM and administrators. Signed-in users may list the directory,
+# and read server.cer once the server has written it - never the key itself. The directory's own
+# rights for anyone else go first, since granting with :r replaces only the named accounts'.
+Invoke-Icacls $ConfigDirectory /reset
+Invoke-Icacls $ConfigDirectory /inheritance:r /grant:r "${system}:(OI)(CI)F" "${administrators}:(OI)(CI)F" "${serviceAccount}:(OI)(CI)M" "${users}:(RX)"
 
 # A server started by hand kept its key in its user's profile, where every program that user
 # runs can read it. The key moves here, so the phones paired with that server stay paired and
@@ -217,11 +248,9 @@ if (-not (Test-Path -LiteralPath $serviceKey) -and (Test-Path -LiteralPath $hand
     Write-Host "Moved the key of the server started by hand from $handKey, so the paired phones stay paired."
 }
 
-$arguments = "--Filum:Root=`"$Root`" --Filum:ConfigDirectory=`"$ConfigDirectory`" --Filum:Port=$Port"
-New-Service -Name $serviceName -DisplayName 'Filum backup server' `
-    -Description 'Receives the backups of paired phones.' `
-    -BinaryPathName "`"$server`" $arguments" -StartupType Automatic | Out-Null
-& sc.exe failure $serviceName reset= 86400 actions= restart/60000/restart/60000/restart/60000 | Out-Null
+# The service's account may write to the event log but not create a source there, and without
+# one the host stops logging at its first warning.
+[Diagnostics.EventLog]::CreateEventSource($eventSource, 'Application')
 
 New-NetFirewallRule -Name 'Filum-TCP-In' -DisplayName 'Filum backup server' -Direction Inbound `
     -Protocol TCP -LocalPort $Port -Program $server -Action Allow -Profile Any | Out-Null
