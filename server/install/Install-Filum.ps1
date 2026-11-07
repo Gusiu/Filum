@@ -187,7 +187,10 @@ New-Item -ItemType Directory -Force -Path $Root | Out-Null
 # in it go to administrators, since an owner may always change an object's rights, and those
 # directories lose rights given to them on their own; a right on a file changes that file alone.
 # /L changes a link itself rather than what it points to, should one appear after the check.
+# Granting with :r replaces only the named accounts' rights, so the root's own rights for anyone
+# else go first.
 $reader = '*' + [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+Invoke-Icacls $Root /reset /L
 Invoke-Icacls $Root /inheritance:r /grant:r "${system}:(OI)(CI)F" "${administrators}:(OI)(CI)F" "${reader}:(OI)(CI)RX" /L
 Invoke-Icacls $Root /setowner $administrators /L
 foreach ($directory in $directories | Select-Object -Skip 1) {
