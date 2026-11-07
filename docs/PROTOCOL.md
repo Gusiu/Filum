@@ -512,6 +512,9 @@ client certificate, which is its identity - §3.2), `slug` (the name of its dire
 `label` (§3.2), `pairedAt` (when it was first paired, ISO 8601) and `enabled` (`false`
 while it is disabled, when the server answers it with `403` - §6). Unpairing a device
 removes its `device.json` and nothing else: its files, versions and ledger stay (I1).
+The server MUST ignore a `device.json` whose `slug` is not the name of the directory that
+holds it: the slug goes into every path the server builds for the device, and the file is
+open to anyone with the disk.
 
 ### 8.2 Committing a transfer
 

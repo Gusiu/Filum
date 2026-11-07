@@ -122,8 +122,9 @@ with the computer, restarted if it fails, running as `LocalSystem`), opens the p
 mDNS in the firewall on every profile, and starts the tray icon at every sign-in. The
 server's key goes to `%ProgramData%\Filum`, readable to SYSTEM and administrators alone;
 the tray icon pins the server by `server.cer`, the certificate the server publishes there
-without the key. A key left by a server started by hand is taken over, so the phones
-paired with it stay paired - give `-Root` the directory that server used. `-Uninstall`
+without the key. A key that a server started by hand left in `%LOCALAPPDATA%\Filum` moves
+there, so the phones paired with that server stay paired and no copy stays where the user's
+own programs can read it - give `-Root` the directory that server used. `-Uninstall`
 removes everything but the backup and the key.
 
 The service runs in session 0 and **cannot show a UI** - which is why the tray icon is

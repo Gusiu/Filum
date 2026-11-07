@@ -129,6 +129,23 @@ public class DeviceRegistryTests
     }
 
     [Theory]
+    [InlineData("../outside")]
+    [InlineData("another-phone-abc123")]
+    public void ARecordWhoseSlugIsNotItsDirectoryName_IsSkipped(string slug)
+    {
+        // device.json is a file anyone with the disk can edit, and its slug goes into every
+        // path the server builds for the device. Taken as it stands, "../outside" would put
+        // the device's files outside the backup root.
+        using var h = new Harness();
+        var meta = Path.Combine(h.Root, "planted", ".filum");
+        Directory.CreateDirectory(meta);
+        File.WriteAllText(Path.Combine(meta, "device.json"), JsonSerializer.Serialize(
+            new DeviceRecord("PIN-PLANTED", slug, "Planted", DateTimeOffset.UtcNow)));
+
+        Assert.Null(new DeviceRegistry(h.Paths).FindByPin("PIN-PLANTED"));
+    }
+
+    [Theory]
     [InlineData("Galaxy S24 Ultra", "galaxy-s24-ultra-abcdef")]
     [InlineData("  ", "device-abcdef")]
     [InlineData("Phone@#$%Żony", "phone-ony-abcdef")]
@@ -553,6 +570,42 @@ public class PairingCodeRenderingTests
         var value = payload["filum1:".Length..].Replace('-', '+').Replace('_', '/');
         value += (value.Length % 4) switch { 2 => "==", 3 => "=", _ => "" };
         return Encoding.UTF8.GetString(Convert.FromBase64String(value));
+    }
+}
+
+/// <summary>The panel's orphan page, which takes a device's slug from its address.</summary>
+public class OrphanPanelTests
+{
+    [Theory]
+    [InlineData("relative")]
+    [InlineData("absolute")]
+    public void AReportOutsideTheBackupRoot_IsNotRead(string form)
+    {
+        // /orphans/{Slug} puts whatever the address holds into a path. Joined to the root as
+        // it stands, "..\elsewhere" - or a full path, which Path.Combine takes in place of
+        // the root - would have the panel look into any directory and read a report there.
+        using var app = new FilumApp();
+        using var elsewhere = new TempRoot();
+        var meta = Path.Combine(elsewhere.Path, ".filum");
+        Directory.CreateDirectory(meta);
+        File.WriteAllText(Path.Combine(meta, "orphans-planted.json"), JsonSerializer.Serialize(
+            new OrphanReport("planted", DateTimeOffset.UtcNow, 1, 1, ["planted.txt"])));
+
+        var slug = form == "absolute" ? elsewhere.Path : Path.GetRelativePath(app.Root, elsewhere.Path);
+
+        Assert.Null(app.Services.GetRequiredService<AdminService>().Orphans(slug));
+    }
+
+    [Fact]
+    public async Task APairedDevicesReport_IsShown()
+    {
+        using var app = new FilumApp();
+        var slug = await app.PairAsync();
+        app.Services.GetRequiredService<OrphanReporter>().Complete(slug, "session");
+
+        var report = app.Services.GetRequiredService<AdminService>().Orphans(slug);
+
+        Assert.Equal("session", report?.Session);
     }
 }
 

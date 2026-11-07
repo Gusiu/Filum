@@ -12,9 +12,10 @@ computer and restarted if it fails; opens its port and mDNS in the Windows firew
 profile, because an overlay network's adapter is usually filed as public
 (docs/ARCHITECTURE.md section 2.4); and starts the tray icon whenever someone signs in.
 
-The server's private key, server.pfx, stays readable to SYSTEM and administrators alone. The
-tray icon runs as the signed-in user and pins the server by server.cer, the certificate the
-server publishes next to the key.
+The server's private key, server.pfx, stays readable to SYSTEM and administrators alone. A key
+that a server started by hand left in its user's profile moves there, so the phones paired with
+that server stay paired. The tray icon runs as the signed-in user and pins the server by
+server.cer, the certificate the server publishes next to the key.
 
 Installing again replaces the program, the service, the rules and the logon entry. Removing
 them leaves the backup and the key where they are: the server deletes nothing, and the same key
@@ -144,13 +145,17 @@ New-Item -ItemType Directory -Force -Path $ConfigDirectory | Out-Null
 # server.cer once the server has written it - never the key itself.
 Invoke-Icacls $ConfigDirectory /inheritance:r /grant:r "${system}:(OI)(CI)F" "${administrators}:(OI)(CI)F" "${users}:(RX)"
 
-# A server started by hand kept its key in its user's profile. Taking that key keeps the phones
-# paired with it paired.
+# A server started by hand kept its key in its user's profile, where every program that user
+# runs can read it. The key moves here, so the phones paired with that server stay paired and
+# the profile keeps no copy. It is written anew and the original removed, rather than moved in
+# place: a file moved within a volume keeps the rights it had, and the new one takes this
+# directory's.
 $serviceKey = Join-Path $ConfigDirectory 'server.pfx'
 $handKey = Join-Path $env:LOCALAPPDATA 'Filum\server.pfx'
 if (-not (Test-Path -LiteralPath $serviceKey) -and (Test-Path -LiteralPath $handKey)) {
     Copy-Item -LiteralPath $handKey -Destination $serviceKey
-    Write-Host "Took the key of the server started by hand, $handKey, so the paired phones stay paired."
+    Remove-Item -LiteralPath $handKey
+    Write-Host "Moved the key of the server started by hand from $handKey, so the paired phones stay paired."
 }
 
 $arguments = "--Filum:Root=`"$Root`" --Filum:ConfigDirectory=`"$ConfigDirectory`" --Filum:Port=$Port"
