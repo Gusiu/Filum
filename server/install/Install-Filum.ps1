@@ -17,13 +17,19 @@ that a server started by hand left in its user's profile moves there, so the pho
 that server stay paired. The tray icon runs as the signed-in user and pins the server by
 server.cer, the certificate the server publishes next to the key.
 
+The backup becomes the service's to write: SYSTEM and administrators may change it, the user
+who installs may read it, to browse and copy it in Explorer, and nobody else gets in. Deleting
+from it by hand then takes an administrator. Since everything under the root changes hands, the
+root must be a backup's: a directory of its own, not a whole drive, holding device directories
+alone and no link. The installer refuses any other.
+
 Installing again replaces the program, the service, the rules and the logon entry. Removing
-them leaves the backup and the key where they are: the server deletes nothing, and the same key
-keeps the paired phones paired after a reinstall.
+them leaves the backup, with its rights, and the key where they are: the server deletes
+nothing, and the same key keeps the paired phones paired after a reinstall.
 
 .PARAMETER Root
 The backup root, where every paired phone has a directory. To keep a backup made so far, give
-the root the server has used.
+the root the server has used. It must hold nothing but those directories.
 
 .PARAMETER ConfigDirectory
 Where the server keeps its key. By default %ProgramData%\Filum.
@@ -112,6 +118,18 @@ function Invoke-Icacls {
     if ($LASTEXITCODE -ne 0) { throw "icacls $($args -join ' ') failed." }
 }
 
+# Every directory of a backup, the root first. A link anywhere stops it: changing rights would
+# follow one out of the backup, and so would the service, writing through it as LocalSystem.
+function Get-BackupDirectory([string] $directory) {
+    $directory
+    foreach ($item in Get-ChildItem -LiteralPath $directory -Force) {
+        if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+            throw "$($item.FullName) is a link, which the service would write through: remove it and install again."
+        }
+        if ($item.PSIsContainer) { Get-BackupDirectory $item.FullName }
+    }
+}
+
 if ($Uninstall) {
     Remove-Registration
     if (Test-Path -LiteralPath $installDirectory) { Remove-Item -LiteralPath $installDirectory -Recurse -Force }
@@ -128,6 +146,27 @@ foreach ($name in 'Filum.Server.exe', 'Filum.Tray.exe') {
 $Root = Resolve-ArgumentPath $Root
 $ConfigDirectory = Resolve-ArgumentPath $ConfigDirectory
 
+# Installing gives the root and everything in it to the service, so before anything changes, the
+# root has to prove a backup's: a directory of its own, holding device directories alone, with
+# no link anywhere.
+$fullRoot = [IO.Path]::GetFullPath($Root)
+if ($fullRoot -eq [IO.Path]::GetPathRoot($fullRoot)) {
+    throw "$fullRoot is a whole drive: give the backup a directory of its own, such as $(Join-Path $fullRoot 'Filum')."
+}
+$directories = @()
+if (Test-Path -LiteralPath $Root) {
+    if ((Get-Item -LiteralPath $Root -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) {
+        throw "$Root is a link, which the service would write through: give the backup a directory of its own."
+    }
+    $foreign = @(Get-ChildItem -LiteralPath $Root -Force | Where-Object {
+        -not ($_.PSIsContainer -and (Test-Path -LiteralPath (Join-Path $_.FullName '.filum')))
+    })
+    if ($foreign) {
+        throw "$Root holds more than backups ($(($foreign | Select-Object -First 5 | ForEach-Object Name) -join ', ')): give the backup a directory of its own."
+    }
+    $directories = @(Get-BackupDirectory $Root)
+}
+
 Remove-Registration
 
 $source = (Resolve-Path -LiteralPath $PSScriptRoot).Path.TrimEnd('\')
@@ -139,6 +178,26 @@ $server = Join-Path $installDirectory 'Filum.Server.exe'
 $tray = Join-Path $installDirectory 'Filum.Tray.exe'
 
 New-Item -ItemType Directory -Force -Path $Root | Out-Null
+
+# The backup is the service's to write. Whoever else could write to it could make a link there,
+# through which the service would write anywhere on the disk, or a device record of their own,
+# and any program they run could destroy the backup. The user who installs may read it, to
+# browse and copy it in Explorer. The root inherits nothing from its parent, which on a data
+# drive lets every signed-in user change everything below. The root and every directory already
+# in it go to administrators, since an owner may always change an object's rights, and those
+# directories lose rights given to them on their own; a right on a file changes that file alone.
+# /L changes a link itself rather than what it points to, should one appear after the check.
+# Granting with :r replaces only the named accounts' rights, so the root's own rights for anyone
+# else go first.
+$reader = '*' + [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+Invoke-Icacls $Root /reset /L
+Invoke-Icacls $Root /inheritance:r /grant:r "${system}:(OI)(CI)F" "${administrators}:(OI)(CI)F" "${reader}:(OI)(CI)RX" /L
+Invoke-Icacls $Root /setowner $administrators /L
+foreach ($directory in $directories | Select-Object -Skip 1) {
+    Invoke-Icacls $directory /reset /L
+    Invoke-Icacls $directory /setowner $administrators /L
+}
+
 New-Item -ItemType Directory -Force -Path $ConfigDirectory | Out-Null
 
 # The key is for SYSTEM and administrators. Signed-in users may list the directory, and read

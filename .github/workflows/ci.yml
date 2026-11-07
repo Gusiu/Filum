@@ -72,6 +72,20 @@ jobs:
           }
           $published = Get-PfxCertificate -FilePath (Join-Path $env:LOCALAPPDATA 'Filum\server.cer')
           "HAND_KEY=$($published.Thumbprint)" >> $env:GITHUB_ENV
+      # A backup written before the service, with rights such a backup can have: every
+      # signed-in user may change it, as below the root of a data drive, and one directory
+      # belongs to a group that is not administrators and grants that group a right of its own.
+      - name: Leave a backup made before the service
+        shell: pwsh
+        run: |
+          function Invoke-Icacls { & icacls.exe @args | Out-Null; if ($LASTEXITCODE) { throw "icacls $args failed." } }
+          $root = Join-Path $env:RUNNER_TEMP 'backup'
+          $device = Join-Path $root 'phone-abc123'
+          New-Item -ItemType Directory -Force (Join-Path $device '.filum'), (Join-Path $device 'files\DCIM') | Out-Null
+          Set-Content -LiteralPath (Join-Path $device 'files\DCIM\a.jpg') -Value 'kept'
+          Invoke-Icacls $root /grant '*S-1-5-11:(OI)(CI)M'
+          Invoke-Icacls (Join-Path $device 'files\DCIM') /grant '*S-1-5-32-545:(OI)(CI)M'
+          Invoke-Icacls (Join-Path $device 'files') /setowner '*S-1-5-32-545'
       # Windows PowerShell 5.1, as on a computer nobody has installed anything on.
       - name: Install
         shell: powershell
@@ -117,6 +131,38 @@ jobs:
               }
           }
           if (-not $offer) { throw 'The service does not answer on port 8766.' }
+      # Whoever could write to the backup could make a link there for the service, running as
+      # LocalSystem, to write through, or destroy the backup. The user who installs reads it.
+      - name: Only the service may write to the backup
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'backup'
+          $writers = 'S-1-5-18', 'S-1-5-32-544'
+          $user = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+          # Rights that change something: data, attributes, deletion, the rights themselves,
+          # ownership, and generic write and all.
+          $changing = 0x500D0156
+          if (-not (Get-Acl -LiteralPath $root).AreAccessRulesProtected) {
+              throw 'The backup root inherits rights from its parent.'
+          }
+          foreach ($item in @(Get-Item -LiteralPath $root -Force) + @(Get-ChildItem -LiteralPath $root -Force -Recurse)) {
+              $acl = Get-Acl -LiteralPath $item.FullName
+              $rules = @($acl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]) | Where-Object AccessControlType -eq 'Allow')
+              foreach ($rule in $rules) {
+                  if (([int]$rule.FileSystemRights -band $changing) -and $rule.IdentityReference.Value -notin $writers) {
+                      throw "$($rule.IdentityReference) may change $($item.FullName)."
+                  }
+              }
+              if (-not ($rules | Where-Object { $_.IdentityReference.Value -eq $user -and $_.FileSystemRights.HasFlag([Security.AccessControl.FileSystemRights]::ReadAndExecute) })) {
+                  throw "The user who installed may not read $($item.FullName)."
+              }
+              # The owner of a directory may always change its rights, and so make an entry in it.
+              $owner = $acl.GetOwner([Security.Principal.SecurityIdentifier]).Value
+              if ($item.PSIsContainer -and $owner -notin $writers) { throw "$($item.FullName) belongs to $owner." }
+          }
+          if ((Get-Content -LiteralPath (Join-Path $root 'phone-abc123\files\DCIM\a.jpg')) -ne 'kept') {
+              throw 'The backup made before the service changed.'
+          }
       - name: Uninstall
         shell: powershell
         run: '& "$env:ProgramFiles\Filum\Install-Filum.ps1" -Uninstall'
@@ -128,6 +174,38 @@ jobs:
           if (Test-Path "$env:ProgramFiles\Filum") { throw 'The program files are still there.' }
           if (-not (Test-Path "$env:RUNNER_TEMP\backup")) { throw 'The backup root is gone.' }
           if (-not (Test-Path (Join-Path $env:ProgramData 'Filum\server.pfx'))) { throw 'The key is gone.' }
+      # Installing changes the rights of everything under the root, so the installer takes no
+      # root that is a whole drive or holds more than backups, and none holding a link, which
+      # the change - and the service - would follow out of the backup.
+      - name: The installer refuses a root that is not a backup's
+        shell: powershell
+        run: |
+          $foreign = Join-Path $env:RUNNER_TEMP 'foreign'
+          $linked = Join-Path $env:RUNNER_TEMP 'linked'
+          $drive = Join-Path $env:RUNNER_TEMP 'drive'
+          New-Item -ItemType Directory -Force (Join-Path $foreign 'Documents'), (Join-Path $linked 'phone-abc123\.filum'), (Join-Path $linked 'phone-abc123\files'), $drive | Out-Null
+          $link = New-Item -ItemType Junction -Path (Join-Path $linked 'phone-abc123\files\DCIM') -Target $foreign
+          if (-not ($link.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'The junction was not made.' }
+          $letter = [char[]]'XYZW' | Where-Object { -not (Test-Path "$($_):\") } | Select-Object -First 1
+          subst "$($letter):" $drive
+          if (-not (Test-Path "$($letter):\")) { throw "subst did not make $($letter):." }
+          try {
+              foreach ($case in @(@("$($letter):\", 'whole drive'), @($foreign, 'more than backups'), @($linked, 'is a link'))) {
+                  $root, $reason = $case
+                  $refused = $false
+                  try {
+                      & "$env:RUNNER_TEMP\release\Install-Filum.ps1" -Root $root -Port 8766
+                  } catch {
+                      if ("$_" -notmatch $reason) { throw "The installer refused $root for another reason: $_" }
+                      $refused = $true
+                      Write-Host "Refused $root - $_"
+                  }
+                  if (-not $refused) { throw "The installer took $root as a backup root." }
+              }
+          } finally {
+              subst "$($letter):" /D
+          }
+          if (Get-Service Filum -ErrorAction SilentlyContinue) { throw 'A refused install left a service behind.' }
       - name: Service log
         if: failure()
         shell: pwsh
