@@ -39,6 +39,9 @@ public sealed class DeviceRegistry
 
     public DeviceRecord? FindByPin(string pin) => _byPin.GetValueOrDefault(pin);
 
+    public DeviceRecord? FindBySlug(string slug) =>
+        _byPin.Values.FirstOrDefault(d => string.Equals(d.Slug, slug, StringComparison.Ordinal));
+
     /// <summary>Re-reads the backup directory. Called at startup and after external changes.</summary>
     public void Reload()
     {

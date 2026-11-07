@@ -68,8 +68,13 @@ public sealed class AdminService(
 
     public bool SetEnabled(string pin, bool enabled) => registry.SetEnabled(pin, enabled);
 
-    /// <summary>The device's latest orphan report; null when no full reconciliation has run yet.</summary>
-    public OrphanReport? Orphans(string slug) => orphans.Latest(slug);
+    /// <summary>
+    /// The latest orphan report of the paired device with this slug; null for a slug no
+    /// device has, or when no full reconciliation has run yet. The slug comes from the page's
+    /// address, so only the registry's own copy of it goes into a path.
+    /// </summary>
+    public OrphanReport? Orphans(string slug) =>
+        registry.FindBySlug(slug) is { } device ? orphans.Latest(device.Slug) : null;
 
     /// <summary>
     /// Revokes a device's access but **does not delete its files**.
