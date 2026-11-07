@@ -109,6 +109,15 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
     implementation(libs.zxing.core)
+
+    // CameraX brings in media3, and media3 an older Guava. Versions up to 33.7.1 run out of
+    // memory deserialising some of their collections (CVE-2026-102554). The app deserialises no
+    // Java objects, but holding Guava at the fixed version costs nothing.
+    constraints {
+        implementation(libs.guava) {
+            because("CVE-2026-102554 affects Guava up to 33.7.1, which CameraX brings in through media3")
+        }
+    }
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
