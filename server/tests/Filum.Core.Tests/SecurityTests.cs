@@ -129,6 +129,23 @@ public class DeviceRegistryTests
     }
 
     [Theory]
+    [InlineData("../outside")]
+    [InlineData("another-phone-abc123")]
+    public void ARecordWhoseSlugIsNotItsDirectoryName_IsSkipped(string slug)
+    {
+        // device.json is a file anyone with the disk can edit, and its slug goes into every
+        // path the server builds for the device. Taken as it stands, "../outside" would put
+        // the device's files outside the backup root.
+        using var h = new Harness();
+        var meta = Path.Combine(h.Root, "planted", ".filum");
+        Directory.CreateDirectory(meta);
+        File.WriteAllText(Path.Combine(meta, "device.json"), JsonSerializer.Serialize(
+            new DeviceRecord("PIN-PLANTED", slug, "Planted", DateTimeOffset.UtcNow)));
+
+        Assert.Null(new DeviceRegistry(h.Paths).FindByPin("PIN-PLANTED"));
+    }
+
+    [Theory]
     [InlineData("Galaxy S24 Ultra", "galaxy-s24-ultra-abcdef")]
     [InlineData("  ", "device-abcdef")]
     [InlineData("Phone@#$%Żony", "phone-ony-abcdef")]

@@ -19,7 +19,8 @@ public sealed record DeviceRecord(
 /// <summary>
 /// The list of paired devices. The disk remains the source of truth (ADR-003) - memory is
 /// only a cache, because the read has to be cheap on every HTTP request. Deleting a
-/// device's directory in Explorer unpairs it once the server restarts.
+/// device's directory in Explorer unpairs it once the server restarts, and so does renaming
+/// it: a record counts only in the directory its slug names.
 /// </summary>
 public sealed class DeviceRegistry
 {
@@ -55,7 +56,13 @@ public sealed class DeviceRegistry
             {
                 var record = JsonSerializer.Deserialize<DeviceRecord>(
                     File.ReadAllText(LongPath.Extended(file)), Json);
-                if (record is not null) _byPin[record.Pin] = record;
+
+                // The slug goes into every path the server builds for the device, and
+                // device.json is a file anyone with the disk can edit. A record is taken only
+                // from the directory it names, so a slug such as "../outside" cannot carry the
+                // device's files out of the backup root.
+                if (record is not null && string.Equals(record.Slug, Path.GetFileName(directory), StringComparison.Ordinal))
+                    _byPin[record.Pin] = record;
             }
             catch (JsonException)
             {
