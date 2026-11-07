@@ -45,6 +45,33 @@ jobs:
                   --runtime win-x64 --self-contained -p:PublishSingleFile=true --output "$env:RUNNER_TEMP/release"
           }
           Copy-Item server/install/Install-Filum.ps1 "$env:RUNNER_TEMP/release"
+      # A server started by hand before the service keeps its key in its user's profile. The
+      # installer is to move that key to the service, so the phones paired with it stay paired.
+      - name: Run the server by hand first
+        shell: pwsh
+        run: |
+          $server = Start-Process -PassThru -FilePath "$env:RUNNER_TEMP\release\Filum.Server.exe" -ArgumentList @(
+              "--Filum:Root=$env:RUNNER_TEMP\by-hand",
+              '--Filum:Bind=127.0.0.1',
+              '--Filum:Port=8767',
+              '--Filum:EnableMdns=false'
+          )
+          try {
+              $offer = $null
+              foreach ($attempt in 1..30) {
+                  try {
+                      $offer = Invoke-RestMethod https://127.0.0.1:8767/api/v1/pair/new -SkipCertificateCheck
+                      break
+                  } catch {
+                      Start-Sleep -Seconds 1
+                  }
+              }
+              if (-not $offer) { throw 'The server started by hand does not answer on port 8767.' }
+          } finally {
+              Stop-Process -Id $server.Id -ErrorAction SilentlyContinue
+          }
+          $published = Get-PfxCertificate -FilePath (Join-Path $env:LOCALAPPDATA 'Filum\server.cer')
+          "HAND_KEY=$($published.Thumbprint)" >> $env:GITHUB_ENV
       # Windows PowerShell 5.1, as on a computer nobody has installed anything on.
       - name: Install
         shell: powershell
@@ -65,6 +92,20 @@ jobs:
           function Readers($file) { (Get-Acl $file).Access | Where-Object { $_.IdentityReference.Value -eq $users } }
           if (Readers (Join-Path $config 'server.pfx')) { throw 'Users can read the private key.' }
           if (-not (Readers (Join-Path $config 'server.cer'))) { throw 'Users cannot read server.cer.' }
+
+          # The key of the server started by hand moved: the service serves it, the profile
+          # holds it no longer, and the user who ran that server has no right of their own to it.
+          if ((Get-PfxCertificate -FilePath (Join-Path $config 'server.cer')).Thumbprint -ne $env:HAND_KEY) {
+              throw 'The service did not take the key of the server started by hand.'
+          }
+          if (Test-Path (Join-Path $env:LOCALAPPDATA 'Filum\server.pfx')) {
+              throw 'The key is still in the profile of the user who started the server by hand.'
+          }
+          $user = [Security.Principal.WindowsIdentity]::GetCurrent().User
+          $rules = (Get-Acl (Join-Path $config 'server.pfx')).GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier])
+          if ($rules | Where-Object { $_.IdentityReference -eq $user }) {
+              throw 'The user who started the server by hand has a right of their own to the key.'
+          }
 
           $offer = $null
           foreach ($attempt in 1..30) {
