@@ -83,6 +83,12 @@ directly.
   be classified as a public network. A rule created only for the private profile will work
   at home and silently stop working remotely. The install script,
   `server/install/Install-Filum.ps1`, creates the rule for Domain, Private and Public.
+- **Junctions in the backup.** The path check compares strings, and a write follows a
+  junction. One that any account could make in the backup would carry the service's writes,
+  made as LocalSystem, anywhere on the disk - and below the root of a data drive every
+  signed-in user may change everything. The install script therefore gives the backup root to
+  the service: SYSTEM and administrators may change it, the user who installs may read it, and
+  a root holding a link is refused.
 - **The `\\?\` prefix** on every file operation.
 - **`Path.Combine`** discards its first argument when the second is rooted - see the note in
   [PATH-RULES.md](PATH-RULES.md) §4.

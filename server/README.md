@@ -124,8 +124,13 @@ server's key goes to `%ProgramData%\Filum`, readable to SYSTEM and administrator
 the tray icon pins the server by `server.cer`, the certificate the server publishes there
 without the key. A key that a server started by hand left in `%LOCALAPPDATA%\Filum` moves
 there, so the phones paired with that server stay paired and no copy stays where the user's
-own programs can read it - give `-Root` the directory that server used. `-Uninstall`
-removes everything but the backup and the key.
+own programs can read it - give `-Root` the directory that server used. The backup becomes
+the service's: SYSTEM and administrators may change it, the user who installs may read it, to
+browse and copy it, and nobody else gets in, so no other account and no program a user runs
+can alter it, and deleting from it by hand takes an administrator. The root must be a
+directory of its own, holding device directories alone and no link; the installer refuses any
+other, since the rights of everything in it change. `-Uninstall` removes everything but the
+backup, which keeps its rights, and the key.
 
 The service runs in session 0 and **cannot show a UI** - which is why the tray icon is
 a separate process started at sign-in (ADR-010).
