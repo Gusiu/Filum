@@ -44,8 +44,9 @@ class RoomSyncQueue(
     /** The absolute path is not in the database: it follows from the scan and changes with the volume. */
     private val absolutePaths = HashMap<String, String>()
 
-    override suspend fun enqueue(files: List<ScannedFile>) {
+    override suspend fun enqueue(files: List<ScannedFile>): Int {
         val now = clock()
+        var changed = 0
 
         val entries = files.map { file ->
             absolutePaths[file.canonicalPath] = file.absolutePath
@@ -58,6 +59,7 @@ class RoomSyncQueue(
             if (unchanged) {
                 existing!!
             } else {
+                if (existing?.state == FileState.DONE) changed++
                 // A change of size or mtime invalidates the progress so far:
                 // resuming would splice two different versions of the file.
                 FileEntryEntity(
@@ -72,6 +74,7 @@ class RoomSyncQueue(
         }
 
         dao.upsert(entries)
+        return changed
     }
 
     override suspend fun markAlreadyOnServer(paths: List<String>) {

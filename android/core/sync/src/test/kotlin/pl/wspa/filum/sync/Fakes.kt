@@ -57,14 +57,17 @@ class FakeQueue : SyncQueue {
         const val MAX_WRITES = 10_000L
     }
 
-    override suspend fun enqueue(files: List<ScannedFile>) {
+    override suspend fun enqueue(files: List<ScannedFile>): Int {
+        var changed = 0
         for (file in files) {
             val existing = rows[file.canonicalPath]
             if (existing != null && existing.file.size == file.size && existing.file.mtime() == file.mtime()) {
                 continue
             }
+            if (existing?.state == State.DONE) changed++
             rows[file.canonicalPath] = Row(file).apply { touch() }
         }
+        return changed
     }
 
     private fun ScannedFile.mtime() = mtimeSeconds

@@ -45,6 +45,9 @@ class SyncEngine(
     private var filesQueued = 0
     private val filesFailed = AtomicInteger()
 
+    /** Files already in the backup whose content changed, counted while the manifest is agreed. */
+    private var filesChanged = 0
+
     /**
      * Files that failed, or had to be skipped, during this cycle. They stay in the queue, which
      * hands them straight back: without this set the cycle would retry them at once, and a
@@ -63,12 +66,33 @@ class SyncEngine(
         bytesSent.set(0)
         filesQueued = 0
         filesFailed.set(0)
+        filesChanged = 0
         deferred.clear()
 
         val reconciled = reconcile(sessionId, mode, files, deadline)
+        warnOfMassChange()
         if (reconciled != null) return reconciled
 
         return upload(deadline)
+    }
+
+    /**
+     * Ransomware rewrites the files it encrypts, so many files already in the backup changing
+     * in one cycle is the sign to raise. New files do not count: a first backup or a day of
+     * photos brings many of them. The backup keeps every previous version either way, and the
+     * cycle goes on; the warning is there so the person learns of it now rather than when they
+     * come to restore. It is raised even when the server cannot be reached, since the change
+     * happened on the phone.
+     */
+    private suspend fun warnOfMassChange() {
+        if (filesChanged < config.massChangeFiles) return
+
+        journal.record(
+            JournalLevel.WARN, "mass_change",
+            "$filesChanged files already in the backup changed in one cycle. If you did not change " +
+                "them, something on this phone may be encrypting them - the backup keeps their " +
+                "previous versions.",
+        )
     }
 
     // --- agreeing the manifest (protocol §5.2) ---
@@ -99,7 +123,7 @@ class SyncEngine(
             val batch = batches.next()
             val isLast = !batches.hasNext()
 
-            queue.enqueue(batch)
+            filesChanged += queue.enqueue(batch)
 
             val request = ManifestRequest(
                 session = sessionId,
