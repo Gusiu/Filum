@@ -109,11 +109,17 @@ class Bench(private val context: Context, private val container: AppContainer) {
      * One full cycle over a set through the real SyncRunner - route race, Room queue, HTTP
      * client and all. The set moves under a fresh run directory first, so the server sees
      * files it does not hold yet, and moves back afterwards.
+     *
+     * `prune=false` keeps the queue's finished entries. A run under an earlier run's name then
+     * finds that run's files already in the backup, and a set generated anew in between - with
+     * another size - comes back changed: how the warning about many changed files is tried on
+     * the phone.
      */
     private suspend fun sync(arguments: Map<String, String>): JSONObject {
         val name = arguments.need("set")
         val run = arguments.need("run")
         val parallel = arguments["parallel"]?.toInt() ?: 1
+        val prune = arguments["prune"]?.toBooleanStrict() ?: true
 
         val source = File(sets, name)
         require(source.isDirectory) { "no set \"$name\" - generate it first" }
@@ -127,7 +133,7 @@ class Bench(private val context: Context, private val container: AppContainer) {
         try {
             // Finished queue entries from earlier runs would make every batch query longer,
             // and a run would no longer measure the same work as the one before it.
-            container.database.files().pruneCompleted(System.currentTimeMillis() + 1)
+            if (prune) container.database.files().pruneCompleted(System.currentTimeMillis() + 1)
 
             // Time to pull the cable out before the battery is read (energy per gigabyte).
             arguments["startDelay"]?.toLong()?.let { delay(it * 1000) }
