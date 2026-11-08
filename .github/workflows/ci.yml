@@ -94,6 +94,15 @@ jobs:
         shell: pwsh
         run: |
           if ((Get-Service Filum).Status -ne 'Running') { throw 'The service is not running.' }
+
+          # The service runs under its own virtual account and keeps no privilege but traversing
+          # directories, so a flaw in it reaches no further than what that account may touch.
+          $account = (Get-CimInstance Win32_Service -Filter "Name='Filum'").StartName
+          if ($account -ne 'NT SERVICE\Filum') { throw "The service runs as $account." }
+          $privileges = [regex]::Matches((& sc.exe qprivs Filum) -join "`n", 'Se\w+Privilege').Value
+          if ("$privileges" -ne 'SeChangeNotifyPrivilege') { throw "The service keeps privileges: $privileges." }
+          if (-not [Diagnostics.EventLog]::SourceExists('Filum.Server')) { throw 'The service has no event log source.' }
+
           foreach ($rule in 'Filum-TCP-In', 'Filum-mDNS-In') {
               if ((Get-NetFirewallRule -Name $rule).Profile -ne 'Any') { throw "$rule is not open on every profile." }
           }
@@ -131,14 +140,32 @@ jobs:
               }
           }
           if (-not $offer) { throw 'The service does not answer on port 8766.' }
-      # Whoever could write to the backup could make a link there for the service, running as
-      # LocalSystem, to write through, or destroy the backup. The user who installs reads it.
+
+          # Pairing writes the device's record into the backup, so it shows that the service's
+          # account may write there.
+          $key = [Security.Cryptography.ECDsa]::Create([Security.Cryptography.ECCurve+NamedCurves]::nistP256)
+          $request = [Security.Cryptography.X509Certificates.CertificateRequest]::new('CN=CI phone', $key, [Security.Cryptography.HashAlgorithmName]::SHA256)
+          $phone = $request.CreateSelfSigned([DateTimeOffset]::UtcNow.AddDays(-1), [DateTimeOffset]::UtcNow.AddDays(1))
+          $body = @{ cert = [Convert]::ToBase64String($phone.Export('Cert')); label = 'CI phone' } | ConvertTo-Json
+          Invoke-RestMethod https://127.0.0.1:8766/api/v1/pair -Method Post -Body $body -ContentType 'application/json' `
+              -Headers @{ Authorization = "Bearer $($offer.payload.t)" } -SkipCertificateCheck | Out-Null
+          $device = Get-ChildItem -LiteralPath (Join-Path $env:RUNNER_TEMP 'backup') -Directory | Where-Object Name -like 'ci-phone-*'
+          if (-not $device -or -not (Test-Path (Join-Path $device.FullName '.filum\device.json'))) {
+              throw 'Pairing wrote no device record into the backup.'
+          }
+      # Whoever could write to the backup could make a link there for the service to write
+      # through, or destroy the backup. The user who installs reads it.
       - name: Only the service may write to the backup
         shell: pwsh
         run: |
           $root = Join-Path $env:RUNNER_TEMP 'backup'
-          $writers = 'S-1-5-18', 'S-1-5-32-544'
+          $service = (New-Object Security.Principal.NTAccount 'NT SERVICE\Filum').Translate([Security.Principal.SecurityIdentifier]).Value
+          $writers = 'S-1-5-18', 'S-1-5-32-544', $service
           $user = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+          $rootRules = (Get-Acl -LiteralPath $root).GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier])
+          if (-not ($rootRules | Where-Object { $_.IdentityReference.Value -eq $service -and $_.FileSystemRights.HasFlag([Security.AccessControl.FileSystemRights]::Modify) })) {
+              throw "The service's account may not change the backup."
+          }
           # Rights that change something: data, attributes, deletion, the rights themselves,
           # ownership, and generic write and all.
           $changing = 0x500D0156
@@ -174,6 +201,7 @@ jobs:
           if (Test-Path "$env:ProgramFiles\Filum") { throw 'The program files are still there.' }
           if (-not (Test-Path "$env:RUNNER_TEMP\backup")) { throw 'The backup root is gone.' }
           if (-not (Test-Path (Join-Path $env:ProgramData 'Filum\server.pfx'))) { throw 'The key is gone.' }
+          if ([Diagnostics.EventLog]::SourceExists('Filum.Server')) { throw 'The event log source is still there.' }
       # Installing changes the rights of everything under the root, so the installer takes no
       # root that is a whole drive or holds more than backups, and none holding a link, which
       # the change - and the service - would follow out of the backup.

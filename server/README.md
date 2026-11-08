@@ -118,19 +118,21 @@ The release zip holds the server and the tray icon as self-contained executables
 ```
 
 It copies the program to `%ProgramFiles%\Filum`, registers the service `Filum` (started
-with the computer, restarted if it fails, running as `LocalSystem`), opens the port and
-mDNS in the firewall on every profile, and starts the tray icon at every sign-in. The
-server's key goes to `%ProgramData%\Filum`, readable to SYSTEM and administrators alone;
+with the computer, restarted if it fails, running under its own virtual account
+`NT SERVICE\Filum` with no privilege but traversing directories, so that a flaw in the
+server reaches the backup and the key and nothing else), opens the port and mDNS in the
+firewall on every profile, and starts the tray icon at every sign-in. The server's key goes
+to `%ProgramData%\Filum`, readable to the service, SYSTEM and administrators alone;
 the tray icon pins the server by `server.cer`, the certificate the server publishes there
 without the key. A key that a server started by hand left in `%LOCALAPPDATA%\Filum` moves
 there, so the phones paired with that server stay paired and no copy stays where the user's
 own programs can read it - give `-Root` the directory that server used. The backup becomes
-the service's: SYSTEM and administrators may change it, the user who installs may read it, to
-browse and copy it, and nobody else gets in, so no other account and no program a user runs
-can alter it, and deleting from it by hand takes an administrator. The root must be a
-directory of its own, holding device directories alone and no link; the installer refuses any
-other, since the rights of everything in it change. `-Uninstall` removes everything but the
-backup, which keeps its rights, and the key.
+the service's: the service, SYSTEM and administrators may change it, the user who installs
+may read it, to browse and copy it, and nobody else gets in, so no other account and no
+program a user runs can alter it, and deleting from it by hand takes an administrator. The
+root must be a directory of its own, holding device directories alone and no link; the
+installer refuses any other, since the rights of everything in it change. `-Uninstall`
+removes everything but the backup, which keeps its rights, and the key.
 
 The service runs in session 0 and **cannot show a UI** - which is why the tray icon is
 a separate process started at sign-in (ADR-010).
