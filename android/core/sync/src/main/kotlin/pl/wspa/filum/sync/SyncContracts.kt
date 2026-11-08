@@ -53,7 +53,11 @@ data class QueuedFile(
 /** The queue's durable state. It has to survive the process being killed - that is what resumability means. */
 interface SyncQueue {
 
-    suspend fun enqueue(files: List<ScannedFile>)
+    /**
+     * Returns how many of [files] were already in the backup and now have another size or
+     * modification time - files whose content changed after it was backed up.
+     */
+    suspend fun enqueue(files: List<ScannedFile>): Int
 
     /** The server already has these; nothing is sent. */
     suspend fun markAlreadyOnServer(paths: List<String>)
@@ -141,6 +145,16 @@ data class SyncConfig(
      * batch.
      */
     val parallelTransfers: Int = 1,
+
+    /**
+     * How many files already in the backup have to change in one cycle for the journal and the
+     * home screen to warn of it - what encryption by ransomware looks like from the phone.
+     *
+     * Routine cycles change few such files: the photos of a day are new files, and the one
+     * incremental cycle measured on the test phone sent 21 files, new and changed together.
+     * Fifty stays clear of that, while encrypting even one folder of photos goes past it.
+     */
+    val massChangeFiles: Int = 50,
 ) {
     init {
         require(parallelTransfers in 1..MAX_PARALLEL_TRANSFERS) {

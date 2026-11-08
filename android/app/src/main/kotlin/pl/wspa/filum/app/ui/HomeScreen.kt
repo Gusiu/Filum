@@ -43,6 +43,7 @@ fun HomeScreen(
     activity: SyncActivity,
     onSyncNow: () -> Unit,
     onVerify: () -> Unit,
+    onMassChangeSeen: () -> Unit,
     onScheduleChange: (Schedule) -> Unit,
     onIntegrityPolicyChange: (IntegrityPolicy) -> Unit,
     onOpenLog: () -> Unit,
@@ -129,6 +130,8 @@ fun HomeScreen(
                 }
             }
         }
+
+        state.massChangeAlarm?.let { MassChangeCard(it, onMassChangeSeen) }
 
         LedgerWitnessCard(state.witnessedHead, state.ledgerAlarm)
 
@@ -319,5 +322,24 @@ private fun LedgerWitnessCard(head: WitnessedHeadEntity?, alarm: String?) {
             "Ledger witnessed: ${head.entries} entries, at ${formatTime(head.witnessedAt)}.",
             style = MaterialTheme.typography.bodySmall,
         )
+    }
+}
+
+/**
+ * Many files already in the backup changed in one cycle - possibly encryption by ransomware.
+ * The card stays until the person says they have seen it: the next cycle, finding nothing new,
+ * may well run before they look.
+ */
+@Composable
+private fun MassChangeCard(message: String, onSeen: () -> Unit) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("Many files changed at once", style = MaterialTheme.typography.titleSmall)
+            Text(message, style = MaterialTheme.typography.bodySmall)
+            TextButton(onClick = onSeen) { Text("I have seen this") }
+        }
     }
 }
