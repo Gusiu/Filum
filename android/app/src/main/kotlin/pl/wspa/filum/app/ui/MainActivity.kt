@@ -52,6 +52,7 @@ class MainActivity : ComponentActivity() {
                                 activity = activity,
                                 onSyncNow = model::syncNow,
                                 onVerify = model::verify,
+                                onMassChangeSeen = model::acknowledgeMassChange,
                                 onScheduleChange = model::setSchedule,
                                 onIntegrityPolicyChange = model::setIntegrityPolicy,
                                 onOpenLog = { model.show(Screen.LOG) },

@@ -198,7 +198,10 @@ interface LogEventDao {
     @Query("SELECT * FROM log_event ORDER BY at DESC, id DESC LIMIT :limit")
     suspend fun recent(limit: Int = LogEventDao.RETENTION): List<LogEventEntity>
 
-    /** The newest event of the given kinds - what the home screen says about the ledger. */
+    /**
+     * The newest event of the given kinds - what the home screen says about the ledger and about
+     * files changed in one cycle.
+     */
     @Query("SELECT * FROM log_event WHERE code IN (:codes) ORDER BY at DESC, id DESC LIMIT 1")
     fun observeLatestOf(codes: List<String>): Flow<LogEventEntity?>
 
@@ -206,10 +209,15 @@ interface LogEventDao {
      * Trims the journal to the last [RETENTION] events. The log screen shows that many
      * anyway, and across a hundred thousand files an unbounded journal would grow faster
      * than the data itself.
+     *
+     * A warning that many files changed in one cycle (`mass_change`, written by the sync
+     * engine) and the person's acknowledgement of it (`mass_change_seen`) stay whatever their
+     * age. The home screen shows the newest warning until it is acknowledged, and one trimmed
+     * away unseen would vanish from the screen as well. Both are rare.
      */
     @Query(
         """
-        DELETE FROM log_event WHERE id NOT IN (
+        DELETE FROM log_event WHERE code NOT IN ('mass_change', 'mass_change_seen') AND id NOT IN (
             SELECT id FROM log_event ORDER BY at DESC, id DESC LIMIT :keep
         )
         """

@@ -27,6 +27,7 @@ import pl.wspa.filum.data.SyncSessionEntity
 import pl.wspa.filum.data.WitnessedHeadEntity
 import pl.wspa.filum.scan.Environment
 import pl.wspa.filum.scan.ExclusionRules
+import pl.wspa.filum.sync.JournalLevel
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -41,6 +42,13 @@ enum class Screen { HOME, PAIRING, LOG, FOLDERS }
  */
 private val LEDGER_EVENTS = listOf("ledger_witnessed", "ledger_rewritten")
 
+/**
+ * A warning that many files already in the backup changed in one cycle, and the person's word
+ * that they have seen it. The warning is about an event, not a state the next cycle checks
+ * again, so it lasts until acknowledged rather than until the next cycle.
+ */
+private val MASS_CHANGE_EVENTS = listOf("mass_change", "mass_change_seen")
+
 data class UiState(
     val screen: Screen = Screen.HOME,
     val server: PairedServerEntity? = null,
@@ -53,6 +61,8 @@ data class UiState(
     val witnessedHead: WitnessedHeadEntity? = null,
     /** Set while the newest check of the ledger found it rewritten. */
     val ledgerAlarm: String? = null,
+    /** Set from a warning that many files changed in one cycle until the person acknowledges it. */
+    val massChangeAlarm: String? = null,
     val lastError: String? = null,
     val verifying: Boolean = false,
     val verification: String? = null,
@@ -96,10 +106,15 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
                 container.database.files().observePending(),
                 container.database.witnessedHeads().observeLatest(),
                 container.database.log().observeLatestOf(LEDGER_EVENTS),
-            ) { sessions, pending, head, ledgerEvent ->
+                container.database.log().observeLatestOf(MASS_CHANGE_EVENTS),
+            ) { sessions, pending, head, ledgerEvent, massChangeEvent ->
                 // Every later cycle checks again, so the alarm lasts exactly as long as the
                 // newest check keeps finding the ledger rewritten.
-                Progress(sessions.firstOrNull(), pending, head, ledgerEvent?.takeIf { it.code == "ledger_rewritten" }?.message)
+                Progress(
+                    sessions.firstOrNull(), pending, head,
+                    ledgerEvent?.takeIf { it.code == "ledger_rewritten" }?.message,
+                    massChangeEvent?.takeIf { it.code == "mass_change" }?.message,
+                )
             }
                 .collect { progress ->
                     _state.value = _state.value.copy(
@@ -107,6 +122,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
                         pendingFiles = progress.pending,
                         witnessedHead = progress.head,
                         ledgerAlarm = progress.ledgerAlarm,
+                        massChangeAlarm = progress.massChangeAlarm,
                     )
                 }
         }
@@ -252,6 +268,18 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    /** Records that the person has seen the warning about files changed in one cycle, which clears it. */
+    fun acknowledgeMassChange() {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                container.journal.record(
+                    JournalLevel.INFO, "mass_change_seen",
+                    "The warning about files changed in one cycle was acknowledged.",
+                )
+            }
+        }
+    }
+
     fun setSchedule(schedule: Schedule) {
         viewModelScope.launch {
             val updated = _state.value.settings.copy(schedule = schedule)
@@ -284,6 +312,7 @@ class MainViewModel(private val container: AppContainer) : ViewModel() {
         val pending: Int,
         val head: WitnessedHeadEntity?,
         val ledgerAlarm: String?,
+        val massChangeAlarm: String?,
     )
 
     class Factory(private val container: AppContainer) : ViewModelProvider.Factory {

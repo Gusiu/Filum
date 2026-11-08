@@ -251,6 +251,15 @@ The last step follows a cycle that completed: the phone holds the server's ledge
 head it witnessed last (protocol §9.5, ADR-019). A cycle cut short skips it and loses nothing -
 the next check covers every line since that head.
 
+Building the queue also shows what changed on the phone. A file already in the backup that
+comes back with another size or modification time has had its content changed. When at least
+50 of them change in one cycle (`SyncConfig.massChangeFiles`), the engine writes a warning to
+the journal, and the home screen shows it until the person acknowledges it - ransomware
+rewrites the files it encrypts. The cycle goes on, since the backup keeps every previous
+version. New files do not count: a first backup or a day of photos brings many of them.
+Encryption that writes new files and deletes the originals shows up instead as new files here
+and as orphans in the next full reconciliation (protocol §5.6).
+
 ---
 
 ## 5. Server panel
