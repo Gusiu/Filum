@@ -98,3 +98,33 @@ walks the tree.
   on the phone. The witness after a cycle of 2048 files reads one page and takes 0.42 s.
 - The last manifest batch of a full cycle takes 0.5-0.8 s on the server against 70-90 ms for
   the others: the orphan report walks the device's directory, 129,000 files at the time.
+
+## 6. HTTP/2 flow-control windows
+
+A large file goes up in one stream, and the phone may have no more of it in flight - sent, but
+not yet read by the server and acknowledged - than the flow-control window. Kestrel's defaults
+on .NET 9 are 768 KB a stream and 1 MB a connection. Two series of 16 files of 16 MB, each file
+a request of its own, with the server restarted for every change of its windows:
+
+- the first on a quiet night, in the setup above, the windows in blocks, three runs a point;
+- the second in the evening, with the phone's power saving off, on channel 64 at 2401 Mb/s,
+  with a ping from the computer to the idle phone averaging 131 ms, the windows and the number
+  of transfers alternating and their order turning every round, five runs a point.
+
+| Stream / connection window | At once | First series: s; MB/s | Second series: s; MB/s | Server's handling of a file, ms: first; second |
+|---|---|---|---|---|
+| 768 KB / 1 MB (default) | 1 | 12.0 ± 1.1; 21.4 | 65.9 ± 3.9; 3.9 | 541; 3523 |
+| 1 MB / 4 MB | 1 | 11.5 ± 0.4; 22.2 | 56.8 ± 6.7; 4.5 | 498; 3141 |
+| 8 MB / 32 MB | 1 | 8.6 ± 0.2; 29.7 | 27.7 ± 5.4; 9.2 | 308; 1352 |
+| 768 KB / 1 MB (default) | 3 | 14.4 ± 0.2; 17.8 | 78.0 ± 2.7; 3.3 | 2131; 12869 |
+| 1 MB / 4 MB | 3 | 14.3 ± 0.2; 17.9 | 44.4 ± 19.2; 5.8 | 2066; 6963 |
+| 8 MB / 32 MB | 3 | 14.4 ± 0.3; 17.8 | 56.3 ± 28.4; 4.5 | 2081; 8463 |
+
+The 8 MB window is the one that matters: one file at a time went 1.4 times faster on the
+quiet night and 2.4 times faster in the evening, when the default window took 5.5 times as long.
+A 1 MB window is barely more than the default and gives barely more. Three transfers at once
+gain nothing consistent, and in the evening their times scattered widely. At 30 MB/s the
+default window covers some 25 ms of a transfer and the 8 MB one more than a quarter of a
+second. The series do not tell whether the phone waited on the network or on the server's
+reading, nor why the evening was slower; the larger window bridges delays on either side, so
+the server sets 8 MB a stream and 32 MB a connection.
