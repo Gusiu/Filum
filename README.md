@@ -62,6 +62,7 @@ monotonic - it can only grow.
 | [docs/PATH-RULES.md](docs/PATH-RULES.md) | path normalisation and sanitisation for NTFS |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | module breakdown, flows, build order |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | architecture decision record, including the rejected alternatives |
+| [docs/MEASUREMENTS.md](docs/MEASUREMENTS.md) | measurements on a real phone behind the transfer settings, with the commands to repeat them |
 | [docs/testvectors/paths.tsv](docs/testvectors/paths.tsv) | shared test vectors for path sanitisation |
 | [tools/verify_ledger.py](tools/verify_ledger.py) | an independent check of a backup: the ledger's chain, every file and every previous version, or the provenance of one file |
 

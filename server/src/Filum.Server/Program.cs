@@ -61,6 +61,16 @@ builder.WebHost.ConfigureKestrel(kestrel =>
     // not a transport limit.
     kestrel.Limits.MaxRequestBodySize = null;
 
+    // A large file goes up in one HTTP/2 stream, and the phone may have no more of it in
+    // flight - sent, but not yet read by the server and acknowledged - than the flow-control
+    // window. Kestrel's defaults, 768 KB a stream and 1 MB a connection, cover some 25 ms of
+    // a transfer at 30 MB/s, so any delay in the network or in the server's reading stalls
+    // the phone. On the test phone a single 16 MB file went 1.4 to 2.4 times slower with them
+    // than with these windows (docs/MEASUREMENTS.md §6). The cost is memory: a connection may
+    // hold up to 32 MB that the server has not read yet.
+    kestrel.Limits.Http2.InitialStreamWindowSize = 8 * 1024 * 1024;
+    kestrel.Limits.Http2.InitialConnectionWindowSize = 32 * 1024 * 1024;
+
     kestrel.Listen(IPAddress.Parse(options.Bind), options.Port, listen =>
         listen.UseHttps(https => ServerTls.Configure(https, certificates.Certificate)));
 });

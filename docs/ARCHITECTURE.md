@@ -310,6 +310,9 @@ Worth planning from the start, because some of it requires preparing data:
 7. **Comparison against existing tools** (Syncthing, FolderSync, Resilio) - primarily on
    semantics, not only on speed.
 
+The measurements taken, with their setup and the commands to repeat them, are in
+[MEASUREMENTS.md](MEASUREMENTS.md).
+
 ---
 
 ## 8. Build order
