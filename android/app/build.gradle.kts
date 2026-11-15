@@ -4,7 +4,7 @@ plugins {
 }
 
 /** The release workflow checks this against the server's version and the tag. */
-val appVersion = "0.1.0"
+val appVersion = "1.0.0"
 
 /**
  * major * 10000 + minor * 100 + patch, so every release has a greater code than the one
