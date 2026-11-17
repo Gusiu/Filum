@@ -9,7 +9,9 @@ import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
 import android.os.BatteryManager
 import android.os.SystemClock
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import pl.wspa.filum.app.AppContainer
@@ -140,10 +142,20 @@ class Bench(private val context: Context, private val container: AppContainer) {
 
             val before = battery()
             val started = SystemClock.elapsedRealtime()
-            val cycle = container.syncRunner.runOnce(
-                mode = ManifestRequest.MODE_FULL,
-                override = SyncRunner.Override(root = live, parallelTransfers = parallel),
-            )
+            val current = JSONArray()
+            val cycle = coroutineScope {
+                val sampling = launch { sampleCurrent(current, started) }
+                try {
+                    container.syncRunner.runOnce(
+                        mode = ManifestRequest.MODE_FULL,
+                        override = SyncRunner.Override(root = live, parallelTransfers = parallel),
+                    )
+                } finally {
+                    // coroutineScope waits for the cancelled sampler, so nothing writes to
+                    // `current` once the cycle has returned.
+                    sampling.cancel()
+                }
+            }
             val elapsed = SystemClock.elapsedRealtime() - started
 
             return JSONObject()
@@ -151,6 +163,7 @@ class Bench(private val context: Context, private val container: AppContainer) {
                 .put("cycle", describe(cycle))
                 .put("batteryBefore", before)
                 .put("batteryAfter", battery())
+                .put("current", current)
                 .put("wifi", wifi())
         } finally {
             target.renameTo(source)
@@ -297,6 +310,25 @@ class Bench(private val context: Context, private val container: AppContainer) {
             .put("plugged", (status?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0) != 0)
     }
 
+    /**
+     * The battery current through a cycle, every half second, as [milliseconds since the start,
+     * current] pairs, until cancelled.
+     *
+     * The charge counter moves in steps of a thousandth of the capacity - almost 5 mAh on the
+     * test phone, about what a gigabyte costs - so energy per gigabyte is the integral of these
+     * samples, and the counter only checks the sum over a series. The current is as the battery
+     * reports it: microamperes by the API's contract, milliamperes on Samsung, which the
+     * analysis tells apart by size.
+     */
+    private suspend fun sampleCurrent(into: JSONArray, started: Long) {
+        val manager = context.getSystemService(BatteryManager::class.java) ?: return
+        while (true) {
+            val sample = manager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
+            into.put(JSONArray().put(SystemClock.elapsedRealtime() - started).put(sample))
+            delay(CURRENT_SAMPLE_MILLIS)
+        }
+    }
+
     /** The link the measurement ran over: speed and band, never the network's name. */
     private fun wifi(): JSONObject {
         val connectivity = context.getSystemService(ConnectivityManager::class.java)
@@ -328,6 +360,7 @@ class Bench(private val context: Context, private val container: AppContainer) {
     private companion object {
         const val MB = 1024L * 1024
         const val CHUNK = 1024L * 1024
+        const val CURRENT_SAMPLE_MILLIS = 500L
 
         /** 2026-01-01 00:00 UTC: outside any quiet window, and the same for every set. */
         const val FIXED_MTIME_MILLIS = 1_767_225_600_000L

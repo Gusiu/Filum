@@ -128,3 +128,39 @@ default window covers some 25 ms of a transfer and the 8 MB one more than a quar
 second. The series do not tell whether the phone waited on the network or on the server's
 reading, nor why the evening was slower; the larger window bridges delays on either side, so
 the server sets 8 MB a stream and 32 MB a connection.
+
+## 7. Energy per gigabyte
+
+The phone ran on its battery: before each run the USB cable came out and the screen went off,
+and the bench sampled the battery current every half second through the cycle. Charge is the
+integral of the samples, energy the charge times the mean battery voltage. The phone's charge
+counter cannot measure one cycle: it moves in steps of 4.94 mAh, a thousandth of the capacity,
+and trails the current by some 40 s - its drops over ten runs add up to 64.2 mAh, the integral
+without each run's last 40 s to 64.3 mAh. A set of 64 files of 16 MB (1 GB) each run, five runs
+with one transfer at a time and five with three, in ABBA order, on a quiet night with the
+phone's power saving off, on channel 64 at 2401 Mb/s, and the server's windows of section 6:
+
+| At once | s | MB/s | Mean current, mA | mAh a GB | mWh a GB | Battery a GB |
+|---|---|---|---|---|---|---|
+| 1 | 74.8 ± 12.5 | 13.7 | 462 | 9.6 ± 1.3 | 38 ± 5 | 0.19 % |
+| 3 | 112.5 ± 38.2 | 9.1 | 458 | 14.1 ± 4.2 | 56 ± 17 | 0.28 % |
+
+The current was the same either way, so the energy follows the time: three transfers at once
+took longer and cost half as much again. The first three runs were slower than the rest and
+two of them had three transfers, but in the steady part too three transfers took 85 s against
+69 s and 9.0 mAh became 11.2 - a quarter more. One transfer at a time is the cheaper setting as
+well as the faster one. Before a cycle, with the screen off, the phone drew 35-60 mA, so the
+transfer itself accounts for some nine tenths of the energy. A gigabyte of large files costs a
+fifth of a per cent of the battery.
+
+`startDelay` gives the time to pull the cable out before the first reading:
+
+```bash
+adb shell am start --user 0 -n pl.wspa.filum.qa/pl.wspa.filum.app.bench.BenchActivity \
+    --es command sync --es set e64x16m --es run e01 --es parallel 1 --es startDelay 40
+adb shell input keyevent KEYCODE_SLEEP
+```
+
+The result carries `batteryBefore` and `batteryAfter` - the counters, the voltage and whether
+the phone was plugged in - and `current`, the samples as `[ms, current]` pairs: milliamperes on
+this phone, although the API's contract says microamperes.
